@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# Environment
+*.env
+!.env.example
+!functions/.env.example
+
+# Firebase
+firebase-debug.log
+firebase-debug.*.log
+*.local
+
+# Node
+node_modules/
+*.log
+functions/lib/
