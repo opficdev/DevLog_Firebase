@@ -1,0 +1,165 @@
+import * as admin from "firebase-admin";
+import { HttpsError } from "firebase-functions/v2/https";
+import axios from "axios";
+
+interface GitHubOAuthResponse {
+    access_token: string;
+    token_type: string;
+    scope: string;
+    error?: string;
+}
+
+interface GitHubUser {
+    id: number;
+    login: string;
+    name?: string;
+    email?: string;
+    avatar_url?: string;
+}
+
+interface GitHubEmail {
+    email: string;
+    primary: boolean;
+    verified: boolean;
+}
+
+const GITHUB_EMAIL_UNAVAILABLE_REASON = "email_not_found";
+
+export async function requestGithubTokensWithCode(
+    code: string
+): Promise<{ accessToken: string; customToken: string }> {
+    const clientId = process.env.GITHUB_CLIENT_ID;
+    const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+        throw new HttpsError("internal", "GitHub 환경 설정이 누락되었습니다.");
+    }
+
+    const tokenResponse = await axios.post<GitHubOAuthResponse>
+    ("https://github.com/login/oauth/access_token", {
+        client_id: clientId,
+        client_secret: clientSecret,
+        code: code
+    }, {
+        headers: { "Accept": "application/json" }
+    });
+
+    const tokenData = tokenResponse.data;
+    if (tokenData.error) {
+        throw new HttpsError("invalid-argument", `GitHub OAuth 오류: ${tokenData.error}`);
+    }
+
+    const accessToken = tokenData.access_token;
+
+    const userResponse = await axios.get<GitHubUser>("https://api.github.com/user", {
+        headers: {
+            "Authorization": `token ${accessToken}`
+        }
+    });
+
+    const userData = userResponse.data;
+    const email = await resolveGitHubEmail(accessToken, userData.email);
+
+    if (!userData.id || !email) {
+        throw new HttpsError(
+            "internal",
+            "GitHub 사용자 데이터를 가져오지 못했습니다.",
+            { reason: GITHUB_EMAIL_UNAVAILABLE_REASON }
+        );
+    }
+
+    let uid;
+
+    try {
+        const userRecord = await admin.auth().getUserByEmail(email);
+        uid = userRecord.uid;
+        console.log(`이메일(${email})로 기존 사용자를 찾았습니다.`);
+    } catch (error) {
+        const userRecord = await admin.auth().createUser({
+            displayName: userData.name || userData.login,
+            email,
+            photoURL: userData.avatar_url,
+        });
+        uid = userRecord.uid;
+        console.log(`이메일 있는 새 사용자가 생성됨: ${uid}`);
+    }
+
+    const customToken = await admin.auth().createCustomToken(uid);
+
+    console.log(`GitHub 사용자(${userData.login})에 대한 커스텀 토큰이 생성되었습니다. UID: ${uid}`);
+    return {
+        accessToken,
+        customToken
+    };
+}
+
+export async function revokeGithubAccessTokenWithDatabase(
+    db: FirebaseFirestore.Firestore,
+    uid: string,
+    requestedAccessToken?: unknown
+): Promise<{ success: true }> {
+    const clientId = process.env.GITHUB_CLIENT_ID;
+    const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+        throw new HttpsError("internal", "GitHub 클라이언트 설정이 누락되었습니다.");
+    }
+
+    let accessToken = typeof requestedAccessToken === "string" ? requestedAccessToken : "";
+    if (!accessToken) {
+        const tokenDoc = await db.collection("users").doc(uid).collection("userData").doc("tokens").get();
+        accessToken = tokenDoc.exists ? tokenDoc.data()?.githubAccessToken : "";
+    }
+
+    if (!accessToken) {
+        throw new HttpsError("not-found", "GitHub 토큰이 존재하지 않습니다.");
+    }
+
+    const url = `https://api.github.com/applications/${clientId}/token`;
+
+    const response = await axios.request({
+        method: "delete",
+        url,
+        auth: {
+            username: clientId,
+            password: clientSecret,
+        },
+        data: {
+            access_token: accessToken,
+        },
+        headers: {
+            Accept: "application/vnd.github+json",
+        },
+    });
+
+    if (response.status === 204) {
+        return { success: true };
+    }
+
+    throw new HttpsError("internal", "토큰 폐기에 실패했습니다.");
+}
+
+async function resolveGitHubEmail(
+    accessToken: string,
+    profileEmail?: string
+): Promise<string | undefined> {
+    if (profileEmail) {
+        return profileEmail;
+    }
+
+    const emailResponse = await axios.get<GitHubEmail[]>("https://api.github.com/user/emails", {
+        headers: {
+            "Authorization": `token ${accessToken}`
+        }
+    });
+
+    const primaryVerifiedEmail = emailResponse.data.find((item) =>
+        item.primary && item.verified
+    )?.email
+
+    if (primaryVerifiedEmail) {
+        return primaryVerifiedEmail;
+    }
+
+    return emailResponse.data.find((item) => item.verified)?.email;
+}
