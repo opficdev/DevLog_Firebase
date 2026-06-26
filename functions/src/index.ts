@@ -71,6 +71,10 @@ import {
     cleanupSoftDeletedWebPages
 } from "./webPage/cleanup";
 
+import {
+    restApi
+} from "./rest/api";
+
 
 // .env 파일 로드
 dotenv.config({
@@ -122,5 +126,6 @@ export {
     cleanupSoftDeletedNotifications,
     requestWebPageDeletion,
     undoWebPageDeletion,
-    cleanupSoftDeletedWebPages
+    cleanupSoftDeletedWebPages,
+    restApi
 };
