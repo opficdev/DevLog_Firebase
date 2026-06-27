@@ -18,6 +18,17 @@ interface AppleTokenPayload {
   auth_time?: number;
 }
 
+interface FirebaseAuthClient {
+    getUser(uid: string): Promise<{ uid: string }>;
+    getUserByEmail(email: string): Promise<{ uid: string }>;
+    getUserByProviderUid(providerId: string, uid: string): Promise<{ uid: string }>;
+    createUser(properties: {
+        uid?: string;
+        email?: string;
+        emailVerified?: boolean;
+    }): Promise<{ uid: string }>;
+}
+
 export async function requestAppleCustomTokenWithDatabase(
     db: FirebaseFirestore.Firestore,
     idToken: string,
@@ -36,38 +47,19 @@ export async function requestAppleCustomTokenWithDatabase(
 
     const userId = decodedToken.sub;
     const email = decodedToken.email;
+    const emailVerified = decodedToken.email_verified === "true";
 
     if (!userId) {
         throw new HttpsError("internal", "Could not get user ID from Apple token");
     }
 
-    let uid;
-
     try {
-        if (email) {
-            try {
-                const userRecord = await admin.auth().getUserByEmail(email);
-                uid = userRecord.uid;
-                console.log(`Found existing user by email (${email})`);
-            } catch (error) {
-                const userRecord = await admin.auth().createUser({
-                    email: email,
-                    emailVerified: decodedToken.email_verified === "true",
-                });
-                uid = userRecord.uid;
-                console.log(`Created new user with email: ${uid}`);
-            }
-        } else {
-            try {
-                const userRecord = await admin.auth().getUser(`apple:${userId}`);
-                uid = userRecord.uid;
-            } catch (error) {
-                const userRecord = await admin.auth().createUser({});
-                uid = userRecord.uid;
-                console.log(`Created new user with Apple ID: ${uid}`);
-            }
-        }
-
+        const uid = await resolveAppleFirebaseUID(
+            admin.auth(),
+            userId,
+            email,
+            emailVerified
+        );
         const refreshToken = await requestAppleRefreshTokenFromApple(authorizationCode);
         await saveAppleRefreshToken(db, uid, refreshToken);
 
@@ -80,6 +72,83 @@ export async function requestAppleCustomTokenWithDatabase(
             error instanceof Error ? error.message : "Unknown error occurred during authentication"
         );
     }
+}
+
+export async function resolveAppleFirebaseUID(
+    auth: FirebaseAuthClient,
+    userId: string,
+    email?: string,
+    emailVerified?: boolean
+): Promise<string> {
+    try {
+        const userRecord = await auth.getUserByProviderUid("apple.com", userId);
+        return userRecord.uid;
+    } catch (error) {
+        if (firebaseAuthErrorCode(error) !== "auth/user-not-found") {
+            throw error;
+        }
+    }
+
+    return email ?
+        await firebaseUIDForEmail(auth, email, emailVerified === true) :
+        await firebaseUIDForAppleUser(auth, userId);
+}
+
+async function firebaseUIDForEmail(
+    auth: FirebaseAuthClient,
+    email: string,
+    emailVerified: boolean
+): Promise<string> {
+    try {
+        const userRecord = await auth.getUserByEmail(email);
+        console.log(`Found existing user by email (${email})`);
+        return userRecord.uid;
+    } catch (error) {
+        try {
+            const userRecord = await auth.createUser({
+                email,
+                emailVerified,
+            });
+            console.log(`Created new user with email: ${userRecord.uid}`);
+            return userRecord.uid;
+        } catch (createError) {
+            if (firebaseAuthErrorCode(createError) === "auth/email-already-exists") {
+                return (await auth.getUserByEmail(email)).uid;
+            }
+            throw createError;
+        }
+    }
+}
+
+async function firebaseUIDForAppleUser(
+    auth: FirebaseAuthClient,
+    userId: string
+): Promise<string> {
+    const uid = `apple:${userId}`;
+    try {
+        const userRecord = await auth.getUser(uid);
+        return userRecord.uid;
+    } catch (error) {
+        try {
+            const userRecord = await auth.createUser({ uid });
+            console.log(`Created new user with Apple ID: ${userRecord.uid}`);
+            return userRecord.uid;
+        } catch (createError) {
+            if (firebaseAuthErrorCode(createError) === "auth/uid-already-exists") {
+                return (await auth.getUser(uid)).uid;
+            }
+            throw createError;
+        }
+    }
+}
+
+function firebaseAuthErrorCode(error: unknown): string | undefined {
+    if (!error || typeof error !== "object") {
+        return undefined;
+    }
+
+    const code = (error as Record<string, unknown>).code;
+    return typeof code === "string" ? code : undefined;
 }
 
 export async function requestAppleRefreshTokenWithDatabase(

@@ -72,9 +72,13 @@ import {
 } from "./webPage/cleanup";
 
 import {
-    restApi
+    prodApi,
+    stagingApi
 } from "./rest/api";
 
+// Cloud Functions REST base URLs:
+// staging: https://${region}-${projectId}.cloudfunctions.net/stagingApi/api
+// prod: https://${region}-${projectId}.cloudfunctions.net/prodApi/api
 
 // .env 파일 로드
 dotenv.config({
@@ -127,5 +131,6 @@ export {
     requestWebPageDeletion,
     undoWebPageDeletion,
     cleanupSoftDeletedWebPages,
-    restApi
+    prodApi,
+    stagingApi
 };

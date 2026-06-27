@@ -2,7 +2,7 @@ import * as admin from "firebase-admin";
 import { onRequest, HttpsError } from "firebase-functions/v2/https";
 import type { Request } from "firebase-functions/v2/https";
 import type { Response } from "express";
-import { firestoreFor } from "../common/firestore";
+import { FirestoreDatabaseID, firestoreFor } from "../common/firestore";
 import { requestTodoDeletionInFirestore, undoTodoDeletionInFirestore } from "./todoDeletion";
 import {
     requestPushNotificationDeletionInFirestore,
@@ -23,11 +23,15 @@ import {
     revokeGithubAccessTokenWithDatabase
 } from "./githubAuth";
 import { RestError, restErrorFrom } from "./error";
-import { matchRestRoute, parseRestBaseRoute, RestRoute } from "./router";
+import { matchRestRoute, parseRestRouteSegments, RestRoute } from "./router";
 
 const LOCATION = "asia-northeast3";
 
-export const restApi = onRequest({
+export const stagingApi = restApiFor("staging");
+export const prodApi = restApiFor("prod");
+
+function restApiFor(databaseID: FirestoreDatabaseID) {
+    return onRequest({
         cors: true,
         maxInstances: 3,
         region: LOCATION,
@@ -35,17 +39,17 @@ export const restApi = onRequest({
     async (request, response) => {
         try {
             const body = requestBody(request);
-            const baseRoute = parseRestBaseRoute(pathSegmentsFromRequest(request));
-            if (!baseRoute) {
+            const routeSegments = parseRestRouteSegments(pathSegmentsFromRequest(request));
+            if (!routeSegments) {
                 throw new RestError(404, "not-found", "API 경로를 찾을 수 없습니다.");
             }
 
-            const route = matchRestRoute(request.method, baseRoute.routeSegments);
+            const route = matchRestRoute(request.method, routeSegments);
             if (!route) {
                 throw new RestError(404, "not-found", "Endpoint를 찾을 수 없습니다.");
             }
 
-            const db = firestoreFor(baseRoute.databaseID);
+            const db = firestoreFor(databaseID);
             const uid = route.requiresAuth ? await authenticatedUID(request) : undefined;
             const result = await handleRoute(route, db, body, uid);
 
@@ -54,7 +58,8 @@ export const restApi = onRequest({
             sendRestError(response, error);
         }
     }
-);
+    );
+}
 
 async function handleRoute(
     route: RestRoute,

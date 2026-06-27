@@ -1,5 +1,3 @@
-import { firestoreDatabaseID, FirestoreDatabaseID } from "../common/firestore";
-
 export type RestAction =
     "requestTodoDeletion" |
     "undoTodoDeletion" |
@@ -14,32 +12,19 @@ export type RestAction =
     "requestGithubTokens" |
     "revokeGithubAccessToken";
 
-export interface RestBaseRoute {
-    databaseID: FirestoreDatabaseID;
-    routeSegments: string[];
-}
-
 export interface RestRoute {
     action: RestAction;
     requiresAuth: boolean;
     id?: string;
 }
 
-export function parseRestBaseRoute(pathSegments: string[]): RestBaseRoute | undefined {
+export function parseRestRouteSegments(pathSegments: string[]): string[] | undefined {
     const apiIndex = pathSegments.indexOf("api");
     if (apiIndex < 0) {
         return undefined;
     }
 
-    const databaseID = firestoreDatabaseID(pathSegments[apiIndex + 1] ?? "");
-    if (!databaseID) {
-        return undefined;
-    }
-
-    return {
-        databaseID,
-        routeSegments: pathSegments.slice(apiIndex + 2)
-    };
+    return pathSegments.slice(apiIndex + 1);
 }
 
 export function matchRestRoute(method: string, routeSegments: string[]): RestRoute | undefined {
