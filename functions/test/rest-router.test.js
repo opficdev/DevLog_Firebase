@@ -145,3 +145,10 @@ const emailMismatch = restErrorFrom({
 });
 assert.strictEqual(emailMismatch.status, 400);
 assert.strictEqual(emailMismatch.code, "email-mismatch");
+
+const invalidIDToken = restErrorFrom({
+    code: "auth/invalid-id-token",
+    message: "Firebase ID token has invalid signature."
+});
+assert.strictEqual(invalidIDToken.status, 401);
+assert.strictEqual(invalidIDToken.code, "auth/invalid-id-token");

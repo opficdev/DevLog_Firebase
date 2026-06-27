@@ -28,6 +28,11 @@ export function restErrorFrom(error: unknown): RestError {
         return new RestError(statusCodeFor(error.code), error.code, error.message);
     }
 
+    const authCode = authErrorCode(error);
+    if (authCode) {
+        return new RestError(401, authCode, messageFrom(error, "인증 토큰이 유효하지 않거나 만료되었습니다."));
+    }
+
     return new RestError(500, "internal", messageFrom(error, "서버 오류가 발생했습니다."));
 }
 
@@ -51,6 +56,19 @@ function messageFrom(error: unknown, fallback: string): string {
         return error.message;
     }
     return fallback;
+}
+
+function authErrorCode(error: unknown): string | undefined {
+    if (!error || typeof error !== "object") {
+        return undefined;
+    }
+
+    const code = (error as Record<string, unknown>).code;
+    if (typeof code === "string" && code.startsWith("auth/")) {
+        return code;
+    }
+
+    return undefined;
 }
 
 function errorReason(error: unknown): string | undefined {
