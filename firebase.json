@@ -15,9 +15,23 @@
       ]
     }
   ],
-  "firestore": {
-    "indexes": "firestore.index.json"
-  },
+  "firestore": [
+    {
+      "database": "(default)",
+      "indexes": "firestore.index.json",
+      "rules": "firestore.rules"
+    },
+    {
+      "database": "staging",
+      "indexes": "firestore.index.json",
+      "rules": "firestore.rules"
+    },
+    {
+      "database": "prod",
+      "indexes": "firestore.index.json",
+      "rules": "firestore.rules"
+    }
+  ],
   "emulators": {
     "auth": {
       "port": 9099
