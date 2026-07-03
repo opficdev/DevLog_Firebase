@@ -32,10 +32,10 @@ export interface AppleTokenPayload {
 
 // Apple ID 토큰 헤더의 key id로 Apple 공개키를 조회하는 메서드
 function getApplePublicKey(
-    header: jwt.JwtHeader,
+    header: jwt.JwtHeader | undefined,
     callback: jwt.SigningKeyCallback
 ) {
-    if (!header.kid) {
+    if (!header || !header.kid) {
         callback(new Error("Apple ID token header is missing key id"));
         return;
     }
