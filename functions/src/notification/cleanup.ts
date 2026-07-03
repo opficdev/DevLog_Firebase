@@ -153,7 +153,13 @@ export const cleanupNotificationDispatches = onSchedule({
     },
     async () => {
         for (const firebaseDB of firebaseDBs()) {
-            await cleanupNotificationDispatchesIn(firebaseDB);
+            try {
+                await cleanupNotificationDispatchesIn(firebaseDB);
+            } catch (error) {
+                logger.error("알림 발송 기록 정리 실패", toError(error), {
+                    firebaseDB
+                });
+            }
         }
     }
 );
