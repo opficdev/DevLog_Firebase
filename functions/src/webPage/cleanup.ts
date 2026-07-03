@@ -20,7 +20,17 @@ export const cleanupSoftDeletedWebPages = onSchedule({
     async () => {
         try {
             for (const firebaseDB of firebaseDBs()) {
-                await cleanupSoftDeletedWebPagesIn(firebaseDB);
+                try {
+                    await cleanupSoftDeletedWebPagesIn(firebaseDB);
+                } catch (error) {
+                    logger.error("soft delete WebPage cleanup 실패", toError(error), {
+                        firebaseDB,
+                        collectionGroup: "webPages",
+                        filter: "isDeleted == true",
+                        orderBy: "documentId",
+                        cleanupBatchSize: CLEANUP_BATCH_SIZE
+                    });
+                }
             }
         } catch (error) {
             logger.error("soft delete WebPage cleanup 실패", toError(error), {

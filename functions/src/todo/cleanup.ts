@@ -28,7 +28,21 @@ export const compactSoftDeletedTodos = onSchedule({
 
         try {
             for (const firebaseDB of firebaseDBs()) {
-                await compactSoftDeletedTodosIn(firebaseDB, cutoff);
+                try {
+                    await compactSoftDeletedTodosIn(firebaseDB, cutoff);
+                } catch (error) {
+                    logger.error(
+                        "soft deleted todo 축약 문서 압축 실패",
+                        toError(error),
+                        {
+                            firebaseDB,
+                            collectionGroup: "todoLists",
+                            filter: `deletedAt <= now - ${TOMBSTONE_GRACE_PERIOD_HOURS}h`,
+                            orderBy: ["deletedAt", "documentId"],
+                            cleanupBatchSize: CLEANUP_BATCH_SIZE
+                        }
+                    );
+                }
             }
         } catch (error) {
             logger.error(
