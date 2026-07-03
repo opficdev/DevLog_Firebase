@@ -16,9 +16,11 @@ const CLEANUP_BATCH_SIZE = 200;
 const DELETE_BATCH_SIZE = 200;
 const QUERY_BATCH_SIZE = 100;
 
-// Todo 삭제 시 연결된 알림 문서와 발송 기록 문서의 동시 제거
-export const removeTodoNotificationDocuments = onDocumentDeleted({
+// removeTodoNotificationDocuments는 지정한 Firestore 데이터베이스에서 Todo 삭제 시 연결된 알림 문서를 제거하는 함수를 반환합니다.
+export function removeTodoNotificationDocuments(firebaseDB: FirestoreDatabase) {
+    return onDocumentDeleted({
         maxInstances: 1,
+        database: firebaseDB,
         document: "users/{userId}/todoLists/{todoId}",
         region: LOCATION
     },
@@ -27,7 +29,7 @@ export const removeTodoNotificationDocuments = onDocumentDeleted({
         const todoId = event.params.todoId;
 
         try {
-            const db = firestoreFor(event.database);
+            const db = firestoreFor(firebaseDB);
             await deleteByTodoId(db, userId, "notificationDispatches", todoId);
             await deleteByTodoId(db, userId, "notifications", todoId);
         } catch (error) {
@@ -35,6 +37,7 @@ export const removeTodoNotificationDocuments = onDocumentDeleted({
                 "todo 삭제 후 notification 문서 정리 실패",
                 toError(error),
                 {
+                    firebaseDB,
                     userId,
                     todoId,
                     collections: ["notificationDispatches", "notifications"]
@@ -42,11 +45,14 @@ export const removeTodoNotificationDocuments = onDocumentDeleted({
             );
         }
     }
-);
+    );
+}
 
-// 지난 마감일 Todo 완료 시 재발송 방지 기록 정리
-export const removeCompletedTodoNotificationRecords = onDocumentUpdated({
+// removeCompletedTodoNotificationRecords는 지정한 Firestore 데이터베이스에서 완료된 Todo의 알림 발송 기록을 정리하는 함수를 반환합니다.
+export function removeCompletedTodoNotificationRecords(firebaseDB: FirestoreDatabase) {
+    return onDocumentUpdated({
         maxInstances: 1,
+        database: firebaseDB,
         document: "users/{userId}/todoLists/{todoId}",
         region: LOCATION
     },
@@ -64,12 +70,13 @@ export const removeCompletedTodoNotificationRecords = onDocumentUpdated({
         if (!dueDate || Date.now() <= dueDate.getTime()) { return; }
 
         try {
-            await deleteByTodoId(firestoreFor(event.database), userId, "notificationDispatches", todoId);
+            await deleteByTodoId(firestoreFor(firebaseDB), userId, "notificationDispatches", todoId);
         } catch (error) {
             logger.error(
                 "완료된 todo의 notification record 정리 실패",
                 toError(error),
                 {
+                    firebaseDB,
                     userId,
                     todoId,
                     collection: "notificationDispatches"
@@ -77,7 +84,8 @@ export const removeCompletedTodoNotificationRecords = onDocumentUpdated({
             );
         }
     }
-);
+    );
+}
 
 export const cleanupSoftDeletedNotifications = onSchedule({
         maxInstances: 1,

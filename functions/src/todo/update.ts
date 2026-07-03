@@ -1,15 +1,18 @@
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
-import * as admin from "firebase-admin";
+import { FieldPath } from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 import { toError } from "../common/error";
+import { FirestoreDatabase, firestoreFor } from "../common/firestore";
 import { FirestorePath } from "../common/firestorePath";
 
 const LOCATION = "asia-northeast3";
 const BATCH_SIZE = 200;
 
-// Todo 카테고리 변경 시 기존 알림 문서 카테고리 동기화
-export const syncTodoNotificationCategory = onDocumentUpdated({
+// syncTodoNotificationCategory는 지정한 Firestore 데이터베이스에서 Todo 카테고리 변경 시 알림 문서 카테고리를 동기화하는 함수를 반환합니다.
+export function syncTodoNotificationCategory(firebaseDB: FirestoreDatabase) {
+    return onDocumentUpdated({
         maxInstances: 1,
+        database: firebaseDB,
         document: "users/{userId}/todoLists/{todoId}",
         region: LOCATION
     },
@@ -27,9 +30,10 @@ export const syncTodoNotificationCategory = onDocumentUpdated({
         }
 
         try {
-            await updateNotifications(userId, todoId, afterCategory);
+            await updateNotifications(firestoreFor(firebaseDB), userId, todoId, afterCategory);
         } catch (error) {
             logger.error("todo 카테고리 변경 후 알림 데이터 동기화 실패", toError(error), {
+                firebaseDB,
                 userId,
                 todoId,
                 beforeCategory,
@@ -38,29 +42,32 @@ export const syncTodoNotificationCategory = onDocumentUpdated({
             throw error;
         }
     }
-);
+    );
+}
 
 // 변경된 카테고리 값의 해당 Todo 알림 문서 반영
 async function updateNotifications(
+    db: FirebaseFirestore.Firestore,
     userId: string,
     todoId: string,
     todoCategory: string
 ): Promise<void> {
-    await updateNotificationBatch(userId, todoId, todoCategory)
+    await updateNotificationBatch(db, userId, todoId, todoCategory);
 }
 
 // 알림 문서의 배치 단위 순회 및 카테고리 값 갱신
 async function updateNotificationBatch(
+    db: FirebaseFirestore.Firestore,
     userId: string,
     todoId: string,
     todoCategory: string,
     lastDocument?:
         FirebaseFirestore.QueryDocumentSnapshot<FirebaseFirestore.DocumentData>
 ): Promise<void> {
-    let query = admin.firestore()
+    let query = db
         .collection(FirestorePath.notifications(userId))
         .where("todoId", "==", todoId)
-        .orderBy(admin.firestore.FieldPath.documentId())
+        .orderBy(FieldPath.documentId())
         .limit(BATCH_SIZE);
 
     if (lastDocument) {
@@ -70,7 +77,7 @@ async function updateNotificationBatch(
     const snapshot = await query.get();
     if (snapshot.empty) { return; }
 
-    const batch = admin.firestore().batch();
+    const batch = db.batch();
     snapshot.docs.forEach((document) => {
         batch.update(document.ref, { todoCategory });
     });
@@ -79,6 +86,7 @@ async function updateNotificationBatch(
     if (snapshot.size < BATCH_SIZE) { return; }
 
     await updateNotificationBatch(
+        db,
         userId,
         todoId,
         todoCategory,

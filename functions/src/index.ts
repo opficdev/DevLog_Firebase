@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import * as dotenv from "dotenv";
 import * as path from "path";
+import { firebaseDBs } from "./common/firestore";
 
 // import {
 
@@ -60,6 +61,18 @@ dotenv.config({
 // Firebase 앱 초기화
 admin.initializeApp();
 
+// firestoreDatabaseFunctionGroups는 이름 지정 데이터베이스별 Firestore trigger export 묶음을 저장합니다.
+const firestoreDatabaseFunctionGroups: Record<string, unknown> = {};
+for (const firebaseDB of firebaseDBs()) {
+    firestoreDatabaseFunctionGroups[firebaseDB] = {
+        removeTodoNotificationDocuments: removeTodoNotificationDocuments(firebaseDB),
+        removeCompletedTodoNotificationRecords: removeCompletedTodoNotificationRecords(firebaseDB),
+        syncTodoNotificationCategory: syncTodoNotificationCategory(firebaseDB),
+        requestMoveRemovedCategoryTodosToEtc: requestMoveRemovedCategoryTodosToEtc(firebaseDB)
+    };
+}
+Object.assign(exports, firestoreDatabaseFunctionGroups);
+
 // Google 인증 함수들 (나중에 구현되면 추가)
 
 export {
@@ -73,12 +86,8 @@ export {
 };
 
 export {
-    removeTodoNotificationDocuments,
-    removeCompletedTodoNotificationRecords,
     cleanupNotificationDispatches,
     compactSoftDeletedTodos,
-    syncTodoNotificationCategory,
-    requestMoveRemovedCategoryTodosToEtc,
     completeMoveRemovedCategoryTodosToEtc,
     cleanupSoftDeletedNotifications,
     cleanupSoftDeletedWebPages,
