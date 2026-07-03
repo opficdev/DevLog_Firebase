@@ -20,6 +20,15 @@ These instructions apply to the repository root.
 
 - Add a one-sentence comment explaining the role of each declared type and method.
 - For properties inside a type, add a short comment describing what data the property stores.
+- When a named import has three or more imported members, put each member on its own line:
+```ts
+import {
+    FirstMember,
+    SecondMember,
+    ThirdMember
+} from "./module";
+```
+
 - For function or method declarations with two or more parameters, put each parameter on its own line:
 ```ts
 function someFunction(
