@@ -54,11 +54,5 @@ GitHub Actions의 action 런타임은 Node 24 대응 버전을 사용하고, Fun
 현재 CD workflow는 없습니다. 배포는 필요한 시점에 수동으로 진행합니다.
 
 이 저장소에는 `.firebaserc`를 커밋하지 않습니다.
-로컬 `.firebaserc`에 `staging`, `prod` alias를 설정한 뒤 필요한 함수만 배포합니다.
-
-```bash
-firebase deploy -P staging --only functions:stagingApi
-firebase deploy -P prod --only functions:prodApi
-```
 
 여러 함수를 배포해야 할 때도 전체 일괄 배포보다 필요한 함수 단위로 나누어 배포합니다.
