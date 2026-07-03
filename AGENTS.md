@@ -16,6 +16,28 @@ These instructions apply to the repository root.
 - Do not include full files, unrelated code, or explanatory text unless explicitly requested.
 - You do not need to paste code in the prompt after updating it in the repository.
 
+## TypeScript documentation and formatting
+
+- Add a one-sentence comment explaining the role of each declared type and method.
+- For properties inside a type, add a short comment describing what data the property stores.
+- For function or method declarations with two or more parameters, put each parameter on its own line:
+```ts
+function someFunction(
+    firstParameter: string,
+    secondParameter: number
+) {
+    // ...
+}
+```
+
+- For function or method calls with two or more arguments, put each argument on its own line:
+```ts
+someFunction(
+    firstArgument,
+    secondArgument
+);
+```
+
 ## Firebase Functions
 
 - Treat `functions` as the Cloud Functions source root.
