@@ -63,6 +63,11 @@ if (
 - Do not commit generated dependency or build output directories such as `node_modules/` and `functions/lib/`.
 - Deploy updated functions one by one separately.
 
+## Pull Requests
+
+- Before drafting or creating a pull request, read `.github/pull_request_template.md` and follow that template exactly.
+- Do not invent pull request sections when a repository template exists.
+
 ## Verification
 
 - After Firebase Functions changes, run `npm run build` from `functions`.
