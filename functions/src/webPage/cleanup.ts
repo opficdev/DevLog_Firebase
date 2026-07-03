@@ -19,7 +19,7 @@ export const cleanupSoftDeletedWebPages = onSchedule({
     },
     async () => {
         try {
-            for (const firebaseDB of firebaseDBs) {
+            for (const firebaseDB of firebaseDBs()) {
                 await cleanupSoftDeletedWebPagesIn(firebaseDB);
             }
         } catch (error) {

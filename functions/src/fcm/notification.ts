@@ -182,7 +182,7 @@ function parseTaskPayload(data: FirebaseFirestore.DocumentData | undefined): Tas
     }
 
     return {
-        firebaseDB,
+        firebaseDB: firebaseDB.trim(),
         userId,
         todoId,
         dueDateKey,

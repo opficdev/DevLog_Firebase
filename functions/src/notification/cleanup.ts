@@ -87,7 +87,7 @@ export const cleanupSoftDeletedNotifications = onSchedule({
     },
     async () => {
         try {
-            for (const firebaseDB of firebaseDBs) {
+            for (const firebaseDB of firebaseDBs()) {
                 await cleanupSoftDeletedNotificationsIn(firebaseDB);
             }
         } catch (error) {
@@ -144,7 +144,7 @@ export const cleanupNotificationDispatches = onSchedule({
         timeZone: "UTC"
     },
     async () => {
-        for (const firebaseDB of firebaseDBs) {
+        for (const firebaseDB of firebaseDBs()) {
             await cleanupNotificationDispatchesIn(firebaseDB);
         }
     }

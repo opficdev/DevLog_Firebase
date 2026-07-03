@@ -27,7 +27,7 @@ export const compactSoftDeletedTodos = onSchedule({
         const cutoff = new Date(Date.now() - (TOMBSTONE_GRACE_PERIOD_HOURS * 60 * 60 * 1000));
 
         try {
-            for (const firebaseDB of firebaseDBs) {
+            for (const firebaseDB of firebaseDBs()) {
                 await compactSoftDeletedTodosIn(firebaseDB, cutoff);
             }
         } catch (error) {

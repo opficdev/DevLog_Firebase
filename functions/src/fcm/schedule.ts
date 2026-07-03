@@ -27,7 +27,7 @@ export const scheduleTodoReminder = onSchedule({
     async (event) => {
         try {
             const now = event.scheduleTime ? new Date(event.scheduleTime) : new Date();
-            for (const firebaseDB of firebaseDBs) {
+            for (const firebaseDB of firebaseDBs()) {
                 await enqueueTodoReminderTasks(firebaseDB, now);
             }
         } catch (error) {
