@@ -40,6 +40,17 @@ function someFunction(
 }
 ```
 
+- For long conditional expressions, put the opening parenthesis on its own line and split each logical condition by `&&` or `||`:
+```ts
+if (
+    firstCondition ||
+    secondCondition ||
+    thirdCondition
+) {
+    // ...
+}
+```
+
 - For function or method call sites, prefer the existing local style and framework conventions.
 
 ## Firebase Functions
