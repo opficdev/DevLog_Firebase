@@ -28,7 +28,13 @@ export const scheduleTodoReminder = onSchedule({
         try {
             const now = event.scheduleTime ? new Date(event.scheduleTime) : new Date();
             for (const firebaseDB of firebaseDBs()) {
-                await enqueueTodoReminderTasks(firebaseDB, now);
+                try {
+                    await enqueueTodoReminderTasks(firebaseDB, now);
+                } catch (error) {
+                    logger.error("알림 스케줄 작업 적재 실패", toError(error), {
+                        firebaseDB
+                    });
+                }
             }
         } catch (error) {
             logger.error("알림 스케줄 배치 실행 중 오류 발생", toError(error));
