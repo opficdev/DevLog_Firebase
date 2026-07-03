@@ -2,22 +2,7 @@ import {onCall, HttpsError} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import axios from "axios";
 import * as jwt from "jsonwebtoken";
-
-// Apple ID 토큰 페이로드 인터페이스 정의
-interface AppleTokenPayload {
-  iss: string;          // 발행자 (issuer)
-  sub: string;          // 사용자 ID (subject)
-  aud: string;          // 앱 ID (audience)
-  iat: number;          // 발행 시간 (issued at)
-  exp: number;          // 만료 시간 (expiration)
-  email?: string;       // 사용자 이메일 (선택적)
-  email_verified?: string; // 이메일 인증 여부
-  is_private_email?: boolean; // 개인정보 보호 이메일 여부
-  nonce?: string;       // 보안용 난수값
-  nonce_supported?: boolean;
-  real_user_status?: number; // 실제 사용자 상태
-  auth_time?: number;   // 인증 시간
-}
+import { AppleTokenPayload, verifyAppleIdToken } from "./appleIdToken";
 
 function getAppleConfiguration() {
     const teamId = process.env.APPLE_TEAM_ID;
@@ -64,16 +49,18 @@ export const requestAppleCustomToken = onCall({
             throw new HttpsError('invalid-argument', 'ID token and authorization code are required');
         }
 
+        const { clientId } = getAppleConfiguration();
+
         // // 1. Verify and decode the Apple ID token
         let decodedToken: AppleTokenPayload;
         try {
-            decodedToken = jwt.decode(idToken) as AppleTokenPayload;
-            if (!decodedToken) {
-                throw new HttpsError('invalid-argument', 'Invalid Apple ID token');
-            }
+            decodedToken = await verifyAppleIdToken(
+                idToken,
+                clientId
+            );
         } catch (error) {
-            console.error('Error decoding Apple ID token:', error);
-            throw new HttpsError('invalid-argument', 'Failed to decode Apple ID token');
+            console.error('Error verifying Apple ID token:', error);
+            throw new HttpsError('invalid-argument', 'Failed to verify Apple ID token');
         }
 
         // 2. Get user information from the decoded token
