@@ -1,6 +1,6 @@
 import { getFirestore } from "firebase-admin/firestore";
 
-const firebaseDBsEnvKey = "FIREBASE_DBS";
+const firebaseDBsEnvKey = "FIRESTORE_DBS";
 
 // 배포 함수가 사용하는 이름 지정 Firestore 데이터베이스를 나타냅니다.
 export type FirestoreDatabase = string;
