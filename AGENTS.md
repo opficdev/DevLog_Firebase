@@ -20,6 +20,8 @@ These instructions apply to the repository root.
 
 - Add a one-sentence comment explaining the role of each declared type and method.
 - For properties inside a type, add a short comment describing what data the property stores.
+- Write all newly added comments in Korean.
+- Do not write implementation names such as type, function, method, variable, or property names as the subject of comments.
 - Apply these rules only to code that is directly related to the current change.
 - When a named import has three or more imported members, put each member on its own line:
 ```ts
@@ -60,6 +62,11 @@ if (
 - Keep `.env` as a local-only file and commit `functions/.env.example` instead.
 - Do not commit generated dependency or build output directories such as `node_modules/` and `functions/lib/`.
 - Deploy updated functions one by one separately.
+
+## Pull Requests
+
+- Before drafting or creating a pull request, read `.github/pull_request_template.md` and follow that template exactly.
+- Do not invent pull request sections when a repository template exists.
 
 ## Verification
 

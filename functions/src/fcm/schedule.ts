@@ -1,9 +1,14 @@
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { getFunctions } from "firebase-admin/functions";
-import * as admin from "firebase-admin";
+import { Timestamp } from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 import { addDays, getZonedParts, zonedDateTimeToUTC } from "../common/date";
 import { toError } from "../common/error";
+import {
+    FirestoreDatabase,
+    firebaseDBs,
+    firestoreFor
+} from "../common/firestore";
 import { FirestorePath } from "../common/firestorePath";
 import { resolveTimeZone } from "./shared";
 
@@ -22,113 +27,134 @@ export const scheduleTodoReminder = onSchedule({
     async (event) => {
         try {
             const now = event.scheduleTime ? new Date(event.scheduleTime) : new Date();
-            const queue = getFunctions().taskQueue(`locations/${LOCATION}/functions/sendPushNotification`);
-            let usersSnapshot: FirebaseFirestore.QuerySnapshot<FirebaseFirestore.DocumentData>;
-            try {
-                usersSnapshot = await admin.firestore().collection("users").get();
-            } catch (error) {
-                logger.error("users 조회 실패", toError(error), {
-                    at: "collection(users).get()"
-                });
-                return;
-            }
-
-            for (const userDoc of usersSnapshot.docs) {
-                const userId = userDoc.id;
-                let settingsDoc: FirebaseFirestore.DocumentSnapshot<FirebaseFirestore.DocumentData>;
+            for (const firebaseDB of firebaseDBs()) {
                 try {
-                    settingsDoc = await admin.firestore()
-                        .doc(FirestorePath.userData(userId, FirestorePath.UserDataDocument.settings))
-                        .get();
+                    await enqueueTodoReminderTasks(firebaseDB, now);
                 } catch (error) {
-                    logger.error("settings 조회 실패", toError(error), {
-                        userId,
-                        at: "users/{uid}/userData/settings"
+                    logger.error("알림 스케줄 작업 적재 실패", toError(error), {
+                        firebaseDB
                     });
-                    continue;
-                }
-                const settings = settingsDoc.data();
-                if (!settings || settings.allowPushNotification !== true) { continue; }
-
-                const hour = Number.isInteger(settings.pushNotificationHour) ? settings.pushNotificationHour : DEFAULT_HOUR;
-                const configuredMinute = Number.isInteger(settings.pushNotificationMinute) ?
-                    Number(settings.pushNotificationMinute) :
-                    DEFAULT_MINUTE;
-                const minute = configuredMinute < 0 || configuredMinute > 59 ?
-                    DEFAULT_MINUTE :
-                    configuredMinute - (configuredMinute % MINUTE_INTERVAL);
-
-                const timeZone = resolveTimeZone(settings);
-
-                const localNow = getZonedParts(now, timeZone);
-                if (localNow.hour !== hour) { continue; }
-                const windowEnd = Math.min(minute + MINUTE_INTERVAL, 60);
-                if (localNow.minute < minute || localNow.minute >= windowEnd) { continue; }
-
-                const tomorrow = addDays(localNow.year, localNow.month, localNow.day, 1);
-                const dayAfterTomorrow = addDays(localNow.year, localNow.month, localNow.day, 2);
-                const startUTC = zonedDateTimeToUTC(
-                    tomorrow.year,
-                    tomorrow.month,
-                    tomorrow.day,
-                    0, 0,
-                    timeZone
-                );
-                const endUTC = zonedDateTimeToUTC(
-                    dayAfterTomorrow.year,
-                    dayAfterTomorrow.month,
-                    dayAfterTomorrow.day,
-                    0, 0,
-                    timeZone
-                );
-
-                const dueDateKey = `${tomorrow.year}-${tomorrow.month.toString().padStart(2, "0")}-${tomorrow.day.toString().padStart(2, "0")}`;
-                let todosSnapshot: FirebaseFirestore.QuerySnapshot<FirebaseFirestore.DocumentData>;
-                try {
-                    todosSnapshot = await admin.firestore()
-                        .collection(FirestorePath.todos(userId))
-                        .where("dueDate", ">=", admin.firestore.Timestamp.fromDate(startUTC))
-                        .where("dueDate", "<", admin.firestore.Timestamp.fromDate(endUTC))
-                        .get();
-                } catch (error) {
-                    logger.error("todoLists 조회 실패", toError(error), {
-                        userId,
-                        at: "todoLists.where(dueDate>=start).where(dueDate<end)",
-                        startUTC: startUTC.toISOString(),
-                        endUTC: endUTC.toISOString(),
-                        dueDateKey
-                    });
-                    continue;
-                }
-
-                for (const todoDoc of todosSnapshot.docs) {
-                    const todoData = todoDoc.data();
-                    const todoTitle = typeof todoData.title === "string" && todoData.title.trim() ?
-                        todoData.title :
-                        "제목 없음";
-
-                    const notificationPayload = {
-                        userId,
-                        todoId: todoDoc.id,
-                        dueDateKey,
-                        title: "DevLog",
-                        body: `'${todoTitle}'의 마감일이 내일입니다.`
-                    };
-
-                    try {
-                        await queue.enqueue(notificationPayload);
-                    } catch (error) {
-                        logger.error("Cloud Tasks enqueue 실패", toError(error), {
-                            userId,
-                            todoId: todoDoc.id,
-                            dueDateKey
-                        });
-                    }
                 }
             }
-
         } catch (error) {
             logger.error("알림 스케줄 배치 실행 중 오류 발생", toError(error));
         }
     }
 );
+
+// 하나의 이름 지정 데이터베이스를 순회하며 마감 Todo 푸시 알림 작업을 적재합니다.
+async function enqueueTodoReminderTasks(
+    firebaseDB: FirestoreDatabase,
+    now: Date
+): Promise<void> {
+    const db = firestoreFor(firebaseDB);
+    const queue = getFunctions().taskQueue(`locations/${LOCATION}/functions/sendPushNotification`);
+    let usersSnapshot: FirebaseFirestore.QuerySnapshot<FirebaseFirestore.DocumentData>;
+    try {
+        usersSnapshot = await db.collection("users").get();
+    } catch (error) {
+        logger.error("users 조회 실패", toError(error), {
+            firebaseDB,
+            at: "collection(users).get()"
+        });
+        return;
+    }
+
+    for (const userDoc of usersSnapshot.docs) {
+        const userId = userDoc.id;
+        let settingsDoc: FirebaseFirestore.DocumentSnapshot<FirebaseFirestore.DocumentData>;
+        try {
+            settingsDoc = await db
+                .doc(FirestorePath.userData(userId, FirestorePath.UserDataDocument.settings))
+                .get();
+        } catch (error) {
+            logger.error("settings 조회 실패", toError(error), {
+                firebaseDB,
+                userId,
+                at: "users/{uid}/userData/settings"
+            });
+            continue;
+        }
+        const settings = settingsDoc.data();
+        if (!settings || settings.allowPushNotification !== true) { continue; }
+
+        const hour = Number.isInteger(settings.pushNotificationHour) ? settings.pushNotificationHour : DEFAULT_HOUR;
+        const configuredMinute = Number.isInteger(settings.pushNotificationMinute) ?
+            Number(settings.pushNotificationMinute) :
+            DEFAULT_MINUTE;
+        const minute = configuredMinute < 0 || 59 < configuredMinute ?
+            DEFAULT_MINUTE :
+            configuredMinute - (configuredMinute % MINUTE_INTERVAL);
+
+        const timeZone = resolveTimeZone(settings);
+
+        const localNow = getZonedParts(now, timeZone);
+        if (localNow.hour !== hour) { continue; }
+        const windowEnd = Math.min(minute + MINUTE_INTERVAL, 60);
+        if (localNow.minute < minute || windowEnd <= localNow.minute) { continue; }
+
+        const tomorrow = addDays(localNow.year, localNow.month, localNow.day, 1);
+        const dayAfterTomorrow = addDays(localNow.year, localNow.month, localNow.day, 2);
+        const startUTC = zonedDateTimeToUTC(
+            tomorrow.year,
+            tomorrow.month,
+            tomorrow.day,
+            0, 0,
+            timeZone
+        );
+        const endUTC = zonedDateTimeToUTC(
+            dayAfterTomorrow.year,
+            dayAfterTomorrow.month,
+            dayAfterTomorrow.day,
+            0, 0,
+            timeZone
+        );
+
+        const dueDateKey = `${tomorrow.year}-${tomorrow.month.toString().padStart(2, "0")}-${tomorrow.day.toString().padStart(2, "0")}`;
+        let todosSnapshot: FirebaseFirestore.QuerySnapshot<FirebaseFirestore.DocumentData>;
+        try {
+            todosSnapshot = await db
+                .collection(FirestorePath.todos(userId))
+                .where("dueDate", ">=", Timestamp.fromDate(startUTC))
+                .where("dueDate", "<", Timestamp.fromDate(endUTC))
+                .get();
+        } catch (error) {
+            logger.error("todoLists 조회 실패", toError(error), {
+                firebaseDB,
+                userId,
+                at: "todoLists.where(dueDate>=start).where(dueDate<end)",
+                startUTC: startUTC.toISOString(),
+                endUTC: endUTC.toISOString(),
+                dueDateKey
+            });
+            continue;
+        }
+
+        for (const todoDoc of todosSnapshot.docs) {
+            const todoData = todoDoc.data();
+            const todoTitle = typeof todoData.title === "string" && todoData.title.trim() ?
+                todoData.title :
+                "제목 없음";
+
+            const notificationPayload = {
+                firebaseDB,
+                userId,
+                todoId: todoDoc.id,
+                dueDateKey,
+                title: "DevLog",
+                body: `'${todoTitle}'의 마감일이 내일입니다.`
+            };
+
+            try {
+                await queue.enqueue(notificationPayload);
+            } catch (error) {
+                logger.error("Cloud Tasks enqueue 실패", toError(error), {
+                    firebaseDB,
+                    userId,
+                    todoId: todoDoc.id,
+                    dueDateKey
+                });
+            }
+        }
+    }
+}

@@ -1,9 +1,14 @@
 import { onDocumentDeleted, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
-import * as admin from "firebase-admin";
+import { FieldPath, Timestamp } from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 import { toDate } from "../common/date";
 import { toError } from "../common/error";
+import {
+    FirestoreDatabase,
+    firebaseDBs,
+    firestoreFor
+} from "../common/firestore";
 import { FirestorePath } from "../common/firestorePath";
 
 const LOCATION = "asia-northeast3";
@@ -11,9 +16,11 @@ const CLEANUP_BATCH_SIZE = 200;
 const DELETE_BATCH_SIZE = 200;
 const QUERY_BATCH_SIZE = 100;
 
-// Todo 삭제 시 연결된 알림 문서와 발송 기록 문서의 동시 제거
-export const removeTodoNotificationDocuments = onDocumentDeleted({
+// 지정한 Firestore 데이터베이스에서 Todo 삭제 시 연결된 알림 문서를 제거하는 함수를 반환합니다.
+export function removeTodoNotificationDocuments(firebaseDB: FirestoreDatabase) {
+    return onDocumentDeleted({
         maxInstances: 1,
+        database: firebaseDB,
         document: "users/{userId}/todoLists/{todoId}",
         region: LOCATION
     },
@@ -22,13 +29,15 @@ export const removeTodoNotificationDocuments = onDocumentDeleted({
         const todoId = event.params.todoId;
 
         try {
-            await deleteByTodoId(userId, "notificationDispatches", todoId);
-            await deleteByTodoId(userId, "notifications", todoId);
+            const db = firestoreFor(firebaseDB);
+            await deleteByTodoId(db, userId, "notificationDispatches", todoId);
+            await deleteByTodoId(db, userId, "notifications", todoId);
         } catch (error) {
             logger.error(
                 "todo 삭제 후 notification 문서 정리 실패",
                 toError(error),
                 {
+                    firebaseDB,
                     userId,
                     todoId,
                     collections: ["notificationDispatches", "notifications"]
@@ -36,11 +45,14 @@ export const removeTodoNotificationDocuments = onDocumentDeleted({
             );
         }
     }
-);
+    );
+}
 
-// 지난 마감일 Todo 완료 시 재발송 방지 기록 정리
-export const removeCompletedTodoNotificationRecords = onDocumentUpdated({
+// 지정한 Firestore 데이터베이스에서 완료된 Todo의 알림 발송 기록을 정리하는 함수를 반환합니다.
+export function removeCompletedTodoNotificationRecords(firebaseDB: FirestoreDatabase) {
+    return onDocumentUpdated({
         maxInstances: 1,
+        database: firebaseDB,
         document: "users/{userId}/todoLists/{todoId}",
         region: LOCATION
     },
@@ -58,12 +70,13 @@ export const removeCompletedTodoNotificationRecords = onDocumentUpdated({
         if (!dueDate || Date.now() <= dueDate.getTime()) { return; }
 
         try {
-            await deleteByTodoId(userId, "notificationDispatches", todoId);
+            await deleteByTodoId(firestoreFor(firebaseDB), userId, "notificationDispatches", todoId);
         } catch (error) {
             logger.error(
                 "완료된 todo의 notification record 정리 실패",
                 toError(error),
                 {
+                    firebaseDB,
                     userId,
                     todoId,
                     collection: "notificationDispatches"
@@ -71,7 +84,8 @@ export const removeCompletedTodoNotificationRecords = onDocumentUpdated({
             );
         }
     }
-);
+    );
+}
 
 export const cleanupSoftDeletedNotifications = onSchedule({
         maxInstances: 1,
@@ -81,31 +95,22 @@ export const cleanupSoftDeletedNotifications = onSchedule({
     },
     async () => {
         try {
-            let lastDocument:
-                FirebaseFirestore.QueryDocumentSnapshot<FirebaseFirestore.DocumentData> | undefined;
-
-            while (true) {
-                let query = admin.firestore()
-                    .collectionGroup("notifications")
-                    .where("isDeleted", "==", true)
-                    .orderBy(admin.firestore.FieldPath.documentId())
-                    .limit(CLEANUP_BATCH_SIZE)
-                if (lastDocument) {
-                    query = query.startAfter(lastDocument);
+            for (const firebaseDB of firebaseDBs()) {
+                try {
+                    await cleanupSoftDeletedNotificationsIn(firebaseDB);
+                } catch (error) {
+                    logger.error(
+                        "soft delete Notification cleanup 실패",
+                        toError(error),
+                        {
+                            firebaseDB,
+                            collectionGroup: "notifications",
+                            filter: "isDeleted == true",
+                            orderBy: "documentId",
+                            cleanupBatchSize: CLEANUP_BATCH_SIZE
+                        }
+                    );
                 }
-
-                const snapshot = await query.get();
-
-                if (snapshot.empty) { return; }
-
-                const batch = admin.firestore().batch();
-                snapshot.docs.forEach((document) => {
-                    batch.delete(document.ref);
-                });
-                await batch.commit();
-
-                if (snapshot.size < CLEANUP_BATCH_SIZE) { return; }
-                lastDocument = snapshot.docs[snapshot.docs.length - 1];
             }
         } catch (error) {
             logger.error(
@@ -122,6 +127,37 @@ export const cleanupSoftDeletedNotifications = onSchedule({
     }
 );
 
+// 하나의 Firestore 데이터베이스에서 삭제 표시된 알림 문서를 제거합니다.
+async function cleanupSoftDeletedNotificationsIn(firebaseDB: FirestoreDatabase): Promise<void> {
+    const db = firestoreFor(firebaseDB);
+    let lastDocument:
+        FirebaseFirestore.QueryDocumentSnapshot<FirebaseFirestore.DocumentData> | undefined;
+
+    while (true) {
+        let query = db
+            .collectionGroup("notifications")
+            .where("isDeleted", "==", true)
+            .orderBy(FieldPath.documentId())
+            .limit(CLEANUP_BATCH_SIZE)
+        if (lastDocument) {
+            query = query.startAfter(lastDocument);
+        }
+
+        const snapshot = await query.get();
+
+        if (snapshot.empty) { return; }
+
+        const batch = db.batch();
+        snapshot.docs.forEach((document) => {
+            batch.delete(document.ref);
+        });
+        await batch.commit();
+
+        if (snapshot.size < CLEANUP_BATCH_SIZE) { return; }
+        lastDocument = snapshot.docs[snapshot.docs.length - 1];
+    }
+}
+
 // 더 이상 필요하지 않은 알림 발송 기록 정리
 export const cleanupNotificationDispatches = onSchedule({
         maxInstances: 1,
@@ -130,66 +166,84 @@ export const cleanupNotificationDispatches = onSchedule({
         timeZone: "UTC"
     },
     async () => {
-        try {
-            await cleanupDispatchesByTodoQuery((lastDocument) => {
-                let query = admin.firestore()
-                    .collectionGroup("todoLists")
-                    .where("isCompleted", "==", true)
-                    .where("dueDate", "<", admin.firestore.Timestamp.now())
-                    .orderBy("dueDate")
-                    .orderBy(admin.firestore.FieldPath.documentId())
-                    .limit(QUERY_BATCH_SIZE);
-
-                if (lastDocument) {
-                    query = query.startAfter(lastDocument);
-                }
-
-                return query;
-            });
-        } catch (error) {
-            logger.error(
-                "지난 마감일의 완료된 todo notification record 정리 실패",
-                toError(error),
-                {
-                    collectionGroup: "todoLists",
-                    filter: "isCompleted == true && dueDate < now",
-                    orderBy: ["dueDate", "documentId"],
-                    queryBatchSize: QUERY_BATCH_SIZE
-                }
-            );
-        }
-
-        try {
-            await cleanupDispatchesByTodoQuery((lastDocument) => {
-                let query = admin.firestore()
-                    .collectionGroup("todoLists")
-                    .where("dueDate", "==", null)
-                    .orderBy(admin.firestore.FieldPath.documentId())
-                    .limit(QUERY_BATCH_SIZE);
-
-                if (lastDocument) {
-                    query = query.startAfter(lastDocument);
-                }
-
-                return query;
-            });
-        } catch (error) {
-            logger.error(
-                "마감일이 없는 todo notification record 정리 실패",
-                toError(error),
-                {
-                    collectionGroup: "todoLists",
-                    filter: "dueDate == null",
-                    orderBy: "__name__",
-                    queryBatchSize: QUERY_BATCH_SIZE
-                }
-            );
+        for (const firebaseDB of firebaseDBs()) {
+            try {
+                await cleanupNotificationDispatchesIn(firebaseDB);
+            } catch (error) {
+                logger.error("알림 발송 기록 정리 실패", toError(error), {
+                    firebaseDB
+                });
+            }
         }
     }
 );
 
+// 하나의 Firestore 데이터베이스에서 불필요한 알림 발송 기록을 정리합니다.
+async function cleanupNotificationDispatchesIn(firebaseDB: FirestoreDatabase): Promise<void> {
+    const db = firestoreFor(firebaseDB);
+
+    try {
+        await cleanupDispatchesByTodoQuery(db, (lastDocument) => {
+            let query = db
+                .collectionGroup("todoLists")
+                .where("isCompleted", "==", true)
+                .where("dueDate", "<", Timestamp.now())
+                .orderBy("dueDate")
+                .orderBy(FieldPath.documentId())
+                .limit(QUERY_BATCH_SIZE);
+
+            if (lastDocument) {
+                query = query.startAfter(lastDocument);
+            }
+
+            return query;
+        });
+    } catch (error) {
+        logger.error(
+            "지난 마감일의 완료된 todo notification record 정리 실패",
+            toError(error),
+            {
+                firebaseDB,
+                collectionGroup: "todoLists",
+                filter: "isCompleted == true && dueDate < now",
+                orderBy: ["dueDate", "documentId"],
+                queryBatchSize: QUERY_BATCH_SIZE
+            }
+        );
+    }
+
+    try {
+        await cleanupDispatchesByTodoQuery(db, (lastDocument) => {
+            let query = db
+                .collectionGroup("todoLists")
+                .where("dueDate", "==", null)
+                .orderBy(FieldPath.documentId())
+                .limit(QUERY_BATCH_SIZE);
+
+            if (lastDocument) {
+                query = query.startAfter(lastDocument);
+            }
+
+            return query;
+        });
+    } catch (error) {
+        logger.error(
+            "마감일이 없는 todo notification record 정리 실패",
+            toError(error),
+            {
+                firebaseDB,
+                collectionGroup: "todoLists",
+                filter: "dueDate == null",
+                orderBy: "__name__",
+                queryBatchSize: QUERY_BATCH_SIZE
+            }
+        );
+    }
+}
+
 // Todo 조회 쿼리를 순회하며 연결된 알림 발송 기록을 정리
 async function cleanupDispatchesByTodoQuery(
+    db: FirebaseFirestore.Firestore,
     makeQuery: (
         lastDocument?:
             FirebaseFirestore.QueryDocumentSnapshot<FirebaseFirestore.DocumentData>
@@ -206,7 +260,7 @@ async function cleanupDispatchesByTodoQuery(
             const userId = todoDoc.ref.parent.parent?.id;
             if (!userId) { continue; }
 
-            await deleteByTodoId(userId, "notificationDispatches", todoDoc.id);
+            await deleteByTodoId(db, userId, "notificationDispatches", todoDoc.id);
         }
 
         if (snapshot.size < QUERY_BATCH_SIZE) { return; }
@@ -216,6 +270,7 @@ async function cleanupDispatchesByTodoQuery(
 
 // 특정 Todo 연결 문서의 배치 단위 전체 삭제
 async function deleteByTodoId(
+    db: FirebaseFirestore.Firestore,
     userId: string,
     collectionName: "notificationDispatches" | "notifications",
     todoId: string
@@ -224,7 +279,7 @@ async function deleteByTodoId(
         const collectionPath = collectionName === "notificationDispatches" ?
             FirestorePath.notificationDispatches(userId) :
             FirestorePath.notifications(userId);
-        const snapshot = await admin.firestore()
+        const snapshot = await db
             .collection(collectionPath)
             .where("todoId", "==", todoId)
             .limit(DELETE_BATCH_SIZE)
@@ -232,7 +287,7 @@ async function deleteByTodoId(
 
         if (snapshot.empty) { return; }
 
-        const batch = admin.firestore().batch();
+        const batch = db.batch();
         snapshot.docs.forEach((document) => {
             batch.delete(document.ref);
         });

@@ -1,6 +1,6 @@
 import * as functions from "firebase-functions/v1";
-import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
+import { firebaseDBs, firestoreFor } from "../common/firestore";
 import { FirestorePath } from "../common/firestorePath";
 
 export const cleanupDeletedUserFirestoreData = functions
@@ -12,17 +12,29 @@ export const cleanupDeletedUserFirestoreData = functions
     .user()
     .onDelete(async (user) => {
         const uid = user.uid;
+        const errors: unknown[] = [];
 
-        try {
-            const userDocRef = admin.firestore().doc(FirestorePath.user(uid));
-            await admin.firestore().recursiveDelete(userDocRef);
-            logger.info("Deleted Firestore user data after Auth user deletion", { uid });
-        } catch (error) {
-            logger.error("Failed to delete Firestore user data after Auth user deletion", {
-                uid,
-                error
-            });
-            throw error;
+        for (const firebaseDB of firebaseDBs()) {
+            try {
+                const db = firestoreFor(firebaseDB);
+                const userDocRef = db.doc(FirestorePath.user(uid));
+                await db.recursiveDelete(userDocRef);
+                logger.info("Auth 사용자 삭제 후 Firestore 사용자 데이터 삭제 완료", {
+                    firebaseDB,
+                    uid
+                });
+            } catch (error) {
+                logger.error("Auth 사용자 삭제 후 Firestore 사용자 데이터 삭제 실패", {
+                    firebaseDB,
+                    uid,
+                    error
+                });
+                errors.push(error);
+            }
+        }
+
+        if (errors.length !== 0) {
+            throw new Error("일부 Firestore 데이터베이스에서 사용자 데이터 삭제에 실패했습니다.");
         }
     }
 );

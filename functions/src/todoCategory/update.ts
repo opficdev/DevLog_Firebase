@@ -1,27 +1,43 @@
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { getFunctions } from "firebase-admin/functions";
-import * as admin from "firebase-admin";
+import { FieldPath } from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 import { toError } from "../common/error";
+import {
+    FirestoreDatabase,
+    firestoreFor,
+    isFirebaseDB
+} from "../common/firestore";
 import { FirestorePath } from "../common/firestorePath";
 
 const LOCATION = "asia-northeast3";
 const BATCH_SIZE = 200;
 const ETC_CATEGORY = "etc";
 
+// 사용자 카테고리 항목의 비교에 필요한 원본 필드를 저장합니다.
 type CategoryItem = {
+    // 카테고리 항목의 종류를 저장합니다.
     kind?: unknown;
+    // 사용자 카테고리 식별자를 저장합니다.
     id?: unknown;
 };
 
+// 삭제된 카테고리의 Todo 정리 작업에 필요한 데이터를 저장합니다.
 type TodoCategoryUpdateTaskData = {
+    // 작업 데이터가 속한 Firestore 데이터베이스를 저장합니다.
+    firebaseDB: FirestoreDatabase;
+    // 정리 대상 Todo 소유자를 저장합니다.
     userId: string;
+    // 삭제된 사용자 카테고리 식별자를 저장합니다.
     id: string;
 };
 
-export const requestMoveRemovedCategoryTodosToEtc = onDocumentUpdated({
+// 지정한 Firestore 데이터베이스에서 삭제된 사용자 카테고리의 Todo 정리 작업을 요청하는 함수를 반환합니다.
+export function requestMoveRemovedCategoryTodosToEtc(firebaseDB: FirestoreDatabase) {
+    return onDocumentUpdated({
         maxInstances: 1,
+        database: firebaseDB,
         document: "users/{userId}/userData/categories",
         region: LOCATION
     },
@@ -45,6 +61,7 @@ export const requestMoveRemovedCategoryTodosToEtc = onDocumentUpdated({
 
             for (const id of removedIDs) {
                 const taskData = {
+                    firebaseDB,
                     userId,
                     id
                 };
@@ -57,14 +74,17 @@ export const requestMoveRemovedCategoryTodosToEtc = onDocumentUpdated({
             }
         } catch (error) {
             logger.error("삭제된 사용자 카테고리 todo 정리 요청 실패", toError(error), {
+                firebaseDB,
                 userId,
                 removedIDs
             });
             throw error;
         }
     }
-);
+    );
+}
 
+// 삭제된 사용자 카테고리에 속한 Todo를 etc 카테고리로 이동
 export const completeMoveRemovedCategoryTodosToEtc = onTaskDispatched({
         maxInstances: 2,
         region: LOCATION,
@@ -77,12 +97,13 @@ export const completeMoveRemovedCategoryTodosToEtc = onTaskDispatched({
             logger.warn("유효하지 않은 카테고리 정리 payload", request.data);
             return;
         }
-        const { userId, id } = taskData;
+        const { firebaseDB, userId, id } = taskData;
 
         try {
-            await updateTodos(userId, id);
+            await updateTodos(firestoreFor(firebaseDB), userId, id);
         } catch (error) {
             logger.error("삭제된 사용자 카테고리 todo 정리 실패", toError(error), {
+                firebaseDB,
                 userId,
                 id,
                 payload: request.data
@@ -92,7 +113,11 @@ export const completeMoveRemovedCategoryTodosToEtc = onTaskDispatched({
     }
 );
 
+// 카테고리 정리 작업 payload의 필수 필드를 검증합니다.
 function parseTaskPayload(data: unknown): TodoCategoryUpdateTaskData | null {
+    const firebaseDB = typeof (data as TodoCategoryUpdateTaskData | undefined)?.firebaseDB === "string" ?
+        (data as TodoCategoryUpdateTaskData).firebaseDB.trim() :
+        "";
     const userId = typeof (data as TodoCategoryUpdateTaskData | undefined)?.userId === "string" ?
         (data as TodoCategoryUpdateTaskData).userId.trim() :
         "";
@@ -100,16 +125,18 @@ function parseTaskPayload(data: unknown): TodoCategoryUpdateTaskData | null {
         (data as TodoCategoryUpdateTaskData).id.trim() :
         "";
 
-    if (!userId || !id) {
+    if (!isFirebaseDB(firebaseDB) || !userId || !id) {
         return null;
     }
 
     return {
+        firebaseDB,
         userId,
         id
     };
 }
 
+// 이전 카테고리 목록에서 제거된 사용자 카테고리 ID 목록을 반환합니다.
 function getRemovedIDs(
     beforeItems: CategoryItem[],
     afterItems: CategoryItem[]
@@ -130,23 +157,27 @@ function getRemovedIDs(
     return Array.from(beforeIDs).filter((id) => !afterIDs.has(id));
 }
 
+// 삭제된 카테고리를 사용하는 Todo를 etc 카테고리로 이동합니다.
 async function updateTodos(
+    db: FirebaseFirestore.Firestore,
     userId: string,
     id: string
 ): Promise<void> {
-    await updateTodoBatch(userId, id)
+    await updateTodoBatch(db, userId, id);
 }
 
+// Todo 문서를 배치 단위로 순회하며 카테고리 값을 갱신합니다.
 async function updateTodoBatch(
+    db: FirebaseFirestore.Firestore,
     userId: string,
     id: string,
     lastDocument?:
         FirebaseFirestore.QueryDocumentSnapshot<FirebaseFirestore.DocumentData>
 ): Promise<void> {
-    let query = admin.firestore()
+    let query = db
         .collection(FirestorePath.todos(userId))
         .where("category", "==", id)
-        .orderBy(admin.firestore.FieldPath.documentId())
+        .orderBy(FieldPath.documentId())
         .limit(BATCH_SIZE);
 
     if (lastDocument) {
@@ -156,7 +187,7 @@ async function updateTodoBatch(
     const snapshot = await query.get();
     if (snapshot.empty) { return; }
 
-    const batch = admin.firestore().batch();
+    const batch = db.batch();
     snapshot.docs.forEach((document) => {
         batch.update(document.ref, {
             category: ETC_CATEGORY
@@ -167,6 +198,7 @@ async function updateTodoBatch(
     if (snapshot.size < BATCH_SIZE) { return; }
 
     await updateTodoBatch(
+        db,
         userId,
         id,
         snapshot.docs[snapshot.docs.length - 1]

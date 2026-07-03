@@ -2,7 +2,7 @@ import * as admin from "firebase-admin";
 import { onRequest, HttpsError } from "firebase-functions/v2/https";
 import type { Request } from "firebase-functions/v2/https";
 import type { Response } from "express";
-import { FirestoreDatabaseID, firestoreFor } from "../common/firestore";
+import { FirestoreDatabase, firestoreFor } from "../common/firestore";
 import { requestTodoDeletionInFirestore, undoTodoDeletionInFirestore } from "./todoDeletion";
 import {
     requestPushNotificationDeletionInFirestore,
@@ -30,7 +30,7 @@ const LOCATION = "asia-northeast3";
 export const stagingApi = restApiFor("staging");
 export const prodApi = restApiFor("prod");
 
-function restApiFor(databaseID: FirestoreDatabaseID) {
+function restApiFor(firebaseDB: FirestoreDatabase) {
     return onRequest({
         cors: true,
         maxInstances: 3,
@@ -49,7 +49,7 @@ function restApiFor(databaseID: FirestoreDatabaseID) {
                 throw new RestError(404, "not-found", "Endpoint를 찾을 수 없습니다.");
             }
 
-            const db = firestoreFor(databaseID);
+            const db = firestoreFor(firebaseDB);
             const uid = route.requiresAuth ? await authenticatedUID(request) : undefined;
             const result = await handleRoute(route, db, body, uid);
 
