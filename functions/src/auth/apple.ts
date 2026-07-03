@@ -58,10 +58,7 @@ export const requestAppleCustomToken = onCall({
         // // 1. Verify and decode the Apple ID token
         let decodedToken: AppleTokenPayload;
         try {
-            decodedToken = await verifyAppleIdToken(
-                idToken,
-                clientId
-            );
+            decodedToken = await verifyAppleIdToken(idToken, clientId);
         } catch (error) {
             console.error('Error verifying Apple ID token:', error);
             throw new HttpsError('invalid-argument', 'Failed to verify Apple ID token');

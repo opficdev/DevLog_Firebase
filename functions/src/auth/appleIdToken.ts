@@ -41,10 +41,7 @@ function getApplePublicKey(
     }
 
     appleJwksClient.getSigningKey(header.kid)
-        .then((key) => callback(
-            null,
-            key.getPublicKey()
-        ))
+        .then((key) => callback(null, key.getPublicKey()))
         .catch((error) => callback(error));
 }
 
@@ -86,10 +83,11 @@ export function verifyAppleIdToken(
                     return;
                 }
 
-                if (!decoded || typeof decoded === "string" || !isAppleTokenPayload(
-                    decoded,
-                    clientId
-                )) {
+                if (
+                    !decoded ||
+                    typeof decoded === "string" ||
+                    !isAppleTokenPayload(decoded, clientId)
+                ) {
                     reject(new Error("Invalid Apple ID token payload"));
                     return;
                 }

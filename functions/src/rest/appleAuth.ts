@@ -2,7 +2,11 @@ import * as admin from "firebase-admin";
 import { HttpsError } from "firebase-functions/v2/https";
 import axios from "axios";
 import * as jwt from "jsonwebtoken";
-import { AppleTokenPayload, isAppleEmailVerified, verifyAppleIdToken } from "../auth/appleIdToken";
+import {
+    AppleTokenPayload,
+    isAppleEmailVerified,
+    verifyAppleIdToken
+} from "../auth/appleIdToken";
 
 interface FirebaseAuthClient {
     getUser(uid: string): Promise<{ uid: string }>;
@@ -23,10 +27,7 @@ export async function requestAppleCustomTokenWithDatabase(
     const { clientId } = appleConfiguration();
     let decodedToken: AppleTokenPayload;
     try {
-        decodedToken = await verifyAppleIdToken(
-            idToken,
-            clientId
-        );
+        decodedToken = await verifyAppleIdToken(idToken, clientId);
     } catch (error) {
         console.error("Error verifying Apple ID token:", error);
         throw new HttpsError("invalid-argument", "Failed to verify Apple ID token");
