@@ -2,7 +2,11 @@ import {onCall, HttpsError} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import axios from "axios";
 import * as jwt from "jsonwebtoken";
-import { AppleTokenPayload, verifyAppleIdToken } from "./appleIdToken";
+import {
+    AppleTokenPayload,
+    isAppleEmailVerified,
+    verifyAppleIdToken
+} from "./appleIdToken";
 
 function getAppleConfiguration() {
     const teamId = process.env.APPLE_TEAM_ID;
@@ -85,7 +89,7 @@ export const requestAppleCustomToken = onCall({
                     // User not found by email, create new user
                     const userRecord = await admin.auth().createUser({
                             email: email,
-                            emailVerified: decodedToken.email_verified === 'true',
+                            emailVerified: isAppleEmailVerified(decodedToken),
                     });
                     uid = userRecord.uid;
                     console.log(`Created new user with email: ${uid}`);

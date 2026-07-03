@@ -22,8 +22,8 @@ export interface AppleTokenPayload {
   iat: number;          // number: 발행 시간 (issued at)
   exp: number;          // number: 만료 시간 (expiration)
   email?: string;       // string | undefined: 사용자 이메일
-  email_verified?: string; // string | undefined: 이메일 인증 여부
-  is_private_email?: boolean; // boolean | undefined: 비공개 릴레이 이메일 여부
+  email_verified?: boolean | string; // boolean | string | undefined: 이메일 인증 여부
+  is_private_email?: boolean | string; // boolean | string | undefined: 비공개 릴레이 이메일 여부
   nonce?: string;       // string | undefined: 보안용 난수값
   nonce_supported?: boolean; // boolean | undefined: nonce 지원 여부
   real_user_status?: number; // number | undefined: 실제 사용자 상태
@@ -58,6 +58,12 @@ function isAppleTokenPayload(
         typeof payload.sub === "string" &&
         typeof payload.iat === "number" &&
         typeof payload.exp === "number";
+}
+
+// Apple ID 토큰의 이메일 인증 여부 claim을 boolean 값으로 변환하는 메서드
+export function isAppleEmailVerified(payload: AppleTokenPayload) {
+    return payload.email_verified === true ||
+        payload.email_verified === "true";
 }
 
 // Apple JWKS와 필수 claim으로 Apple ID 토큰을 검증하고 페이로드를 반환하는 메서드

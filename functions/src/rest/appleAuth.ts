@@ -2,7 +2,7 @@ import * as admin from "firebase-admin";
 import { HttpsError } from "firebase-functions/v2/https";
 import axios from "axios";
 import * as jwt from "jsonwebtoken";
-import { AppleTokenPayload, verifyAppleIdToken } from "../auth/appleIdToken";
+import { AppleTokenPayload, isAppleEmailVerified, verifyAppleIdToken } from "../auth/appleIdToken";
 
 interface FirebaseAuthClient {
     getUser(uid: string): Promise<{ uid: string }>;
@@ -34,7 +34,7 @@ export async function requestAppleCustomTokenWithDatabase(
 
     const userId = decodedToken.sub;
     const email = decodedToken.email;
-    const emailVerified = decodedToken.email_verified === "true";
+    const emailVerified = isAppleEmailVerified(decodedToken);
 
     if (!userId) {
         throw new HttpsError("internal", "Could not get user ID from Apple token");
