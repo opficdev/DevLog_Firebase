@@ -2,21 +2,7 @@ import * as admin from "firebase-admin";
 import { HttpsError } from "firebase-functions/v2/https";
 import axios from "axios";
 import * as jwt from "jsonwebtoken";
-
-interface AppleTokenPayload {
-  iss: string;
-  sub: string;
-  aud: string;
-  iat: number;
-  exp: number;
-  email?: string;
-  email_verified?: string;
-  is_private_email?: boolean;
-  nonce?: string;
-  nonce_supported?: boolean;
-  real_user_status?: number;
-  auth_time?: number;
-}
+import { AppleTokenPayload, verifyAppleIdToken } from "../auth/appleIdToken";
 
 interface FirebaseAuthClient {
     getUser(uid: string): Promise<{ uid: string }>;
@@ -34,15 +20,16 @@ export async function requestAppleCustomTokenWithDatabase(
     idToken: string,
     authorizationCode: string
 ): Promise<{ customToken: string }> {
+    const { clientId } = appleConfiguration();
     let decodedToken: AppleTokenPayload;
     try {
-        decodedToken = jwt.decode(idToken) as AppleTokenPayload;
-        if (!decodedToken) {
-            throw new HttpsError("invalid-argument", "Invalid Apple ID token");
-        }
+        decodedToken = await verifyAppleIdToken(
+            idToken,
+            clientId
+        );
     } catch (error) {
-        console.error("Error decoding Apple ID token:", error);
-        throw new HttpsError("invalid-argument", "Failed to decode Apple ID token");
+        console.error("Error verifying Apple ID token:", error);
+        throw new HttpsError("invalid-argument", "Failed to verify Apple ID token");
     }
 
     const userId = decodedToken.sub;
