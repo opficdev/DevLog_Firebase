@@ -23,9 +23,9 @@ export function firebaseDBs(): FirestoreDatabase[] {
     return Array.from(new Set(values)) as FirestoreDatabase[];
 }
 
-// 값이 비어 있지 않은 Firestore 데이터베이스 이름인지 확인합니다.
+// 환경 변수에 포함된 Firestore 데이터베이스 이름인지 확인합니다.
 export function isFirebaseDB(value: unknown): value is FirestoreDatabase {
-    return typeof value === "string" && value.trim().length !== 0;
+    return typeof value === "string" && firebaseDBs().includes(value.trim());
 }
 
 // 이름 지정 데이터베이스용 Firestore 클라이언트를 반환합니다.
