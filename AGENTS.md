@@ -20,6 +20,7 @@ These instructions apply to the repository root.
 
 - Add a one-sentence comment explaining the role of each declared type and method.
 - For properties inside a type, add a short comment describing what data the property stores.
+- Apply these rules only to code that is directly related to the current change.
 - When a named import has three or more imported members, put each member on its own line:
 ```ts
 import {
@@ -39,13 +40,7 @@ function someFunction(
 }
 ```
 
-- For function or method calls with two or more arguments, put each argument on its own line:
-```ts
-someFunction(
-    firstArgument,
-    secondArgument
-);
-```
+- For function or method call sites, prefer the existing local style and framework conventions.
 
 ## Firebase Functions
 
