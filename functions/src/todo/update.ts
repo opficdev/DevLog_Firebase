@@ -8,7 +8,7 @@ import { FirestorePath } from "../common/firestorePath";
 const LOCATION = "asia-northeast3";
 const BATCH_SIZE = 200;
 
-// syncTodoNotificationCategory는 지정한 Firestore 데이터베이스에서 Todo 카테고리 변경 시 알림 문서 카테고리를 동기화하는 함수를 반환합니다.
+// 지정한 Firestore 데이터베이스에서 Todo 카테고리 변경 시 알림 문서 카테고리를 동기화하는 함수를 반환합니다.
 export function syncTodoNotificationCategory(firebaseDB: FirestoreDatabase) {
     return onDocumentUpdated({
         maxInstances: 1,

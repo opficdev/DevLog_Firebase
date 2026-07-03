@@ -61,7 +61,7 @@ dotenv.config({
 // Firebase 앱 초기화
 admin.initializeApp();
 
-// firestoreDatabaseFunctionGroups는 이름 지정 데이터베이스별 Firestore trigger export 묶음을 저장합니다.
+// 이름 지정 데이터베이스별 Firestore trigger export 묶음을 저장합니다.
 const firestoreDatabaseFunctionGroups: Record<string, unknown> = {};
 for (const firebaseDB of firebaseDBs()) {
     firestoreDatabaseFunctionGroups[firebaseDB] = {

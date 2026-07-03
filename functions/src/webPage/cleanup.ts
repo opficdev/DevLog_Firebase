@@ -33,7 +33,7 @@ export const cleanupSoftDeletedWebPages = onSchedule({
     }
 );
 
-// cleanupSoftDeletedWebPagesIn은 하나의 Firestore 데이터베이스에서 삭제 표시된 WebPage 문서를 제거합니다.
+// 하나의 Firestore 데이터베이스에서 삭제 표시된 웹 페이지 문서를 제거합니다.
 async function cleanupSoftDeletedWebPagesIn(firebaseDB: FirestoreDatabase): Promise<void> {
     const db = firestoreFor(firebaseDB);
     let lastDocument:

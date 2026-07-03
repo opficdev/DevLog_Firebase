@@ -45,7 +45,7 @@ export const compactSoftDeletedTodos = onSchedule({
     }
 );
 
-// compactSoftDeletedTodosIn은 하나의 Firestore 데이터베이스에서 삭제 유예 기간이 지난 Todo를 압축합니다.
+// 하나의 Firestore 데이터베이스에서 삭제 유예 기간이 지난 Todo를 압축합니다.
 async function compactSoftDeletedTodosIn(
     firebaseDB: FirestoreDatabase,
     cutoff: Date

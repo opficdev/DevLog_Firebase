@@ -16,7 +16,7 @@ const CLEANUP_BATCH_SIZE = 200;
 const DELETE_BATCH_SIZE = 200;
 const QUERY_BATCH_SIZE = 100;
 
-// removeTodoNotificationDocuments는 지정한 Firestore 데이터베이스에서 Todo 삭제 시 연결된 알림 문서를 제거하는 함수를 반환합니다.
+// 지정한 Firestore 데이터베이스에서 Todo 삭제 시 연결된 알림 문서를 제거하는 함수를 반환합니다.
 export function removeTodoNotificationDocuments(firebaseDB: FirestoreDatabase) {
     return onDocumentDeleted({
         maxInstances: 1,
@@ -48,7 +48,7 @@ export function removeTodoNotificationDocuments(firebaseDB: FirestoreDatabase) {
     );
 }
 
-// removeCompletedTodoNotificationRecords는 지정한 Firestore 데이터베이스에서 완료된 Todo의 알림 발송 기록을 정리하는 함수를 반환합니다.
+// 지정한 Firestore 데이터베이스에서 완료된 Todo의 알림 발송 기록을 정리하는 함수를 반환합니다.
 export function removeCompletedTodoNotificationRecords(firebaseDB: FirestoreDatabase) {
     return onDocumentUpdated({
         maxInstances: 1,
@@ -113,7 +113,7 @@ export const cleanupSoftDeletedNotifications = onSchedule({
     }
 );
 
-// cleanupSoftDeletedNotificationsIn은 하나의 Firestore 데이터베이스에서 삭제 표시된 알림 문서를 제거합니다.
+// 하나의 Firestore 데이터베이스에서 삭제 표시된 알림 문서를 제거합니다.
 async function cleanupSoftDeletedNotificationsIn(firebaseDB: FirestoreDatabase): Promise<void> {
     const db = firestoreFor(firebaseDB);
     let lastDocument:
@@ -158,7 +158,7 @@ export const cleanupNotificationDispatches = onSchedule({
     }
 );
 
-// cleanupNotificationDispatchesIn은 하나의 Firestore 데이터베이스에서 불필요한 알림 발송 기록을 정리합니다.
+// 하나의 Firestore 데이터베이스에서 불필요한 알림 발송 기록을 정리합니다.
 async function cleanupNotificationDispatchesIn(firebaseDB: FirestoreDatabase): Promise<void> {
     const db = firestoreFor(firebaseDB);
 

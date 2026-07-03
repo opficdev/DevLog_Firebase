@@ -12,25 +12,25 @@ import {
 import { FirestorePath } from "../common/firestorePath";
 import { resolveTimeZone } from "./shared";
 
-// TaskPayload는 푸시 알림 작업 하나를 검증하고 발송하는 데 필요한 데이터를 저장합니다.
+// 푸시 알림 작업 하나를 검증하고 발송하는 데 필요한 데이터를 저장합니다.
 type TaskPayload = {
-    // firebaseDB는 작업 데이터가 속한 Firestore 데이터베이스를 저장합니다.
+    // 작업 데이터가 속한 Firestore 데이터베이스를 저장합니다.
     firebaseDB: FirestoreDatabase;
-    // userId는 Todo와 알림 기록의 소유자를 저장합니다.
+    // Todo와 알림 기록의 소유자를 저장합니다.
     userId: string;
-    // todoId는 마감일 검증에 사용할 Todo 문서 ID를 저장합니다.
+    // 마감일 검증에 사용할 Todo 문서 ID를 저장합니다.
     todoId: string;
-    // dueDateKey는 멱등성 확인에 사용할 예상 로컬 마감일 키를 저장합니다.
+    // 멱등성 확인에 사용할 예상 로컬 마감일 키를 저장합니다.
     dueDateKey: string;
-    // title은 FCM으로 보낼 알림 제목을 저장합니다.
+    // FCM으로 보낼 알림 제목을 저장합니다.
     title: string;
-    // body는 FCM으로 보낼 알림 본문을 저장합니다.
+    // FCM으로 보낼 알림 본문을 저장합니다.
     body: string;
 };
 
-// FirestoreErrorLike는 Firestore 생성 충돌에서 반환되는 오류 코드 형태를 저장합니다.
+// Firestore 생성 충돌에서 반환되는 오류 코드 형태를 저장합니다.
 type FirestoreErrorLike = {
-    // code는 Firestore 오류 코드를 저장합니다.
+    // Firestore 오류 코드를 저장합니다.
     code?: unknown;
 };
 

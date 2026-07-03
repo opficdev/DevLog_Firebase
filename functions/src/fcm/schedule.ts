@@ -36,7 +36,7 @@ export const scheduleTodoReminder = onSchedule({
     }
 );
 
-// enqueueTodoReminderTasks는 하나의 이름 지정 데이터베이스를 순회하며 마감 Todo 푸시 알림 작업을 적재합니다.
+// 하나의 이름 지정 데이터베이스를 순회하며 마감 Todo 푸시 알림 작업을 적재합니다.
 async function enqueueTodoReminderTasks(
     firebaseDB: FirestoreDatabase,
     now: Date
