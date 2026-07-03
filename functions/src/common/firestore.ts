@@ -1,7 +1,7 @@
 import { getFirestore } from "firebase-admin/firestore";
 
 // FirestoreDatabase는 배포 함수가 사용하는 이름 지정 Firestore 데이터베이스를 나타냅니다.
-export type FirestoreDatabase = "staging" | "prod";
+export type FirestoreDatabase = string;
 
 // firebaseDBs는 예약 함수가 처리할 모든 이름 지정 Firestore 데이터베이스를 저장합니다.
 export const firebaseDBs: FirestoreDatabase[] = ["staging", "prod"];
