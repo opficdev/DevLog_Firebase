@@ -12,6 +12,7 @@ export const cleanupDeletedUserFirestoreData = functions
     .user()
     .onDelete(async (user) => {
         const uid = user.uid;
+        const errors: unknown[] = [];
 
         for (const firebaseDB of firebaseDBs()) {
             try {
@@ -28,8 +29,12 @@ export const cleanupDeletedUserFirestoreData = functions
                     uid,
                     error
                 });
-                throw error;
+                errors.push(error);
             }
+        }
+
+        if (errors.length !== 0) {
+            throw new Error("일부 Firestore 데이터베이스에서 사용자 데이터 삭제에 실패했습니다.");
         }
     }
 );
