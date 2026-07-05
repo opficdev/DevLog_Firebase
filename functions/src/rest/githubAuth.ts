@@ -23,8 +23,11 @@ interface GitHubEmail {
     verified: boolean;
 }
 
-const GITHUB_EMAIL_UNAVAILABLE_REASON = "email_not_found";
+const EMAIL_UNAVAILABLE_REASON = "email_not_found";
+const ACCEPT = "application/vnd.github+json";
+const USER_AGENT = "DevLog-Firebase";
 
+// GitHub OAuth 코드로 Firebase 커스텀 토큰 발급에 필요한 사용자 정보를 조회합니다.
 export async function requestGithubTokensWithCode(
     code: string
 ): Promise<{ accessToken: string; customToken: string }> {
@@ -53,7 +56,9 @@ export async function requestGithubTokensWithCode(
 
     const userResponse = await axios.get<GitHubUser>("https://api.github.com/user", {
         headers: {
-            "Authorization": `token ${accessToken}`
+            "Authorization": `Bearer ${accessToken}`,
+            "Accept": ACCEPT,
+            "User-Agent": USER_AGENT
         }
     });
 
@@ -64,7 +69,7 @@ export async function requestGithubTokensWithCode(
         throw new HttpsError(
             "internal",
             "GitHub 사용자 데이터를 가져오지 못했습니다.",
-            { reason: GITHUB_EMAIL_UNAVAILABLE_REASON }
+            { reason: EMAIL_UNAVAILABLE_REASON }
         );
     }
 
@@ -128,7 +133,7 @@ export async function revokeGithubAccessTokenWithDatabase(
             access_token: accessToken,
         },
         headers: {
-            Accept: "application/vnd.github+json",
+            Accept: ACCEPT,
         },
     });
 
@@ -139,6 +144,7 @@ export async function revokeGithubAccessTokenWithDatabase(
     throw new HttpsError("internal", "토큰 폐기에 실패했습니다.");
 }
 
+// 프로필에 공개 이메일이 없을 때 검증된 기본 이메일을 조회합니다.
 async function resolveGitHubEmail(
     accessToken: string,
     profileEmail?: string
@@ -149,7 +155,9 @@ async function resolveGitHubEmail(
 
     const emailResponse = await axios.get<GitHubEmail[]>("https://api.github.com/user/emails", {
         headers: {
-            "Authorization": `token ${accessToken}`
+            "Authorization": `Bearer ${accessToken}`,
+            "Accept": ACCEPT,
+            "User-Agent": USER_AGENT
         }
     });
 
