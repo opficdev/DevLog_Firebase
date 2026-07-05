@@ -63,6 +63,17 @@ if (
 - Do not commit generated dependency or build output directories such as `node_modules/` and `functions/lib/`.
 - Deploy updated functions one by one separately.
 
+## Git and commit rules
+
+- Commit messages must start with a short prefix used by recent local commits, such as `feat`, `fix`, `refactor`, `chore`, `test`, `docs`, `ui`, or `rollback`.
+- Write commit message prose in Korean.
+- Keep implementation names such as `requestGithubTokensWithCode`, `GitHubOAuthResponse`, `functions/src/rest/githubAuth.ts`, commands, branch names, and commit hashes in their original form.
+- Do not translate implementation names into Korean unless the user explicitly asks for a user-facing Korean label.
+- Do not write a commit message body.
+- If the user explicitly specifies a prefix or noun-phrase ending, follow it exactly.
+- When checking recent commit-message style, do not infer local commit style from GitHub merge or squash-merge subjects such as `[#5] ... (#6)`.
+- For squash-merge commits, inspect the commit body and use the individual commit messages as the style reference.
+
 ## Pull Requests
 
 - Before drafting or creating a pull request, read `.github/pull_request_template.md` and follow that template exactly.
