@@ -37,7 +37,7 @@ export async function requestTodoDeletionInFirestore(
     } catch (error) {
         const currentTodoSnapshot = await todoRef.get();
 
-        if (currentTodoSnapshot.exists && !currentTodoSnapshot.data()?.deletedAt) {
+        if (currentTodoSnapshot.exists && !!currentTodoSnapshot.data()?.deletedAt) {
             await todoRef.update({
                 deletedAt: null,
                 isDeleting: FieldValue.delete(),
