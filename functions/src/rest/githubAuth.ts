@@ -134,6 +134,7 @@ export async function revokeGithubAccessTokenWithDatabase(
         },
         headers: {
             Accept: ACCEPT,
+            "User-Agent": USER_AGENT,
         },
     });
 
