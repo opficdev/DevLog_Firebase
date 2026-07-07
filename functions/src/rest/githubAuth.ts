@@ -26,8 +26,8 @@ interface GitHubEmail {
 const EMAIL_UNAVAILABLE_REASON = "email_not_found";
 const ACCEPT = "application/vnd.github+json";
 const USER_AGENT = "DevLog-Firebase";
-const REVOKE_VALIDATION_FAILED_STATUS = 422;
-const TOKEN_CHECK_NOT_FOUND_STATUS = 404;
+const NOT_FOUND_STATUS = 404;
+const VALIDATION_FAILED_STATUS = 422;
 
 // GitHub OAuth 코드로 Firebase 커스텀 토큰 발급에 필요한 사용자 정보를 조회합니다.
 export async function requestGithubTokensWithCode(
@@ -177,9 +177,12 @@ async function isAccessTokenAlreadyInvalid(
     clientSecret: string,
     accessToken: string
 ): Promise<boolean> {
-    if (responseStatus(error) !== REVOKE_VALIDATION_FAILED_STATUS) {
-        return false;
-    }
+    const status = responseStatus(error);
+
+    if (
+        status !== NOT_FOUND_STATUS &&
+        status !== VALIDATION_FAILED_STATUS
+    ) { return false; }
 
     try {
         await axios.request({
@@ -195,9 +198,7 @@ async function isAccessTokenAlreadyInvalid(
         });
         return false;
     } catch (checkError) {
-        if (responseStatus(checkError) === TOKEN_CHECK_NOT_FOUND_STATUS) {
-            return true;
-        }
+        if (responseStatus(checkError) === NOT_FOUND_STATUS) { return true; }
 
         console.error("GitHub 토큰 상태 확인에 실패했습니다.", errorMetadata(checkError));
         return false;
