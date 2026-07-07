@@ -2,6 +2,8 @@ import * as admin from "firebase-admin";
 import { onRequest, HttpsError } from "firebase-functions/v2/https";
 import type { Request } from "firebase-functions/v2/https";
 import type { Response } from "express";
+import * as logger from "firebase-functions/logger";
+import { toError } from "../common/error";
 import { FirestoreDatabase, firestoreFor } from "../common/firestore";
 import { requestTodoDeletionInFirestore, undoTodoDeletionInFirestore } from "./todoDeletion";
 import {
@@ -22,7 +24,11 @@ import {
     requestGithubTokensWithCode,
     revokeGithubAccessTokenWithDatabase
 } from "./githubAuth";
-import { RestError, restErrorFrom } from "./error";
+import {
+    RestError,
+    restErrorBodyFrom,
+    restErrorFrom
+} from "./error";
 import { matchRestRoute, parseRestRouteSegments, RestRoute } from "./router";
 
 const LOCATION = "asia-northeast3";
@@ -55,7 +61,7 @@ function restApiFor(firebaseDB: FirestoreDatabase) {
 
             response.status(200).json(result);
         } catch (error) {
-            sendRestError(response, error);
+            sendRestError(request, response, error);
         }
     }
     );
@@ -199,10 +205,20 @@ function requiredBodyString(body: Record<string, unknown>, key: string): string 
     return value.trim();
 }
 
-function sendRestError(response: Response, error: unknown): void {
+// REST 오류 응답 body와 같은 내용을 Cloud Logging에 남긴 뒤 클라이언트에 반환합니다.
+function sendRestError(
+    request: Request,
+    response: Response,
+    error: unknown
+): void {
     const restError = restErrorFrom(error);
-    response.status(restError.status).json({
-        code: restError.code,
-        message: restError.message
+    const body = restErrorBodyFrom(error);
+
+    logger.error("REST API 오류 응답", toError(error), {
+        method: request.method,
+        path: request.path || new URL(request.url, "https://localhost").pathname,
+        status: restError.status,
+        body
     });
+    response.status(restError.status).json(body);
 }

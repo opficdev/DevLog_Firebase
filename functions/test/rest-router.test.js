@@ -1,6 +1,6 @@
 const assert = require("assert");
 const { HttpsError } = require("firebase-functions/v2/https");
-const { restErrorFrom } = require("../lib/rest/error");
+const { restErrorBodyFrom, restErrorFrom } = require("../lib/rest/error");
 const { parseRestRouteSegments, matchRestRoute } = require("../lib/rest/router");
 const { resolveAppleFirebaseUID } = require("../lib/rest/appleAuth");
 
@@ -133,6 +133,17 @@ const emailNotFound = restErrorFrom(
 );
 assert.strictEqual(emailNotFound.status, 400);
 assert.strictEqual(emailNotFound.code, "email-not-found");
+assert.deepStrictEqual(
+    restErrorBodyFrom(
+        new HttpsError("internal", "GitHub 사용자 데이터를 가져오지 못했습니다.", {
+            reason: "email_not_found"
+        })
+    ),
+    {
+        code: "email-not-found",
+        message: "GitHub 사용자 데이터를 가져오지 못했습니다."
+    }
+);
 
 const emailMismatch = restErrorFrom({
     error: {
