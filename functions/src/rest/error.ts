@@ -36,6 +36,15 @@ export function restErrorFrom(error: unknown): RestError {
     return new RestError(500, "internal", messageFrom(error, "서버 오류가 발생했습니다."));
 }
 
+// REST 오류 응답으로 내려갈 JSON body를 구성합니다.
+export function restErrorBodyFrom(error: unknown): { code: string; message: string } {
+    const restError = restErrorFrom(error);
+    return {
+        code: restError.code,
+        message: restError.message
+    };
+}
+
 function statusCodeFor(code: string): number {
     switch (code) {
     case "invalid-argument":
