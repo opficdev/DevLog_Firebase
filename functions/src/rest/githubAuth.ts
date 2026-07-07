@@ -247,7 +247,8 @@ function errorMetadata(error: unknown) {
     if (axios.isAxiosError(error)) {
         return {
             status: error.response?.status,
-            message: error.message
+            message: error.message,
+            data: error.response?.data
         };
     }
 
