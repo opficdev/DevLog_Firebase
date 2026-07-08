@@ -42,50 +42,25 @@ export const sendPushNotification = onTaskDispatched({
             return;
         }
 
+        const prepared = await prepareNotification(parsed, req.data);
+        if (!prepared) { return; }
+
+        const {
+            db, dispatchDocRef, notificationDocRef,
+            userId, todoId, dueDateKey,
+            title, body, todoCategory, notificationData
+        } = prepared;
+
+        await saveNotification(
+            notificationDocRef,
+            notificationData,
+            req.data,
+            userId,
+            todoId,
+            dueDateKey
+        );
+
         try {
-            const { firebaseDB, userId, todoId, dueDateKey, title, body } = parsed;
-            const db = firestoreFor(firebaseDB);
-
-            const settingsDocRef = db
-                .doc(FirestorePath.userData(userId, FirestorePath.UserDataDocument.settings));
-            const todoDocRef = db.doc(FirestorePath.todo(userId, todoId));
-            const [settingsDoc, todoDoc] = await Promise.all([
-                settingsDocRef.get(),
-                todoDocRef.get()
-            ]);
-            const settingsData = settingsDoc.data();
-            const allowPushNotification = settingsData?.allowPushNotification ?? true;
-            if (!allowPushNotification) { return; }
-
-            const todoData = todoDoc.data();
-            if (!todoDoc.exists || !todoData || todoData.isCompleted === true) { return; }
-            const todoCategory = typeof todoData.category === "string" ? todoData.category.trim() : "";
-            if (!todoCategory) { return; }
-
-            const timeZone = resolveTimeZone(settingsData);
-
-            const currentDueDate = toDate(todoData.dueDate);
-            if (!currentDueDate) { return; }
-            if (formatDateKey(currentDueDate, timeZone) !== dueDateKey) { return; }
-
-            const id = `${todoId}_${dueDateKey}`;
-            const dispatchDocRef = db.doc(FirestorePath.notificationDispatch(userId, id));
-            const notificationDocRef = db.doc(FirestorePath.notification(userId, id));
-            const dispatchDoc = await dispatchDocRef.get();
-
-            if (dispatchDoc.data()?.status === "completed") { return; }
-
-            const notificationData = {
-                title: "Todo 알림",
-                body,
-                receivedAt: FieldValue.serverTimestamp(),
-                isRead: false,
-                isDeleted: false,
-                todoId: todoId,
-                todoCategory: todoCategory
-            };
-            await notificationDocRef.set(notificationData, { merge: true });
-
             // 1. 사용자 FCM 토큰과 읽지 않은 알림 수 가져오기
             const unreadCountPromise = db
                 .collection(FirestorePath.notifications(userId))
@@ -148,6 +123,89 @@ export const sendPushNotification = onTaskDispatched({
         }
     }
 );
+
+// 발송 전 사용자 설정과 Todo 상태를 검증하고 저장할 알림 데이터를 구성합니다.
+async function prepareNotification(
+    parsed: TaskPayload,
+    payload: FirebaseFirestore.DocumentData | undefined
+) {
+    const { firebaseDB, userId, todoId, dueDateKey, title, body } = parsed;
+    const db = firestoreFor(firebaseDB);
+    const id = `${todoId}_${dueDateKey}`;
+    const dispatchDocRef = db.doc(FirestorePath.notificationDispatch(userId, id));
+    const notificationDocRef = db.doc(FirestorePath.notification(userId, id));
+
+    try {
+        const settingsDocRef = db
+            .doc(FirestorePath.userData(userId, FirestorePath.UserDataDocument.settings));
+        const todoDocRef = db.doc(FirestorePath.todo(userId, todoId));
+        const [settingsDoc, todoDoc] = await Promise.all([
+            settingsDocRef.get(),
+            todoDocRef.get()
+        ]);
+        const settingsData = settingsDoc.data();
+        const allowPushNotification = settingsData?.allowPushNotification ?? true;
+        if (!allowPushNotification) { return null; }
+
+        const todoData = todoDoc.data();
+        if (!todoDoc.exists || !todoData || todoData.isCompleted === true) { return null; }
+        const todoCategory = typeof todoData.category === "string" ? todoData.category.trim() : "";
+        if (!todoCategory) { return null; }
+
+        const timeZone = resolveTimeZone(settingsData);
+
+        const currentDueDate = toDate(todoData.dueDate);
+        if (!currentDueDate) { return null; }
+        if (formatDateKey(currentDueDate, timeZone) !== dueDateKey) { return null; }
+
+        const dispatchDoc = await dispatchDocRef.get();
+
+        if (dispatchDoc.data()?.status === "completed") { return null; }
+
+        const notificationData = {
+            title: "Todo 알림",
+            body,
+            receivedAt: FieldValue.serverTimestamp(),
+            isRead: false,
+            isDeleted: false,
+            todoId: todoId,
+            todoCategory: todoCategory
+        };
+
+        return {
+            db, dispatchDocRef, notificationDocRef,
+            userId, todoId, dueDateKey,
+            title, body, todoCategory, notificationData
+        };
+    } catch (error) {
+        logger.error("알림 발송 중 오류 발생", toError(error), {
+            payload
+        });
+        return null;
+    }
+}
+
+// 앱 내 알림 기록을 저장하고 저장 실패를 Cloud Tasks retry로 전달합니다.
+async function saveNotification(
+    notificationDocRef: FirebaseFirestore.DocumentReference<FirebaseFirestore.DocumentData>,
+    notificationData: FirebaseFirestore.DocumentData,
+    payload: FirebaseFirestore.DocumentData | undefined,
+    userId: string,
+    todoId: string,
+    dueDateKey: string
+): Promise<void> {
+    try {
+        await notificationDocRef.set(notificationData, { merge: true });
+    } catch (error) {
+        logger.error("푸시 알림 문서 저장 실패", toError(error), {
+            payload,
+            userId,
+            todoId,
+            dueDateKey
+        });
+        throw error;
+    }
+}
 
 // 큐 payload의 발송 필수 필드 충족 여부 검증
 function parseTaskPayload(data: FirebaseFirestore.DocumentData | undefined): TaskPayload | null {
