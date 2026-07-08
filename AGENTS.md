@@ -54,6 +54,27 @@ if (
 ```
 
 - For function or method call sites, prefer the existing local style and framework conventions.
+- When destructuring or returning many fields, group fields by role on adjacent lines and keep the same order between the returned object and the destructuring site:
+```ts
+const {
+    db, dispatchDocRef, notificationDocRef,
+    userId, todoId, dueDateKey,
+    title, body, todoCategory, notificationData
+} = prepared;
+```
+
+- Do not compress unrelated destructuring fields or positional arguments into one line only to reduce vertical length.
+- For function or method call sites with several positional arguments, put each argument on its own line unless the local code already uses a clearly readable compact convention:
+```ts
+await saveNotification(
+    notificationDocRef,
+    notificationData,
+    req.data,
+    userId,
+    todoId,
+    dueDateKey
+);
+```
 
 ## Firebase Functions
 
