@@ -259,7 +259,7 @@ async function claimDispatch(
             return false;
         }
         if (isProcessingActive(dispatchData, now)) {
-            throw new Error(`푸시 알림 dispatch가 처리 중입니다: ${todoId}_${dueDateKey}`);
+            return false;
         }
 
         transaction.set(dispatchDocRef, {
