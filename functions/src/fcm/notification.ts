@@ -134,6 +134,17 @@ export const sendPushNotification = onTaskDispatched({
         try {
             await admin.messaging().send(message);
         } catch (error) {
+            if (isPermanentFcmTokenError(error)) {
+                logger.warn(`[${userId}] 재시도해도 복구되지 않는 FCM token 오류입니다. completed로 처리합니다.`, error);
+                try {
+                    await dispatchDocRef.set(completedDispatchData, { merge: true });
+                } catch (completionError) {
+                    await expireProcessing(dispatchDocRef);
+                    throw completionError;
+                }
+                return;
+            }
+
             logger.warn(`[${userId}] 푸시 발송 실패. Firestore 기록은 유지됩니다.`, error);
             await expireProcessing(dispatchDocRef);
             throw error;
@@ -312,6 +323,13 @@ async function saveNotification(
         });
         throw error;
     }
+}
+
+// 재시도해도 복구되지 않는 FCM token 오류인지 확인합니다.
+function isPermanentFcmTokenError(error: unknown): boolean {
+    const code = (error as { code?: unknown })?.code;
+    return code === "messaging/invalid-registration-token" ||
+        code === "messaging/registration-token-not-registered";
 }
 
 // 실패를 감지한 처리 경로에서 다음 retry가 즉시 선점할 수 있도록 processing 만료 시각을 앞당깁니다.
