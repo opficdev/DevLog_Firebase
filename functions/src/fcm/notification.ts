@@ -28,12 +28,6 @@ type TaskPayload = {
     body: string;
 };
 
-// Firestore 생성 충돌에서 반환되는 오류 코드 형태를 저장합니다.
-type FirestoreErrorLike = {
-    // Firestore 오류 코드를 저장합니다.
-    code?: unknown;
-};
-
 // 큐에 적재된 알림 payload 검증 및 실제 푸시 발송 수행
 export const sendPushNotification = onTaskDispatched({
         maxInstances: 10,
@@ -77,18 +71,9 @@ export const sendPushNotification = onTaskDispatched({
             const id = `${todoId}_${dueDateKey}`;
             const dispatchDocRef = db.doc(FirestorePath.notificationDispatch(userId, id));
             const notificationDocRef = db.doc(FirestorePath.notification(userId, id));
+            const dispatchDoc = await dispatchDocRef.get();
 
-            try {
-                await dispatchDocRef.create({
-                    todoId,
-                    dueDateKey
-                });
-            } catch (error) {
-                if (isAlreadyExistsError(error)) {
-                    return;
-                }
-                throw error;
-            }
+            if (dispatchDoc.data()?.status === "completed") { return; }
 
             const notificationData = {
                 title: "Todo 알림",
@@ -117,9 +102,17 @@ export const sendPushNotification = onTaskDispatched({
             ]);
             const fcmToken = tokenDoc.data()?.fcmToken;
             const unreadNotificationCount = unreadCountSnapshot.data().count;
+            const completedDispatchData = {
+                todoId,
+                dueDateKey,
+                status: "completed",
+                completedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp()
+            };
 
             if (!fcmToken) {
                 logger.warn(`사용자 ${userId}의 fcmToken이 없어 푸시 발송은 건너뜁니다. Firestore에는 기록했습니다.`);
+                await dispatchDocRef.set(completedDispatchData, { merge: true });
                 return;
             }
 
@@ -146,6 +139,7 @@ export const sendPushNotification = onTaskDispatched({
                 logger.warn(`[${userId}] 푸시 발송 실패. Firestore 기록은 유지됩니다.`, sendError);
                 return;
             }
+            await dispatchDocRef.set(completedDispatchData, { merge: true });
 
         } catch (error) {
             logger.error("알림 발송 중 오류 발생", toError(error), {
@@ -189,10 +183,4 @@ function parseTaskPayload(data: FirebaseFirestore.DocumentData | undefined): Tas
         title,
         body
     };
-}
-
-// Firestore create 충돌의 기존 문서 존재 여부 판별
-function isAlreadyExistsError(error: unknown): boolean {
-    const code = (error as FirestoreErrorLike)?.code;
-    return code === 6 || code === "6" || code === "already-exists";
 }
