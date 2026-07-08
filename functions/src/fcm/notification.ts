@@ -236,7 +236,17 @@ async function claimDispatch(
     return db.runTransaction(async (transaction) => {
         const dispatchDoc = await transaction.get(dispatchDocRef);
         const dispatchData = dispatchDoc.data();
-        if (dispatchData?.status === "completed") { return false; }
+        const dispatchStatus = dispatchData?.status;
+        if (dispatchStatus === "completed") { return false; }
+        if (dispatchDoc.exists && dispatchStatus !== "processing") {
+            migrateLegacyDispatch(
+                transaction,
+                dispatchDocRef,
+                todoId,
+                dueDateKey
+            );
+            return false;
+        }
         if (isProcessingActive(dispatchData, now)) {
             throw new Error(`푸시 알림 dispatch가 처리 중입니다: ${todoId}_${dueDateKey}`);
         }
@@ -251,6 +261,22 @@ async function claimDispatch(
         }, { merge: true });
         return true;
     });
+}
+
+// 상태 필드가 없던 기존 dispatch 문서는 발송 완료 여부를 확정할 수 없어 중복 발송 방지를 우선해 완료 상태로 전환합니다.
+function migrateLegacyDispatch(
+    transaction: FirebaseFirestore.Transaction,
+    dispatchDocRef: FirebaseFirestore.DocumentReference<FirebaseFirestore.DocumentData>,
+    todoId: string,
+    dueDateKey: string
+): void {
+    transaction.set(dispatchDocRef, {
+        todoId,
+        dueDateKey,
+        status: "completed",
+        legacyMigratedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
 }
 
 // processing 상태가 아직 유효한지 만료 시각으로 판단합니다.
