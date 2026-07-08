@@ -14,7 +14,7 @@ import {
 import { FirestorePath } from "../common/firestorePath";
 import { resolveTimeZone } from "./shared";
 
-const processingDurationMilliseconds = 10 * 1000;
+const processingDurationMilliseconds = 30 * 1000;
 
 // 푸시 알림 작업 하나를 검증하고 발송하는 데 필요한 데이터를 저장합니다.
 type TaskPayload = {
@@ -201,7 +201,7 @@ async function prepareNotification(
         logger.error("알림 발송 중 오류 발생", toError(error), {
             payload
         });
-        return null;
+        throw error;
     }
 
     if (!notificationData) { return null; }
