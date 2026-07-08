@@ -1,6 +1,7 @@
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
+import { createHash } from "crypto";
 import * as admin from "firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import type { Message } from "firebase-admin/messaging";
 import * as logger from "firebase-functions/logger";
 import { formatDateKey, toDate } from "../common/date";
@@ -12,6 +13,8 @@ import {
 } from "../common/firestore";
 import { FirestorePath } from "../common/firestorePath";
 import { resolveTimeZone } from "./shared";
+
+const processingDurationMilliseconds = 10 * 1000;
 
 // 푸시 알림 작업 하나를 검증하고 발송하는 데 필요한 데이터를 저장합니다.
 type TaskPayload = {
@@ -48,18 +51,23 @@ export const sendPushNotification = onTaskDispatched({
 
         const {
             db, dispatchDocRef, notificationDocRef,
-            userId, todoId, dueDateKey,
+            dispatchId, userId, todoId, dueDateKey,
             title, body, todoCategory, notificationData
         } = prepared;
 
-        await saveNotification(
-            notificationDocRef,
-            notificationData,
-            req.data,
-            userId,
-            todoId,
-            dueDateKey
-        );
+        try {
+            await saveNotification(
+                notificationDocRef,
+                notificationData,
+                req.data,
+                userId,
+                todoId,
+                dueDateKey
+            );
+        } catch (error) {
+            await expireProcessing(dispatchDocRef);
+            throw error;
+        }
 
         const completedDispatchData = {
             todoId,
@@ -98,10 +106,12 @@ export const sendPushNotification = onTaskDispatched({
             logger.error("알림 발송 중 오류 발생", toError(error), {
                 payload: req.data
             });
-            return;
+            await expireProcessing(dispatchDocRef);
+            throw error;
         }
 
         // 2. 푸시 알림 발송
+        const collapseId = createHash("sha256").update(dispatchId).digest("hex");
         const message: Message = {
             notification: { title, body },
             data: {
@@ -109,6 +119,9 @@ export const sendPushNotification = onTaskDispatched({
                 todoCategory: todoCategory
             },
             apns: {
+                headers: {
+                    "apns-collapse-id": collapseId
+                },
                 payload: {
                     aps: {
                         sound: "default",
@@ -122,6 +135,7 @@ export const sendPushNotification = onTaskDispatched({
             await admin.messaging().send(message);
         } catch (error) {
             logger.warn(`[${userId}] 푸시 발송 실패. Firestore 기록은 유지됩니다.`, error);
+            await expireProcessing(dispatchDocRef);
             throw error;
         }
 
@@ -132,6 +146,8 @@ export const sendPushNotification = onTaskDispatched({
             logger.error("알림 발송 중 오류 발생", toError(error), {
                 payload: req.data
             });
+            await expireProcessing(dispatchDocRef);
+            throw error;
         }
     }
 );
@@ -146,6 +162,8 @@ async function prepareNotification(
     const id = `${todoId}_${dueDateKey}`;
     const dispatchDocRef = db.doc(FirestorePath.notificationDispatch(userId, id));
     const notificationDocRef = db.doc(FirestorePath.notification(userId, id));
+    let todoCategory = "";
+    let notificationData: FirebaseFirestore.DocumentData | null = null;
 
     try {
         const settingsDocRef = db
@@ -161,7 +179,7 @@ async function prepareNotification(
 
         const todoData = todoDoc.data();
         if (!todoDoc.exists || !todoData || todoData.isCompleted === true) { return null; }
-        const todoCategory = typeof todoData.category === "string" ? todoData.category.trim() : "";
+        todoCategory = typeof todoData.category === "string" ? todoData.category.trim() : "";
         if (!todoCategory) { return null; }
 
         const timeZone = resolveTimeZone(settingsData);
@@ -170,11 +188,7 @@ async function prepareNotification(
         if (!currentDueDate) { return null; }
         if (formatDateKey(currentDueDate, timeZone) !== dueDateKey) { return null; }
 
-        const dispatchDoc = await dispatchDocRef.get();
-
-        if (dispatchDoc.data()?.status === "completed") { return null; }
-
-        const notificationData = {
+        notificationData = {
             title: "Todo 알림",
             body,
             receivedAt: FieldValue.serverTimestamp(),
@@ -183,18 +197,73 @@ async function prepareNotification(
             todoId: todoId,
             todoCategory: todoCategory
         };
-
-        return {
-            db, dispatchDocRef, notificationDocRef,
-            userId, todoId, dueDateKey,
-            title, body, todoCategory, notificationData
-        };
     } catch (error) {
         logger.error("알림 발송 중 오류 발생", toError(error), {
             payload
         });
         return null;
     }
+
+    if (!notificationData) { return null; }
+
+    const didClaimDispatch = await claimDispatch(
+        db,
+        dispatchDocRef,
+        todoId,
+        dueDateKey
+    );
+    if (!didClaimDispatch) { return null; }
+
+    return {
+        db, dispatchDocRef, notificationDocRef,
+        dispatchId: id, userId, todoId, dueDateKey,
+        title, body, todoCategory, notificationData
+    };
+}
+
+// dispatch 문서를 트랜잭션으로 선점하고 이미 완료된 작업은 건너뜁니다.
+async function claimDispatch(
+    db: FirebaseFirestore.Firestore,
+    dispatchDocRef: FirebaseFirestore.DocumentReference<FirebaseFirestore.DocumentData>,
+    todoId: string,
+    dueDateKey: string
+): Promise<boolean> {
+    const now = new Date();
+    const processingExpiresAt = Timestamp.fromMillis(
+        now.getTime() + processingDurationMilliseconds
+    );
+
+    return db.runTransaction(async (transaction) => {
+        const dispatchDoc = await transaction.get(dispatchDocRef);
+        const dispatchData = dispatchDoc.data();
+        if (dispatchData?.status === "completed") { return false; }
+        if (isProcessingActive(dispatchData, now)) {
+            throw new Error(`푸시 알림 dispatch가 처리 중입니다: ${todoId}_${dueDateKey}`);
+        }
+
+        transaction.set(dispatchDocRef, {
+            todoId,
+            dueDateKey,
+            status: "processing",
+            processingStartedAt: FieldValue.serverTimestamp(),
+            processingExpiresAt,
+            updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        return true;
+    });
+}
+
+// processing 상태가 아직 유효한지 만료 시각으로 판단합니다.
+function isProcessingActive(
+    dispatchData: FirebaseFirestore.DocumentData | undefined,
+    now: Date
+): boolean {
+    if (dispatchData?.status !== "processing") { return false; }
+
+    const processingExpiresAt = toDate(dispatchData.processingExpiresAt);
+    if (!processingExpiresAt) { return false; }
+
+    return now.getTime() < processingExpiresAt.getTime();
 }
 
 // 앱 내 알림 기록을 저장하고 저장 실패를 Cloud Tasks retry로 전달합니다.
@@ -216,6 +285,22 @@ async function saveNotification(
             dueDateKey
         });
         throw error;
+    }
+}
+
+// 실패를 감지한 처리 경로에서 다음 retry가 즉시 선점할 수 있도록 processing 만료 시각을 앞당깁니다.
+async function expireProcessing(
+    dispatchDocRef: FirebaseFirestore.DocumentReference<FirebaseFirestore.DocumentData>
+): Promise<void> {
+    try {
+        await dispatchDocRef.set({
+            processingExpiresAt: Timestamp.now(),
+            updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+    } catch (error) {
+        logger.error("푸시 알림 processing 만료 처리 실패", toError(error), {
+            path: dispatchDocRef.path
+        });
     }
 }
 
