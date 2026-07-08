@@ -249,7 +249,7 @@ async function claimDispatch(
         const dispatchData = dispatchDoc.data();
         const dispatchStatus = dispatchData?.status;
         if (dispatchStatus === "completed") { return false; }
-        if (dispatchDoc.exists && dispatchStatus !== "processing") {
+        if (dispatchDoc.exists && dispatchStatus === undefined) {
             migrateLegacyDispatch(
                 transaction,
                 dispatchDocRef,
@@ -268,6 +268,7 @@ async function claimDispatch(
             status: "processing",
             processingStartedAt: FieldValue.serverTimestamp(),
             processingExpiresAt,
+            failedAt: FieldValue.delete(),
             updatedAt: FieldValue.serverTimestamp()
         }, { merge: true });
         return true;
@@ -338,6 +339,8 @@ async function expireProcessing(
 ): Promise<void> {
     try {
         await dispatchDocRef.set({
+            status: "failed",
+            failedAt: FieldValue.serverTimestamp(),
             processingExpiresAt: Timestamp.now(),
             updatedAt: FieldValue.serverTimestamp()
         }, { merge: true });
