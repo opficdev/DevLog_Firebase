@@ -1,6 +1,7 @@
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
+import type { Message } from "firebase-admin/messaging";
 import * as logger from "firebase-functions/logger";
 import { formatDateKey, toDate } from "../common/date";
 import { toError } from "../common/error";
@@ -60,6 +61,16 @@ export const sendPushNotification = onTaskDispatched({
             dueDateKey
         );
 
+        const completedDispatchData = {
+            todoId,
+            dueDateKey,
+            status: "completed",
+            completedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp()
+        };
+        let fcmToken: string | undefined;
+        let unreadNotificationCount = 0;
+
         try {
             // 1. 사용자 FCM 토큰과 읽지 않은 알림 수 가져오기
             const unreadCountPromise = db
@@ -75,45 +86,46 @@ export const sendPushNotification = onTaskDispatched({
                 tokenDocPromise,
                 unreadCountPromise
             ]);
-            const fcmToken = tokenDoc.data()?.fcmToken;
-            const unreadNotificationCount = unreadCountSnapshot.data().count;
-            const completedDispatchData = {
-                todoId,
-                dueDateKey,
-                status: "completed",
-                completedAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp()
-            };
+            fcmToken = tokenDoc.data()?.fcmToken;
+            unreadNotificationCount = unreadCountSnapshot.data().count;
 
             if (!fcmToken) {
                 logger.warn(`사용자 ${userId}의 fcmToken이 없어 푸시 발송은 건너뜁니다. Firestore에는 기록했습니다.`);
                 await dispatchDocRef.set(completedDispatchData, { merge: true });
                 return;
             }
+        } catch (error) {
+            logger.error("알림 발송 중 오류 발생", toError(error), {
+                payload: req.data
+            });
+            return;
+        }
 
-            // 2. 푸시 알림 발송
-            const message = {
-                notification: { title, body },
-                data: {
-                    todoId: todoId,
-                    todoCategory: todoCategory
-                },
-                apns: {
-                    payload: {
-                        aps: {
-                            sound: "default",
-                            badge: unreadNotificationCount
-                        }
+        // 2. 푸시 알림 발송
+        const message: Message = {
+            notification: { title, body },
+            data: {
+                todoId: todoId,
+                todoCategory: todoCategory
+            },
+            apns: {
+                payload: {
+                    aps: {
+                        sound: "default",
+                        badge: unreadNotificationCount
                     }
-                },
-                token: fcmToken,
-            };
-            try {
-                await admin.messaging().send(message);
-            } catch (sendError) {
-                logger.warn(`[${userId}] 푸시 발송 실패. Firestore 기록은 유지됩니다.`, sendError);
-                return;
-            }
+                }
+            },
+            token: fcmToken,
+        };
+        try {
+            await admin.messaging().send(message);
+        } catch (error) {
+            logger.warn(`[${userId}] 푸시 발송 실패. Firestore 기록은 유지됩니다.`, error);
+            throw error;
+        }
+
+        try {
             await dispatchDocRef.set(completedDispatchData, { merge: true });
 
         } catch (error) {
