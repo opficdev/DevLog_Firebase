@@ -62,7 +62,7 @@ export async function requestAppleCustomTokenWithDatabase(
     }
 }
 
-export async function resolveAppleFirebaseUID(
+async function resolveAppleFirebaseUID(
     auth: FirebaseAuthClient,
     userId: string,
     email?: string,

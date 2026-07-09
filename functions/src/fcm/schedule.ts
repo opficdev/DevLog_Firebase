@@ -49,32 +49,24 @@ async function enqueueTodoReminderTasks(
 ): Promise<void> {
     const db = firestoreFor(firebaseDB);
     const queue = getFunctions().taskQueue(`locations/${LOCATION}/functions/sendPushNotification`);
-    let usersSnapshot: FirebaseFirestore.QuerySnapshot<FirebaseFirestore.DocumentData>;
+    let settingsSnapshot: FirebaseFirestore.QuerySnapshot<FirebaseFirestore.DocumentData>;
     try {
-        usersSnapshot = await db.collection("users").get();
+        settingsSnapshot = await db
+            .collectionGroup(FirestorePath.userDataCollectionGroup)
+            .where("allowPushNotification", "==", true)
+            .get();
     } catch (error) {
-        logger.error("users 조회 실패", toError(error), {
+        logger.error("settings 후보 조회 실패", toError(error), {
             firebaseDB,
-            at: "collection(users).get()"
+            at: "collectionGroup(userData).where(allowPushNotification==true)"
         });
         return;
     }
 
-    for (const userDoc of usersSnapshot.docs) {
-        const userId = userDoc.id;
-        let settingsDoc: FirebaseFirestore.DocumentSnapshot<FirebaseFirestore.DocumentData>;
-        try {
-            settingsDoc = await db
-                .doc(FirestorePath.userData(userId, FirestorePath.UserDataDocument.settings))
-                .get();
-        } catch (error) {
-            logger.error("settings 조회 실패", toError(error), {
-                firebaseDB,
-                userId,
-                at: "users/{uid}/userData/settings"
-            });
-            continue;
-        }
+    for (const settingsDoc of settingsSnapshot.docs) {
+        const userId = userIdForReminderSettings(settingsDoc);
+        if (!userId) { continue; }
+
         const settings = settingsDoc.data();
         if (!settings || settings.allowPushNotification !== true) { continue; }
 
@@ -157,4 +149,22 @@ async function enqueueTodoReminderTasks(
             }
         }
     }
+}
+
+// 알림 설정 문서 경로에서 사용자 ID를 추출하고 예상하지 않은 collection group 결과를 제외합니다.
+function userIdForReminderSettings(
+    settingsDoc: FirebaseFirestore.QueryDocumentSnapshot<FirebaseFirestore.DocumentData>
+): string | null {
+    if (settingsDoc.id !== FirestorePath.UserDataDocument.settings) { return null; }
+
+    const userDocRef = settingsDoc.ref.parent.parent;
+    if (!userDocRef) { return null; }
+
+    const expectedPath = FirestorePath.userData(
+        userDocRef.id,
+        FirestorePath.UserDataDocument.settings
+    );
+    if (settingsDoc.ref.path !== expectedPath) { return null; }
+
+    return userDocRef.id;
 }

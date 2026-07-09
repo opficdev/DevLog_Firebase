@@ -10,6 +10,13 @@ These instructions apply to the repository root.
 - Change logic only when the new approach produces exactly the same result and strictly improves time or space complexity.
 - If there is no clear complexity improvement, keep the original logic.
 
+## Production code and test boundaries
+
+- Do not add test-purpose code or test-convenience structure to production code.
+- Do not expose internal functions, add dependency injection points, branch runtime behavior, or introduce test-only helpers unless the same change is required by production behavior.
+- If verification needs a seam, prefer testing through existing public behavior or reducing the test scope instead of changing production structure for test convenience.
+- When a production refactor is independently justified, keep the commit scope and message centered on the production reason.
+
 ## Code modification response style
 
 - When asked to modify code, return only the precise changed locations and the modified code for those locations.
