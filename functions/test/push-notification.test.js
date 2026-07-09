@@ -34,6 +34,8 @@ require.cache[require.resolve("../lib/common/firestore")] = {
 const { sendPushNotification } = require("../lib/fcm/notification");
 
 (async () => {
+    resetStores();
+
     firestoreDocs.set(
         "users/user-1/userData/settings",
         {
@@ -90,10 +92,59 @@ const { sendPushNotification } = require("../lib/fcm/notification");
         "legacy notification documents for the same todo should be deleted."
     );
     assert.strictEqual(sentMessages.length, 1);
+
+    resetStores();
+
+    firestoreDocs.set(
+        "users/user-1/userData/settings",
+        {
+            allowPushNotification: true,
+            timeZone: "UTC"
+        }
+    );
+    firestoreDocs.set(
+        "users/user-1/todoLists/todo-1",
+        {
+            dueDate: new Date("2026-07-10T09:00:00.000Z"),
+            category: "work",
+            isCompleted: false
+        }
+    );
+    firestoreDocs.set(
+        "users/user-1/userData/tokens",
+        {
+            fcmToken: "fcm-token"
+        }
+    );
+
+    await sendPushNotification.run({
+        data: {
+            firebaseDB: "prod",
+            userId: "user-1",
+            todoId: "todo-1",
+            dueDateKey: "2026-07-10",
+            title: "DevLog",
+            body: "Todo reminder"
+        }
+    });
+
+    assert.ok(
+        writtenDocs.some((item) => item.path === "users/user-1/notifications/todo-1"),
+        "notification document should be written when legacy documents do not exist."
+    );
+    assert.strictEqual(deletedDocs.length, 0);
+    assert.strictEqual(sentMessages.length, 1);
 })().catch((error) => {
     console.error(error);
     process.exitCode = 1;
 });
+
+function resetStores() {
+    firestoreDocs.clear();
+    writtenDocs.length = 0;
+    deletedDocs.length = 0;
+    sentMessages.length = 0;
+}
 
 function fakeFirestore() {
     return {
