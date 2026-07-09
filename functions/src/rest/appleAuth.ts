@@ -7,6 +7,7 @@ import {
     isAppleEmailVerified,
     verifyAppleIdToken
 } from "../auth/appleIdToken";
+import { FirestorePath } from "../common/firestorePath";
 
 interface FirebaseAuthClient {
     getUser(uid: string): Promise<{ uid: string }>;
@@ -157,12 +158,13 @@ export async function refreshAppleAccessTokenWithDatabase(
     db: FirebaseFirestore.Firestore,
     uid: string
 ): Promise<{ token: string }> {
-    console.log(`Fetching from collection(${uid})/doc(info)`);
-    const userDoc = await db.collection("users").doc(uid).collection("userData").doc("tokens").get();
+    const tokenPath = FirestorePath.userData(uid, FirestorePath.UserDataDocument.tokens);
+    console.log(`Fetching from ${tokenPath}`);
+    const userDoc = await db.doc(tokenPath).get();
 
     if (!userDoc.exists) {
         console.error(`User document not found for ID: ${uid}`);
-        throw new HttpsError("not-found", `User document not found at collection('/users/${uid}')/userData/doc('info')`);
+        throw new HttpsError("not-found", `User document not found at ${tokenPath}`);
     }
 
     const userData = userDoc.data();
@@ -279,7 +281,8 @@ async function saveAppleRefreshToken(
     uid: string,
     refreshToken: string
 ): Promise<void> {
-    await db.collection("users").doc(uid).collection("userData").doc("tokens").set({
+    const tokenPath = FirestorePath.userData(uid, FirestorePath.UserDataDocument.tokens);
+    await db.doc(tokenPath).set({
         appleRefreshToken: refreshToken
     }, { merge: true });
 }
