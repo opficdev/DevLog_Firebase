@@ -115,6 +115,14 @@ assert.deepStrictEqual(
 );
 
 assert.deepStrictEqual(
+    matchRestRoute("POST", ["auth", "github", "link"]),
+    {
+        action: "linkGithubProvider",
+        requiresAuth: true
+    }
+);
+
+assert.deepStrictEqual(
     matchRestRoute("DELETE", ["auth", "github", "access-token"]),
     {
         action: "revokeGithubAccessToken",
