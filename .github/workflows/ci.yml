@@ -3,8 +3,14 @@ name: CI
 on:
   pull_request:
 
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
 jobs:
   build:
+    name: Build
     runs-on: ubuntu-latest
 
     steps:
@@ -23,5 +29,275 @@ jobs:
         run: npm ci
 
       - name: Build
+        shell: bash
         working-directory: functions
-        run: npm run build
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee build.log
+
+      - name: Archive build output
+        working-directory: functions
+        run: tar -czf functions-lib.tar.gz lib
+
+      - name: Upload build output
+        uses: actions/upload-artifact@v6
+        with:
+          name: firebase-functions-lib
+          path: functions/functions-lib.tar.gz
+          if-no-files-found: error
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: firebase-build
+          path: functions/build.log
+          if-no-files-found: ignore
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Download build output
+        uses: actions/download-artifact@v7
+        with:
+          name: firebase-functions-lib
+          path: functions
+
+      - name: Extract build output
+        working-directory: functions
+        run: tar -xzf functions-lib.tar.gz
+
+      - name: Test
+        shell: bash
+        working-directory: functions
+        run: |
+          set -o pipefail
+          npm run test:run 2>&1 | tee test.log
+
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: firebase-test
+          path: functions/test.log
+          if-no-files-found: ignore
+
+  report:
+    name: Report
+    runs-on: ubuntu-latest
+    needs: [build, test]
+    if: |
+      always()
+      && github.event.pull_request.head.repo.fork == false
+      && (
+        needs.build.result == 'failure'
+        || needs.test.result == 'failure'
+        || (needs.build.result == 'success' && needs.test.result == 'success')
+      )
+
+    steps:
+      - name: Download CI logs
+        if: needs.build.result == 'failure' || needs.test.result == 'failure'
+        uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          path: ci-artifacts
+
+      - name: Delete resolved CI failure comments
+        if: needs.build.result == 'success' && needs.test.result == 'success'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const marker = '❌ Firebase CI failed.';
+
+            if (!context.payload.pull_request) {
+              core.info('No PR context; skipping comment cleanup.');
+              return;
+            }
+
+            const issueNumber = context.payload.pull_request.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              per_page: 100,
+            });
+
+            const failureComments = comments.filter((comment) => {
+              return comment.user?.type === 'Bot'
+                && comment.body?.startsWith(marker);
+            });
+
+            for (const comment of failureComments) {
+              await github.rest.issues.deleteComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: comment.id,
+              });
+            }
+
+      - name: Comment CI failure on PR
+        if: needs.build.result == 'failure' || needs.test.result == 'failure'
+        uses: actions/github-script@v8
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const marker = '❌ Firebase CI failed.';
+            const root = 'ci-artifacts';
+
+            function walk(directory) {
+              if (!fs.existsSync(directory)) return [];
+              const entries = fs.readdirSync(directory, { withFileTypes: true });
+              return entries.flatMap((entry) => {
+                const fullPath = path.join(directory, entry.name);
+                return entry.isDirectory() ? walk(fullPath) : [fullPath];
+              });
+            }
+
+            function cleanLine(line) {
+              return line
+                .replace(/\u001b\[[0-9;]*m/g, '')
+                .trim()
+                .slice(0, 300);
+            }
+
+            function extractFailureSnippet(logPath) {
+              if (!fs.existsSync(logPath)) return '';
+
+              const lines = fs.readFileSync(logPath, 'utf8').split(/\r?\n/);
+              const importantPatterns = [
+                /error TS\d+:/,
+                /AssertionError/,
+                /Error:/,
+                /SyntaxError/,
+                /TypeError/,
+                /ReferenceError/,
+                /npm ERR!/,
+                /Command failed/,
+              ];
+              const indexes = [];
+
+              lines.forEach((line, index) => {
+                if (importantPatterns.some((pattern) => pattern.test(line))) {
+                  indexes.push(index);
+                }
+              });
+
+              const selectedLines = [];
+              const seenLines = new Set();
+
+              for (const index of indexes.slice(0, 5)) {
+                const start = Math.max(0, index - 2);
+                const end = Math.min(lines.length, index + 9);
+                for (const line of lines.slice(start, end)) {
+                  const cleanedLine = cleanLine(line);
+                  if (!cleanedLine || seenLines.has(cleanedLine)) continue;
+                  seenLines.add(cleanedLine);
+                  selectedLines.push(cleanedLine);
+                }
+              }
+
+              return selectedLines.slice(0, 30).join('\n');
+            }
+
+            function logPathFor(artifactName, logName) {
+              return walk(root).find((filePath) => {
+                return filePath.includes(`${path.sep}${artifactName}${path.sep}`)
+                  && path.basename(filePath) === logName;
+              });
+            }
+
+            function failureSection(title, result, artifactName, logName) {
+              if (result !== 'failure') return '';
+
+              const logPath = logPathFor(artifactName, logName);
+              let section = `## ${title} failed\n\n`;
+
+              if (!logPath) {
+                return section + `No ${logName} artifact was found. Check the GitHub Actions log for the failed step.\n\n`;
+              }
+
+              const snippet = extractFailureSnippet(logPath);
+              if (!snippet) {
+                return section + `No concise failure diagnostic was found in ${logName}. Check the uploaded CI log artifact.\n\n`;
+              }
+
+              return section + '```text\n' + snippet + '\n```\n\n';
+            }
+
+            async function failureComments(issueNumber) {
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                per_page: 100,
+              });
+
+              return comments.filter((comment) => {
+                return comment.user?.type === 'Bot'
+                  && comment.body?.startsWith(marker);
+              });
+            }
+
+            if (!context.payload.pull_request) {
+              core.info('No PR context; skipping comment.');
+              return;
+            }
+
+            const body = [
+              marker,
+              '',
+              failureSection('Build', process.env.BUILD_RESULT, 'firebase-build', 'build.log'),
+              failureSection('Tests', process.env.TEST_RESULT, 'firebase-test', 'test.log'),
+              'Check the uploaded CI log artifacts for full diagnostics.',
+              '',
+            ].join('\n');
+
+            const issueNumber = context.payload.pull_request.number;
+            const existingComments = await failureComments(issueNumber);
+            const [firstComment, ...extraComments] = existingComments;
+
+            if (firstComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: firstComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body,
+              });
+            }
+
+            for (const comment of extraComments) {
+              await github.rest.issues.deleteComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: comment.id,
+              });
+            }

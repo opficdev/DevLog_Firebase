@@ -3,7 +3,8 @@
   "scripts": {
     "build": "tsc",
     "build:watch": "tsc --watch",
-    "test": "npm run build && node test/rest-router.test.js && node test/github-auth.test.js && node test/todo-deletion.test.js",
+    "test": "npm run build && npm run test:run",
+    "test:run": "node test/rest-router.test.js && node test/github-auth.test.js && node test/todo-deletion.test.js",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",
