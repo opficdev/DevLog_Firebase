@@ -1,7 +1,11 @@
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { createHash } from "crypto";
 import * as admin from "firebase-admin";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import {
+    FieldPath,
+    FieldValue,
+    Timestamp
+} from "firebase-admin/firestore";
 import type { Message } from "firebase-admin/messaging";
 import * as logger from "firebase-functions/logger";
 import { formatDateKey, toDate } from "../common/date";
@@ -50,13 +54,17 @@ export const sendPushNotification = onTaskDispatched({
         if (!prepared) { return; }
 
         const {
+            userId, todoId, dueDateKey,
+            title, body
+        } = parsed;
+        const {
             db, dispatchDocRef, notificationDocRef,
-            dispatchId, userId, todoId, dueDateKey,
-            title, body, todoCategory, notificationData
+            dispatchId, todoCategory, notificationData
         } = prepared;
 
         try {
             await saveNotification(
+                db,
                 notificationDocRef,
                 notificationData,
                 req.data,
@@ -168,11 +176,11 @@ async function prepareNotification(
     parsed: TaskPayload,
     payload: FirebaseFirestore.DocumentData | undefined
 ) {
-    const { firebaseDB, userId, todoId, dueDateKey, title, body } = parsed;
+    const { firebaseDB, userId, todoId, dueDateKey, body } = parsed;
     const db = firestoreFor(firebaseDB);
-    const id = `${todoId}_${dueDateKey}`;
-    const dispatchDocRef = db.doc(FirestorePath.notificationDispatch(userId, id));
-    const notificationDocRef = db.doc(FirestorePath.notification(userId, id));
+    const dispatchId = `${todoId}_${dueDateKey}`;
+    const dispatchDocRef = db.doc(FirestorePath.notificationDispatch(userId, dispatchId));
+    const notificationDocRef = db.doc(FirestorePath.notification(userId, todoId));
     let todoCategory = "";
     let notificationData: FirebaseFirestore.DocumentData | null = null;
 
@@ -227,8 +235,7 @@ async function prepareNotification(
 
     return {
         db, dispatchDocRef, notificationDocRef,
-        dispatchId: id, userId, todoId, dueDateKey,
-        title, body, todoCategory, notificationData
+        dispatchId, todoCategory, notificationData
     };
 }
 
@@ -306,6 +313,7 @@ function isProcessingActive(
 
 // 앱 내 알림 기록을 저장하고 저장 실패를 Cloud Tasks retry로 전달합니다.
 async function saveNotification(
+    db: FirebaseFirestore.Firestore,
     notificationDocRef: FirebaseFirestore.DocumentReference<FirebaseFirestore.DocumentData>,
     notificationData: FirebaseFirestore.DocumentData,
     payload: FirebaseFirestore.DocumentData | undefined,
@@ -314,7 +322,13 @@ async function saveNotification(
     dueDateKey: string
 ): Promise<void> {
     try {
-        await notificationDocRef.set(notificationData, { merge: true });
+        await saveNotificationDocument(
+            db,
+            notificationDocRef,
+            notificationData,
+            userId,
+            todoId
+        );
     } catch (error) {
         logger.error("푸시 알림 문서 저장 실패", toError(error), {
             payload,
@@ -323,6 +337,51 @@ async function saveNotification(
             dueDateKey
         });
         throw error;
+    }
+}
+
+// 앱 내 알림 기준 문서를 저장하고 같은 Todo의 이전 알림 문서를 지웁니다.
+async function saveNotificationDocument(
+    db: FirebaseFirestore.Firestore,
+    notificationDocRef: FirebaseFirestore.DocumentReference<FirebaseFirestore.DocumentData>,
+    notificationData: FirebaseFirestore.DocumentData,
+    userId: string,
+    todoId: string
+): Promise<void> {
+    let shouldSaveNotification = true;
+
+    for (;;) {
+        const snapshot = await db
+            .collection(FirestorePath.notifications(userId))
+            .where("todoId", "==", todoId)
+            .orderBy(FieldPath.documentId())
+            .limit(200)
+            .get();
+        if (snapshot.empty) {
+            if (shouldSaveNotification) {
+                await notificationDocRef.set(notificationData, { merge: true });
+            }
+            return;
+        }
+
+        const legacyDocs = snapshot.docs.filter((document) => {
+            return document.ref.path !== notificationDocRef.path;
+        });
+
+        if (shouldSaveNotification || 0 < legacyDocs.length) {
+            const batch = db.batch();
+            if (shouldSaveNotification) {
+                batch.set(notificationDocRef, notificationData, { merge: true });
+                shouldSaveNotification = false;
+            }
+
+            legacyDocs.forEach((document) => {
+                batch.delete(document.ref);
+            });
+            await batch.commit();
+        }
+
+        if (snapshot.size < 200) { return; }
     }
 }
 
