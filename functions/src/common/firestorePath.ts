@@ -15,6 +15,9 @@ export namespace FirestorePath {
         categories = "categories"
     }
 
+    // 사용자 데이터 하위 컬렉션을 collection group query에 사용할 이름입니다.
+    export const userDataCollectionGroup = Collection.userData;
+
     export function user(userId: string): string {
         return `${Collection.users}/${userId}`;
     }
