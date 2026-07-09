@@ -57,7 +57,7 @@ const fakeAxios = {
             };
         }
 
-        throw new Error(`Unexpected GitHub API URL: ${url}`);
+        throw new Error(`예상하지 않은 GitHub API URL: ${url}`);
     },
     async request(config) {
         axiosRequests.push(config);
@@ -70,17 +70,17 @@ const fakeAxios = {
                 return { status: 204 };
             }
 
-            throw axiosError(grantDeleteStatus, { message: "grant delete failed" });
+            throw axiosError(grantDeleteStatus, { message: "grant 삭제 실패" });
         }
 
         if (
             config.method === "post" &&
             config.url === "https://api.github.com/applications/client-id/token"
         ) {
-            throw axiosError(tokenCheckStatus, { message: "token not found" });
+            throw axiosError(tokenCheckStatus, { message: "token을 찾을 수 없음" });
         }
 
-        throw new Error(`Unexpected GitHub API request: ${config.method} ${config.url}`);
+        throw new Error(`예상하지 않은 GitHub API 요청: ${config.method} ${config.url}`);
     },
     isAxiosError(error) {
         return error?.isAxiosError === true;
@@ -173,7 +173,7 @@ const {
 function assertHeaders(url) {
     const call = axiosCalls.find((item) => item.url === url);
 
-    assert.ok(call, `${url} request should be made.`);
+    assert.ok(call, `${url} 요청이 발생해야 합니다.`);
     assert.strictEqual(call.headers.Authorization, "Bearer access-token");
     assert.strictEqual(call.headers.Accept, "application/vnd.github+json");
     assert.ok(call.headers["User-Agent"]);
@@ -393,14 +393,14 @@ async function assertGithubUnlinkSucceedsWhenGrantDeleteFindsInvalidToken() {
         .find((item) => item && typeof item === "object" && item.status === 422);
     assert.deepStrictEqual(grantWarningMetadata, {
         status: 422,
-        message: "Request failed with status code 422",
-        data: { message: "grant delete failed" }
+        message: "요청이 status code 422로 실패했습니다.",
+        data: { message: "grant 삭제 실패" }
     });
     assert.deepStrictEqual(consoleErrors, []);
 }
 
 function axiosError(status, data) {
-    const error = new Error(`Request failed with status code ${status}`);
+    const error = new Error(`요청이 status code ${status}로 실패했습니다.`);
     error.isAxiosError = true;
     error.response = { status, data };
     return error;

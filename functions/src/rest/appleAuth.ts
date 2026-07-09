@@ -159,23 +159,23 @@ export async function refreshAppleAccessTokenWithDatabase(
     uid: string
 ): Promise<{ token: string }> {
     const tokenPath = FirestorePath.userData(uid, FirestorePath.UserDataDocument.tokens);
-    console.log(`Fetching from ${tokenPath}`);
+    console.log(`Apple token 문서를 조회합니다: ${tokenPath}`);
     const userDoc = await db.doc(tokenPath).get();
 
     if (!userDoc.exists) {
-        console.error(`User document not found for ID: ${uid}`);
-        throw new HttpsError("not-found", `User document not found at ${tokenPath}`);
+        console.error(`사용자 문서를 찾을 수 없습니다. UID: ${uid}`);
+        throw new HttpsError("not-found", `사용자 token 문서를 찾을 수 없습니다: ${tokenPath}`);
     }
 
     const userData = userDoc.data();
     const refreshToken = userData?.appleRefreshToken;
 
     if (!refreshToken) {
-        console.error("User document exists but has no appleRefreshToken field:", userData);
-        throw new HttpsError("not-found", "Apple refresh token not found for this user");
+        console.error("사용자 token 문서에 appleRefreshToken 필드가 없습니다.", userData);
+        throw new HttpsError("not-found", "이 사용자에 대한 Apple refresh token을 찾을 수 없습니다.");
     }
 
-    console.log("Successfully retrieved refresh token from Firestore");
+    console.log("Firestore에서 Apple refresh token을 조회했습니다.");
     const { teamId, clientId, keyId, privateKey } = appleConfiguration();
 
     const clientSecret = jwt.sign({}, privateKey, {
@@ -204,7 +204,7 @@ export async function refreshAppleAccessTokenWithDatabase(
 
     throw new HttpsError(
         "internal",
-        "Failed to retrieve access token from Apple response."
+        "Apple 응답에서 access token을 가져오지 못했습니다."
     );
 }
 
@@ -212,11 +212,11 @@ export async function revokeAppleAccessTokenWithToken(
     uid: string,
     token: string
 ): Promise<{ success: true }> {
-    console.log("Starting Apple token revocation", { uid });
-    console.log("Starting Apple configuration load for token revocation");
+    console.log("Apple token 폐기를 시작합니다.", { uid });
+    console.log("Apple token 폐기를 위한 설정을 불러옵니다.");
     const { teamId, clientId, keyId, privateKey } = appleConfiguration();
 
-    console.log("Starting Apple client secret creation for token revocation");
+    console.log("Apple token 폐기를 위한 client secret을 생성합니다.");
     const clientSecret = jwt.sign({}, privateKey, {
         algorithm: "ES256",
         expiresIn: "5m",
@@ -226,7 +226,7 @@ export async function revokeAppleAccessTokenWithToken(
         keyid: keyId,
     });
 
-    console.log("Starting Apple revoke API request");
+    console.log("Apple revoke API 요청을 시작합니다.");
     await axios.post(
         "https://appleid.apple.com/auth/revoke",
         new URLSearchParams({
@@ -303,12 +303,12 @@ function appleConfiguration() {
         .map(([key]) => key);
 
     if (0 < missingKeys.length) {
-        console.error("Missing Apple configuration", {
+        console.error("Apple 설정이 누락되었습니다.", {
             missingKeys
         });
         throw new HttpsError(
             "internal",
-            `Missing Apple configuration for: ${missingKeys.join(", ")}`
+            `Apple 설정이 누락되었습니다: ${missingKeys.join(", ")}`
         );
     }
 
