@@ -101,7 +101,7 @@ export async function requestGithubTokensWithCode(
     };
 }
 
-// 저장된 GitHub OAuth 토큰을 폐기하고 이미 무효화된 토큰은 성공 상태로 정리합니다.
+// GitHub OAuth App grant를 제거하고 이미 무효화된 토큰은 성공 상태로 정리합니다.
 export async function revokeGithubAccessTokenWithDatabase(
     db: FirebaseFirestore.Firestore,
     uid: string,
@@ -127,7 +127,7 @@ export async function revokeGithubAccessTokenWithDatabase(
     }
 
     try {
-        const status = await requestAccessTokenRevocation(
+        const status = await requestGrantRevocation(
             clientId,
             clientSecret,
             accessToken
@@ -142,25 +142,27 @@ export async function revokeGithubAccessTokenWithDatabase(
             clientSecret,
             accessToken
         )) {
-            console.warn("GitHub 토큰이 이미 무효화되어 폐기 성공으로 처리합니다.", { uid });
+            console.warn("GitHub OAuth App grant를 제거할 수 없지만 토큰이 이미 무효화되어 성공으로 처리합니다.", {
+                uid, github: errorMetadata(error)
+            });
             return { success: true };
         }
 
-        throw accessTokenRevocationError(error);
+        throw grantRevocationError(error);
     }
 
-    throw new HttpsError("internal", "토큰 폐기에 실패했습니다.");
+    throw new HttpsError("internal", "GitHub OAuth App grant 제거에 실패했습니다.");
 }
 
-// GitHub 토큰 삭제 요청을 보내고 HTTP 응답 상태를 반환합니다.
-async function requestAccessTokenRevocation(
+// GitHub OAuth App grant 제거 요청을 보내고 HTTP 응답 상태를 반환합니다.
+async function requestGrantRevocation(
     clientId: string,
     clientSecret: string,
     accessToken: string
 ): Promise<number> {
     const response = await axios.request({
         method: "delete",
-        url: applicationTokenURL(clientId),
+        url: applicationGrantURL(clientId),
         ...appRequestConfig(
             clientId,
             clientSecret
@@ -213,6 +215,11 @@ function applicationTokenURL(clientId: string): string {
     return `https://api.github.com/applications/${clientId}/token`;
 }
 
+// GitHub OAuth 애플리케이션 grant 관리 API 주소를 구성합니다.
+function applicationGrantURL(clientId: string): string {
+    return `https://api.github.com/applications/${clientId}/grant`;
+}
+
 // GitHub OAuth 애플리케이션 인증과 공통 요청 헤더를 구성합니다.
 function appRequestConfig(
     clientId: string,
@@ -239,10 +246,10 @@ function responseStatus(error: unknown): number | undefined {
     return error.response?.status;
 }
 
-// 외부 토큰 폐기 실패를 REST 계층에서 처리할 수 있는 오류로 변환합니다.
-function accessTokenRevocationError(error: unknown): HttpsError {
-    console.error("GitHub 토큰 폐기에 실패했습니다.", errorMetadata(error));
-    return new HttpsError("internal", "GitHub 토큰 폐기에 실패했습니다.");
+// 외부 grant 제거 실패를 REST 계층에서 처리할 수 있는 오류로 변환합니다.
+function grantRevocationError(error: unknown): HttpsError {
+    console.error("GitHub OAuth App grant 제거에 실패했습니다.", errorMetadata(error));
+    return new HttpsError("internal", "GitHub OAuth App grant 제거에 실패했습니다.");
 }
 
 // 로그에 남길 수 있는 외부 API 실패 정보를 구성합니다.
