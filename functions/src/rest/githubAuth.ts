@@ -142,14 +142,16 @@ export async function revokeGithubAccessTokenWithDatabase(
             clientSecret,
             accessToken
         )) {
-            console.warn("GitHub 토큰이 이미 무효화되어 폐기 성공으로 처리합니다.", { uid });
+            console.warn("GitHub OAuth App grant를 제거할 수 없지만 토큰이 이미 무효화되어 성공으로 처리합니다.", {
+                uid, github: errorMetadata(error)
+            });
             return { success: true };
         }
 
-        throw accessTokenRevocationError(error);
+        throw grantRevocationError(error);
     }
 
-    throw new HttpsError("internal", "토큰 폐기에 실패했습니다.");
+    throw new HttpsError("internal", "GitHub OAuth App grant 제거에 실패했습니다.");
 }
 
 // GitHub OAuth App grant 제거 요청을 보내고 HTTP 응답 상태를 반환합니다.
@@ -244,10 +246,10 @@ function responseStatus(error: unknown): number | undefined {
     return error.response?.status;
 }
 
-// 외부 토큰 폐기 실패를 REST 계층에서 처리할 수 있는 오류로 변환합니다.
-function accessTokenRevocationError(error: unknown): HttpsError {
-    console.error("GitHub 토큰 폐기에 실패했습니다.", errorMetadata(error));
-    return new HttpsError("internal", "GitHub 토큰 폐기에 실패했습니다.");
+// 외부 grant 제거 실패를 REST 계층에서 처리할 수 있는 오류로 변환합니다.
+function grantRevocationError(error: unknown): HttpsError {
+    console.error("GitHub OAuth App grant 제거에 실패했습니다.", errorMetadata(error));
+    return new HttpsError("internal", "GitHub OAuth App grant 제거에 실패했습니다.");
 }
 
 // 로그에 남길 수 있는 외부 API 실패 정보를 구성합니다.

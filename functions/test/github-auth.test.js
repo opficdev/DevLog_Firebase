@@ -3,9 +3,11 @@ const assert = require("assert");
 const axiosCalls = [];
 const axiosRequests = [];
 const consoleErrors = [];
+const consoleWarnings = [];
 let grantDeleteStatus = 204;
 let tokenCheckStatus = 404;
 const originalConsoleError = console.error;
+const originalConsoleWarn = console.warn;
 const fakeAxios = {
     async post(url, data, config) {
         assert.strictEqual(url, "https://github.com/login/oauth/access_token");
@@ -107,6 +109,9 @@ require.cache[require.resolve("firebase-admin")] = {
 console.error = (...args) => {
     consoleErrors.push(args);
 };
+console.warn = (...args) => {
+    consoleWarnings.push(args);
+};
 
 const {
     requestGithubTokensWithCode,
@@ -134,6 +139,7 @@ const {
         await assertGithubUnlinkSucceedsWhenGrantDeleteFindsInvalidToken();
     } finally {
         console.error = originalConsoleError;
+        console.warn = originalConsoleWarn;
         restoreEnv("GITHUB_CLIENT_ID", originalClientID);
         restoreEnv("GITHUB_CLIENT_SECRET", originalClientSecret);
     }
@@ -160,6 +166,7 @@ async function assertGithubUnlinkRemovesOAuthGrant() {
     grantDeleteStatus = 204;
     axiosRequests.length = 0;
     consoleErrors.length = 0;
+    consoleWarnings.length = 0;
 
     const revokeResult = await revokeGithubAccessTokenWithDatabase(
         fakeFirestore("valid-token"),
@@ -179,6 +186,7 @@ async function assertGithubUnlinkRemovesOAuthGrant() {
     });
     assertRevokeHeaders(axiosRequests[0]);
     assert.deepStrictEqual(consoleErrors, []);
+    assert.deepStrictEqual(consoleWarnings, []);
 }
 
 async function assertGithubUnlinkSucceedsWhenGrantDeleteFindsInvalidToken() {
@@ -186,6 +194,7 @@ async function assertGithubUnlinkSucceedsWhenGrantDeleteFindsInvalidToken() {
     tokenCheckStatus = 404;
     axiosRequests.length = 0;
     consoleErrors.length = 0;
+    consoleWarnings.length = 0;
 
     const revokeResult = await revokeGithubAccessTokenWithDatabase(
         fakeFirestore("invalid-token"),
@@ -208,14 +217,16 @@ async function assertGithubUnlinkSucceedsWhenGrantDeleteFindsInvalidToken() {
     });
     assertRevokeHeaders(axiosRequests[1]);
 
-    const grantErrorMetadata = consoleErrors
+    const grantWarningMetadata = consoleWarnings
         .flat()
+        .map((item) => item && typeof item === "object" ? item.github : undefined)
         .find((item) => item && typeof item === "object" && item.status === 422);
-    assert.deepStrictEqual(grantErrorMetadata, {
+    assert.deepStrictEqual(grantWarningMetadata, {
         status: 422,
         message: "Request failed with status code 422",
         data: { message: "grant delete failed" }
     });
+    assert.deepStrictEqual(consoleErrors, []);
 }
 
 function axiosError(status, data) {
