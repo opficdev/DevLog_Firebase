@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { HttpsError } from "firebase-functions/v2/https";
 import axios from "axios";
+import { FirestorePath } from "../common/firestorePath";
 
 interface GitHubOAuthResponse {
     access_token: string;
@@ -115,7 +116,9 @@ export async function revokeGithubAccessTokenWithDatabase(
 
     let accessToken = typeof requestedAccessToken === "string" ? requestedAccessToken : "";
     if (!accessToken) {
-        const tokenDoc = await db.collection("users").doc(uid).collection("userData").doc("tokens").get();
+        const tokenDoc = await db
+            .doc(FirestorePath.userData(uid, FirestorePath.UserDataDocument.tokens))
+            .get();
         accessToken = tokenDoc.exists ? tokenDoc.data()?.githubAccessToken : "";
     }
 
