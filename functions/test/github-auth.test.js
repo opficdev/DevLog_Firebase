@@ -154,6 +154,7 @@ const {
         await assertGithubLoginReroutesChangedEmailToNewUser();
         await assertGithubLoginReroutesChangedEmailToExistingEmailUser();
         await assertGithubLoginCreatesProviderLinkedUserForNewEmail();
+        await assertGithubLoginReportsUnavailableEmail();
 
         await assertGithubUnlinkRemovesOAuthGrant();
         await assertGithubUnlinkSucceedsWhenGrantDeleteFindsInvalidToken();
@@ -301,6 +302,31 @@ async function assertGithubLoginCreatesProviderLinkedUserForNewEmail() {
     assert.deepStrictEqual(emailLookupCalls, ["user@example.com"]);
     assert.deepStrictEqual(updatedUsers, []);
     assert.deepStrictEqual(createdUsers, [newGitHubUserProperties("user@example.com")]);
+    assertHeaders("https://api.github.com/user");
+    assertHeaders("https://api.github.com/user/emails");
+}
+
+// GitHub verified email을 찾을 수 없으면 email_not_found 사유로 로그인 실패를 전달하는지 검증합니다.
+async function assertGithubLoginReportsUnavailableEmail() {
+    resetGithubLoginState();
+    githubEmails = unavailableGithubEmails();
+
+    await assert.rejects(
+        () => requestGithubTokensWithCode("github-code"),
+        (error) => {
+            assert.strictEqual(error.code, "internal");
+            assert.strictEqual(error.message, "GitHub 사용자 데이터를 가져오지 못했습니다.");
+            assert.deepStrictEqual(error.details, {
+                reason: "email_not_found"
+            });
+            return true;
+        }
+    );
+
+    assert.deepStrictEqual(providerLookupCalls, []);
+    assert.deepStrictEqual(emailLookupCalls, []);
+    assert.deepStrictEqual(updatedUsers, []);
+    assert.deepStrictEqual(createdUsers, []);
     assertHeaders("https://api.github.com/user");
     assertHeaders("https://api.github.com/user/emails");
 }
@@ -467,6 +493,19 @@ function verifiedEmails(email) {
         email,
         primary: true,
         verified: true
+    }];
+}
+
+// verified email이 없는 GitHub email API 응답을 구성합니다.
+function unavailableGithubEmails() {
+    return [{
+        email: "primary@example.com",
+        primary: true,
+        verified: false
+    }, {
+        email: "secondary@example.com",
+        primary: false,
+        verified: false
     }];
 }
 
