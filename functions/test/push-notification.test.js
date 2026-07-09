@@ -134,6 +134,59 @@ const { sendPushNotification } = require("../lib/fcm/notification");
     );
     assert.strictEqual(deletedDocs.length, 0);
     assert.strictEqual(sentMessages.length, 1);
+
+    resetStores();
+
+    firestoreDocs.set(
+        "users/user-1/userData/settings",
+        {
+            allowPushNotification: true,
+            timeZone: "UTC"
+        }
+    );
+    firestoreDocs.set(
+        "users/user-1/todoLists/todo-1",
+        {
+            dueDate: new Date("2026-07-10T09:00:00.000Z"),
+            category: "work",
+            isCompleted: false
+        }
+    );
+    firestoreDocs.set(
+        "users/user-1/userData/tokens",
+        {
+            fcmToken: "fcm-token"
+        }
+    );
+
+    for (let index = 0; index < 201; index += 1) {
+        firestoreDocs.set(
+            `users/user-1/notifications/todo-1_legacy-${String(index).padStart(3, "0")}`,
+            {
+                todoId: "todo-1",
+                isRead: true,
+                isDeleted: false
+            }
+        );
+    }
+
+    await sendPushNotification.run({
+        data: {
+            firebaseDB: "prod",
+            userId: "user-1",
+            todoId: "todo-1",
+            dueDateKey: "2026-07-10",
+            title: "DevLog",
+            body: "Todo reminder"
+        }
+    });
+
+    assert.ok(
+        writtenDocs.some((item) => item.path === "users/user-1/notifications/todo-1"),
+        "notification document should be written while cleanup spans multiple batches."
+    );
+    assert.strictEqual(deletedDocs.length, 201);
+    assert.strictEqual(sentMessages.length, 1);
 })().catch((error) => {
     console.error(error);
     process.exitCode = 1;
@@ -204,6 +257,7 @@ function fakeCollectionReference(path) {
 
 function fakeQuery(path, filters) {
     return {
+        _limit: undefined,
         where(field, operator, value) {
             return fakeQuery(path, [
                 ...filters,
@@ -221,7 +275,8 @@ function fakeQuery(path, filters) {
                 }
             };
         },
-        limit() {
+        limit(size) {
+            this._limit = size;
             return this;
         },
         orderBy() {
@@ -231,7 +286,12 @@ function fakeQuery(path, filters) {
             return this;
         },
         async get() {
-            const docs = matchingDocuments(path, filters)
+            let entries = matchingDocuments(path, filters);
+            if (this._limit !== undefined) {
+                entries = entries.slice(0, this._limit);
+            }
+
+            const docs = entries
                 .map(([documentPath, data]) => ({
                     id: documentPath.split("/").pop(),
                     ref: fakeDocumentReference(documentPath),
@@ -252,6 +312,7 @@ function matchingDocuments(path, filters) {
 
     return Array.from(firestoreDocs.entries())
         .filter(([documentPath]) => documentPath.startsWith(prefix))
+        .sort(([leftPath], [rightPath]) => leftPath.localeCompare(rightPath))
         .filter(([, data]) => filters.every((filter) => data[filter.field] === filter.value));
 }
 

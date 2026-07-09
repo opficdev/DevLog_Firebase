@@ -350,22 +350,13 @@ async function saveNotificationDocument(
 ): Promise<void> {
     let shouldSaveNotification = true;
 
-    for (
-        let lastDocument:
-            FirebaseFirestore.QueryDocumentSnapshot<FirebaseFirestore.DocumentData> | undefined;
-        ;
-    ) {
-        let query = db
+    for (;;) {
+        const snapshot = await db
             .collection(FirestorePath.notifications(userId))
             .where("todoId", "==", todoId)
             .orderBy(FieldPath.documentId())
-            .limit(200);
-
-        if (lastDocument) {
-            query = query.startAfter(lastDocument);
-        }
-
-        const snapshot = await query.get();
+            .limit(200)
+            .get();
         if (snapshot.empty) {
             if (shouldSaveNotification) {
                 await notificationDocRef.set(notificationData, { merge: true });
@@ -391,7 +382,6 @@ async function saveNotificationDocument(
         }
 
         if (snapshot.size < 200) { return; }
-        lastDocument = snapshot.docs[snapshot.docs.length - 1];
     }
 }
 
