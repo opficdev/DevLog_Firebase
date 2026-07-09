@@ -46,6 +46,14 @@ Default role-to-model assignment:
 
 Do not assign `Spark` as the only model for production TypeScript implementation, Firestore document shape changes, Cloud Tasks queue behavior, FCM delivery behavior, auth flow changes, deploy actions, commits, pushes, PR creation, or final integration.
 
+### Model dispatch requirements
+
+- A model tier assignment is an execution requirement, not a label for work the main agent already performed.
+- When a role is assigned to `Spark` or `Fast`, and tooling can select that model, the main agent must dispatch that role through a separate model or sub-agent call before using its result.
+- Do not satisfy a `Spark` or `Fast` role by completing the role directly in `Primary` and describing it as delegated work.
+- If the assigned model cannot be called, apply the fallback policy and report which role was not dispatched to its default tier.
+- `Primary` must integrate and verify delegated output, but must not skip the delegated role when the workflow requires it and the assigned model is available.
+
 ### Fallback policy
 
 - If `gpt-5.3-codex-spark` is unavailable, assign `Spark` roles to the fastest available read-only coding model.
@@ -126,6 +134,7 @@ Rules:
 - Stay inside the role permissions.
 - Do not edit files if this is a read-only role.
 - Do not deploy, mutate Firebase project state, or change GitHub state unless the user requested that action.
+- Perform this role in the assigned model context. Do not return work copied from a different model context as this role's own result.
 - Stop and report if the task packet conflicts with `AGENTS.md`.
 - Return only the output format defined for `<Role Name>`.
 ```
