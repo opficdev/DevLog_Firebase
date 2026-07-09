@@ -45,6 +45,7 @@ const fakeAxios = {
                     id: 1,
                     login: "github-user",
                     name: "GitHub User",
+                    email: "profile@example.com",
                     avatar_url: "https://example.com/avatar.png"
                 }
             };

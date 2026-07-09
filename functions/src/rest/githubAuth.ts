@@ -110,7 +110,7 @@ async function githubLoginData(
     accessToken: string,
     userData: GitHubUser
 ) {
-    const email = await resolveEmail(accessToken, userData.email);
+    const email = await resolveEmail(accessToken);
 
     if (!userData.id || !email) {
         throw new HttpsError(
@@ -401,15 +401,8 @@ function errorMetadata(error: unknown) {
     };
 }
 
-// 프로필에 공개 이메일이 없을 때 검증된 기본 이메일을 조회합니다.
-async function resolveEmail(
-    accessToken: string,
-    profileEmail?: string
-): Promise<string | undefined> {
-    if (profileEmail) {
-        return profileEmail;
-    }
-
+// GitHub email 목록에서 검증된 이메일을 조회합니다.
+async function resolveEmail(accessToken: string): Promise<string | undefined> {
     const emailResponse = await axios.get<GitHubEmail[]>("https://api.github.com/user/emails", {
         headers: {
             "Authorization": `Bearer ${accessToken}`,
