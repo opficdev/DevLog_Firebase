@@ -50,9 +50,12 @@ export const sendPushNotification = onTaskDispatched({
         if (!prepared) { return; }
 
         const {
+            userId, todoId, dueDateKey,
+            title, body
+        } = parsed;
+        const {
             db, dispatchDocRef, notificationDocRef,
-            dispatchId, userId, todoId, dueDateKey,
-            title, body, todoCategory, notificationData
+            dispatchId, todoCategory, notificationData
         } = prepared;
 
         try {
@@ -168,7 +171,7 @@ async function prepareNotification(
     parsed: TaskPayload,
     payload: FirebaseFirestore.DocumentData | undefined
 ) {
-    const { firebaseDB, userId, todoId, dueDateKey, title, body } = parsed;
+    const { firebaseDB, userId, todoId, dueDateKey, body } = parsed;
     const db = firestoreFor(firebaseDB);
     const id = `${todoId}_${dueDateKey}`;
     const dispatchDocRef = db.doc(FirestorePath.notificationDispatch(userId, id));
@@ -227,8 +230,7 @@ async function prepareNotification(
 
     return {
         db, dispatchDocRef, notificationDocRef,
-        dispatchId: id, userId, todoId, dueDateKey,
-        title, body, todoCategory, notificationData
+        dispatchId: id, todoCategory, notificationData
     };
 }
 
