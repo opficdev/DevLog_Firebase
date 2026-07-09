@@ -24,6 +24,17 @@ export function restErrorFrom(error: unknown): RestError {
         return new RestError(400, "email-mismatch", messageFrom(error, "이메일이 일치하지 않습니다."));
     }
 
+    if (
+        reason === "github_email_changed_account_conflict" ||
+        reason === "github-email-changed-account-conflict"
+    ) {
+        return new RestError(
+            412,
+            "github-email-changed-account-conflict",
+            messageFrom(error, "GitHub provider가 다른 계정에 연결되어 있습니다.")
+        );
+    }
+
     if (error instanceof HttpsError) {
         return new RestError(statusCodeFor(error.code), error.code, error.message);
     }
@@ -55,6 +66,8 @@ function statusCodeFor(code: string): number {
         return 403;
     case "not-found":
         return 404;
+    case "failed-precondition":
+        return 412;
     default:
         return 500;
     }

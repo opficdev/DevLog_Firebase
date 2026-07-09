@@ -69,6 +69,42 @@ export async function requestGithubTokensWithCode(
     return { accessToken, customToken };
 }
 
+// 현재 Firebase 사용자에 GitHub provider를 연결하고 access token을 반환합니다.
+export async function linkGithubProviderWithCode(
+    uid: string,
+    code: string
+): Promise<{ accessToken: string }> {
+    const clientId = process.env.GITHUB_CLIENT_ID;
+    const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+        throw new HttpsError("internal", "GitHub 환경 설정이 누락되었습니다.");
+    }
+
+    const accessToken = await requestGitHubAccessToken(
+        code,
+        clientId,
+        clientSecret
+    );
+    const userData = await requestGitHubUser(accessToken);
+    const {
+        providerUID,
+        providerToLink
+    } = await githubLoginData(
+        accessToken,
+        userData
+    );
+
+    await linkGitHubProvider(
+        uid,
+        providerUID,
+        providerToLink
+    );
+    console.log(`현재 사용자(${uid})에 GitHub provider 연결 처리가 완료되었습니다.`);
+
+    return { accessToken };
+}
+
 // GitHub OAuth code를 access token으로 교환합니다.
 async function requestGitHubAccessToken(
     code: string,
@@ -151,6 +187,40 @@ async function firebaseUIDForGitHubLogin(
         userData
     );
     return uid;
+}
+
+// GitHub provider가 다른 사용자에 묶여 있지 않을 때만 현재 사용자에 연결합니다.
+async function linkGitHubProvider(
+    uid: string,
+    providerUID: string,
+    providerToLink: UserProvider
+): Promise<void> {
+    try {
+        const userRecord = await admin.auth().getUserByProviderUid(
+            PROVIDER_ID,
+            providerUID
+        );
+
+        if (userRecord.uid === uid) {
+            return;
+        }
+
+        throw githubProviderLinkConflictError();
+    } catch (error) {
+        if (firebaseAuthErrorCode(error) !== "auth/user-not-found") { throw error; }
+    }
+
+    await admin.auth().updateUser(uid, { providerToLink });
+    console.log(`현재 사용자(${uid})에 GitHub provider 연결을 추가했습니다.`);
+}
+
+// 다른 사용자에 연결된 GitHub provider 충돌을 클라이언트가 구분할 수 있는 오류로 구성합니다.
+function githubProviderLinkConflictError(): HttpsError {
+    return new HttpsError(
+        "failed-precondition",
+        "GitHub provider가 다른 계정에 연결되어 있습니다.",
+        { reason: "github_email_changed_account_conflict" }
+    );
 }
 
 // 기존 GitHub provider 연결을 현재 verified email과 대조하고 오래된 연결이면 분리합니다.

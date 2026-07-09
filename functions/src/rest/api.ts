@@ -21,6 +21,7 @@ import {
     revokeAppleAccessTokenWithToken
 } from "./appleAuth";
 import {
+    linkGithubProviderWithCode,
     requestGithubTokensWithCode,
     revokeGithubAccessTokenWithDatabase
 } from "./githubAuth";
@@ -114,7 +115,10 @@ async function handleRoute(
     case "requestGithubTokens":
         return requestGithubTokensWithCode(requiredBodyString(body, "code"));
     case "linkGithubProvider":
-        throw new RestError(501, "not-implemented", "GitHub link endpoint 구현이 필요합니다.");
+        return linkGithubProviderWithCode(
+            requiredUID(uid),
+            requiredBodyString(body, "code")
+        );
     case "revokeGithubAccessToken":
         return revokeGithubAccessTokenWithDatabase(db, requiredUID(uid), body.accessToken);
     }

@@ -139,6 +139,7 @@ console.warn = (...args) => {
 };
 
 const {
+    linkGithubProviderWithCode,
     requestGithubTokensWithCode,
     revokeGithubAccessTokenWithDatabase
 } = require("../lib/rest/githubAuth");
@@ -156,6 +157,10 @@ const {
         await assertGithubLoginReroutesChangedEmailToExistingEmailUser();
         await assertGithubLoginCreatesProviderLinkedUserForNewEmail();
         await assertGithubLoginReportsUnavailableEmail();
+
+        await assertGithubLinkKeepsCurrentProvider();
+        await assertGithubLinkConnectsUnlinkedProvider();
+        await assertGithubLinkBlocksProviderConnectedToOtherUser();
 
         await assertGithubUnlinkRemovesOAuthGrant();
         await assertGithubUnlinkSucceedsWhenGrantDeleteFindsInvalidToken();
@@ -325,6 +330,96 @@ async function assertGithubLoginReportsUnavailableEmail() {
     );
 
     assert.deepStrictEqual(providerLookupCalls, []);
+    assert.deepStrictEqual(emailLookupCalls, []);
+    assert.deepStrictEqual(updatedUsers, []);
+    assert.deepStrictEqual(createdUsers, []);
+    assertHeaders("https://api.github.com/user");
+    assertHeaders("https://api.github.com/user/emails");
+}
+
+// 현재 사용자에 이미 연결된 GitHub provider는 추가 변경 없이 정상 처리되는지 검증합니다.
+async function assertGithubLinkKeepsCurrentProvider() {
+    resetGithubLoginState();
+    providerUIDUser = userRecord(
+        "current-uid",
+        [githubProviderData("old@example.com")]
+    );
+
+    const result = await linkGithubProviderWithCode(
+        "current-uid",
+        "github-code"
+    );
+
+    assert.deepStrictEqual(result, { accessToken: "access-token" });
+    assert.deepStrictEqual(providerLookupCalls, [{
+        providerId: "github.com",
+        uid: "1"
+    }]);
+    assert.deepStrictEqual(emailLookupCalls, []);
+    assert.deepStrictEqual(updatedUsers, []);
+    assert.deepStrictEqual(createdUsers, []);
+    assertHeaders("https://api.github.com/user");
+    assertHeaders("https://api.github.com/user/emails");
+}
+
+// 연결되지 않은 GitHub provider는 현재 사용자에 연결되는지 검증합니다.
+async function assertGithubLinkConnectsUnlinkedProvider() {
+    resetGithubLoginState();
+
+    const result = await linkGithubProviderWithCode(
+        "current-uid",
+        "github-code"
+    );
+
+    assert.deepStrictEqual(result, { accessToken: "access-token" });
+    assert.deepStrictEqual(providerLookupCalls, [{
+        providerId: "github.com",
+        uid: "1"
+    }]);
+    assert.deepStrictEqual(emailLookupCalls, []);
+    assert.deepStrictEqual(updatedUsers, [{
+        uid: "current-uid",
+        properties: {
+            providerToLink: githubProviderData("user@example.com")
+        }
+    }]);
+    assert.deepStrictEqual(createdUsers, []);
+    assertHeaders("https://api.github.com/user");
+    assertHeaders("https://api.github.com/user/emails");
+}
+
+// 다른 사용자에 연결된 GitHub provider는 현재 사용자 연결을 차단하는지 검증합니다.
+async function assertGithubLinkBlocksProviderConnectedToOtherUser() {
+    resetGithubLoginState();
+    githubEmails = verifiedEmails("target@example.com");
+    providerUIDUser = userRecord(
+        "other-uid",
+        [
+            githubProviderData("old@example.com"),
+            googleProviderData("old@example.com")
+        ]
+    );
+    emailUser = userRecord("current-uid");
+
+    await assert.rejects(
+        () => linkGithubProviderWithCode(
+            "current-uid",
+            "github-code"
+        ),
+        (error) => {
+            assert.strictEqual(error.code, "failed-precondition");
+            assert.strictEqual(error.message, "GitHub provider가 다른 계정에 연결되어 있습니다.");
+            assert.deepStrictEqual(error.details, {
+                reason: "github_email_changed_account_conflict"
+            });
+            return true;
+        }
+    );
+
+    assert.deepStrictEqual(providerLookupCalls, [{
+        providerId: "github.com",
+        uid: "1"
+    }]);
     assert.deepStrictEqual(emailLookupCalls, []);
     assert.deepStrictEqual(updatedUsers, []);
     assert.deepStrictEqual(createdUsers, []);
