@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { HttpsError } from "firebase-functions/v2/https";
 import axios from "axios";
+import type { UserProvider } from "firebase-admin/auth";
 import { FirestorePath } from "../common/firestorePath";
 
 interface GitHubOAuthResponse {
@@ -27,6 +28,7 @@ interface GitHubEmail {
 const EMAIL_UNAVAILABLE_REASON = "email_not_found";
 const ACCEPT = "application/vnd.github+json";
 const USER_AGENT = "DevLog-Firebase";
+const PROVIDER_ID = "github.com";
 const NOT_FOUND_STATUS = 404;
 const VALIDATION_FAILED_STATUS = 422;
 
@@ -76,29 +78,85 @@ export async function requestGithubTokensWithCode(
         );
     }
 
-    let uid;
-
-    try {
-        const userRecord = await admin.auth().getUserByEmail(email);
-        uid = userRecord.uid;
-        console.log(`이메일(${email})로 기존 사용자를 찾았습니다.`);
-    } catch (error) {
-        const userRecord = await admin.auth().createUser({
-            displayName: userData.name || userData.login,
-            email,
-            photoURL: userData.avatar_url,
-        });
-        uid = userRecord.uid;
-        console.log(`이메일 있는 새 사용자가 생성됨: ${uid}`);
-    }
+    const providerUID = String(userData.id);
+    const providerToLink = githubProviderForUser(
+        providerUID,
+        email,
+        userData
+    );
+    const linkedUID = await firebaseUIDForGitHubUser(providerUID);
+    const uid = linkedUID ?? await firebaseUIDForGitHubEmail(
+        email,
+        providerToLink,
+        userData
+    );
 
     const customToken = await admin.auth().createCustomToken(uid);
 
     console.log(`GitHub 사용자(${userData.login})에 대한 커스텀 토큰이 생성되었습니다. UID: ${uid}`);
+    return { accessToken, customToken };
+}
+
+// GitHub provider user id로 연결된 Firebase uid를 조회합니다.
+async function firebaseUIDForGitHubUser(providerUID: string): Promise<string | undefined> {
+    try {
+        const userRecord = await admin.auth().getUserByProviderUid(
+            PROVIDER_ID,
+            providerUID
+        );
+        return userRecord.uid;
+    } catch (error) {
+        if (firebaseAuthErrorCode(error) !== "auth/user-not-found") { throw error; }
+        return undefined;
+    }
+}
+
+// 현재 GitHub verified email 기준으로 기존 계정 연결 또는 신규 생성을 수행합니다.
+async function firebaseUIDForGitHubEmail(
+    email: string,
+    providerToLink: UserProvider,
+    userData: GitHubUser
+): Promise<string> {
+    try {
+        const userRecord = await admin.auth().getUserByEmail(email);
+        await admin.auth().updateUser(userRecord.uid, { providerToLink });
+        console.log(`이메일(${email}) 기존 사용자에 GitHub provider 연결을 추가했습니다.`);
+        return userRecord.uid;
+    } catch (error) {
+        if (firebaseAuthErrorCode(error) !== "auth/user-not-found") { throw error; }
+    }
+
+    const userRecord = await admin.auth().createUser({
+        displayName: userData.name || userData.login,
+        email,
+        photoURL: userData.avatar_url,
+        providerToLink
+    });
+    console.log(`GitHub provider 연결 사용자가 생성됨: ${userRecord.uid}`);
+    return userRecord.uid;
+}
+
+// GitHub user id 연결 정보를 Firebase Auth provider 형식으로 구성합니다.
+function githubProviderForUser(
+    providerUID: string,
+    email: string,
+    userData: GitHubUser
+): UserProvider {
     return {
-        accessToken,
-        customToken
+        providerId: PROVIDER_ID,
+        uid: providerUID,
+        displayName: userData.name || userData.login,
+        email,
+        photoURL: userData.avatar_url
     };
+}
+
+// Firebase Auth 예외에서 오류 코드를 추출합니다.
+function firebaseAuthErrorCode(error: unknown): string | undefined {
+    if (!error || typeof error !== "object") { return undefined; }
+
+    const code = (error as Record<string, unknown>).code;
+    return typeof code === "string" ? code : undefined;
 }
 
 // GitHub OAuth App grant를 제거하고 이미 무효화된 토큰은 성공 상태로 정리합니다.
