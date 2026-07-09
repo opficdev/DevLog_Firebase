@@ -739,6 +739,16 @@
       ]
     },
     {
+      "collectionGroup": "userData",
+      "fieldPath": "allowPushNotification",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
+    {
       "collectionGroup": "webPages",
       "fieldPath": "isDeleted",
       "indexes": [
