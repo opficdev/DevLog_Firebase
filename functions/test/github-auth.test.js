@@ -178,34 +178,16 @@ function axiosError(status) {
 
 function fakeFirestore(accessToken) {
     return {
-        collection(collectionName) {
-            assert.strictEqual(collectionName, "users");
+        doc(path) {
+            assert.strictEqual(path, "users/firebase-uid/userData/tokens");
 
             return {
-                doc(uid) {
-                    assert.strictEqual(uid, "firebase-uid");
-
+                async get() {
                     return {
-                        collection(subCollectionName) {
-                            assert.strictEqual(subCollectionName, "userData");
-
-                            return {
-                                doc(documentID) {
-                                    assert.strictEqual(documentID, "tokens");
-
-                                    return {
-                                        async get() {
-                                            return {
-                                                exists: true,
-                                                data: () => ({
-                                                    githubAccessToken: accessToken
-                                                })
-                                            };
-                                        }
-                                    };
-                                }
-                            };
-                        }
+                        exists: true,
+                        data: () => ({
+                            githubAccessToken: accessToken
+                        })
                     };
                 }
             };
