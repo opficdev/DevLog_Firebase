@@ -15,6 +15,8 @@ These instructions apply to the repository root.
 - Do not add test-purpose code or test-convenience structure to production code.
 - Do not expose internal functions, add dependency injection points, branch runtime behavior, or introduce test-only helpers unless the same change is required by production behavior.
 - If verification needs a seam, prefer testing through existing public behavior or reducing the test scope instead of changing production structure for test convenience.
+- For behavior changes, write feature tests that describe the new expected user-facing or public behavior instead of framing them as regression tests.
+- Do not label or plan tests as regression tests when the work should be expressed as feature behavior; convert that scope into feature-test wording and coverage.
 - When a production refactor is independently justified, keep the commit scope and message centered on the production reason.
 
 ## Code modification response style
