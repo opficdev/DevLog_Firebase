@@ -173,9 +173,9 @@ async function prepareNotification(
 ) {
     const { firebaseDB, userId, todoId, dueDateKey, body } = parsed;
     const db = firestoreFor(firebaseDB);
-    const id = `${todoId}_${dueDateKey}`;
-    const dispatchDocRef = db.doc(FirestorePath.notificationDispatch(userId, id));
-    const notificationDocRef = db.doc(FirestorePath.notification(userId, id));
+    const dispatchId = `${todoId}_${dueDateKey}`;
+    const dispatchDocRef = db.doc(FirestorePath.notificationDispatch(userId, dispatchId));
+    const notificationDocRef = db.doc(FirestorePath.notification(userId, todoId));
     let todoCategory = "";
     let notificationData: FirebaseFirestore.DocumentData | null = null;
 
@@ -230,7 +230,7 @@ async function prepareNotification(
 
     return {
         db, dispatchDocRef, notificationDocRef,
-        dispatchId: id, todoCategory, notificationData
+        dispatchId, todoCategory, notificationData
     };
 }
 
