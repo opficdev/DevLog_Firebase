@@ -163,7 +163,7 @@ const {
     process.env.GITHUB_CLIENT_SECRET = "client-secret";
 
     try {
-        await assertGithubLoginKeepsProviderWhenEmailMatches();
+        await assertGithubLoginKeepsProviderWithoutVerifiedEmail();
         await assertGithubLoginKeepsProviderWhenEmailChangesWithoutEmailUser();
         await assertGithubLoginKeepsProviderWhenEmailChangesWithEmailUser();
         await assertGithubLoginCreatesProviderLinkedUserForNewEmail();
@@ -196,14 +196,20 @@ function assertHeaders(url) {
     assert.ok(call.headers["User-Agent"]);
 }
 
+// 지정한 GitHub API 요청이 발생하지 않았는지 검증합니다.
+function assertNoRequest(url) {
+    assert.strictEqual(axiosCalls.some((item) => item.url === url), false);
+}
+
 function assertRevokeHeaders(call) {
     assert.strictEqual(call.headers.Accept, "application/vnd.github+json");
     assert.strictEqual(call.headers["User-Agent"], "DevLog-Firebase");
 }
 
-// 기존 provider email과 현재 verified email이 같으면 연결된 Firebase uid로 로그인하는지 검증합니다.
-async function assertGithubLoginKeepsProviderWhenEmailMatches() {
+// verified email이 없어도 기존 provider uid로 로그인하는지 검증합니다.
+async function assertGithubLoginKeepsProviderWithoutVerifiedEmail() {
     resetGithubLoginState();
+    githubEmails = unavailableGithubEmails();
     providerUIDUser = userRecord(
         "linked-uid",
         [githubProviderData("user@example.com")]
@@ -224,7 +230,7 @@ async function assertGithubLoginKeepsProviderWhenEmailMatches() {
     assert.deepStrictEqual(createdUsers, []);
     assert.deepStrictEqual(updatedUsers, []);
     assertHeaders("https://api.github.com/user");
-    assertHeaders("https://api.github.com/user/emails");
+    assertNoRequest("https://api.github.com/user/emails");
 }
 
 // GitHub email이 바뀌고 같은 email 계정이 없어도 기존 provider uid로 로그인하는지 검증합니다.
@@ -252,7 +258,7 @@ async function assertGithubLoginKeepsProviderWhenEmailChangesWithoutEmailUser() 
     assert.deepStrictEqual(updatedUsers, []);
     assert.deepStrictEqual(createdUsers, []);
     assertHeaders("https://api.github.com/user");
-    assertHeaders("https://api.github.com/user/emails");
+    assertNoRequest("https://api.github.com/user/emails");
 }
 
 // GitHub email이 바뀌고 같은 email 계정이 있어도 기존 provider uid로 로그인하는지 검증합니다.
@@ -282,7 +288,7 @@ async function assertGithubLoginKeepsProviderWhenEmailChangesWithEmailUser() {
     assert.deepStrictEqual(createdUsers, []);
     assert.deepStrictEqual(updatedUsers, []);
     assertHeaders("https://api.github.com/user");
-    assertHeaders("https://api.github.com/user/emails");
+    assertNoRequest("https://api.github.com/user/emails");
 }
 
 // provider 연결과 같은 email 계정이 없으면 현재 email 기준 새 provider 연결 계정을 생성하는지 검증합니다.
@@ -324,7 +330,10 @@ async function assertGithubLoginReportsUnavailableEmail() {
         }
     );
 
-    assert.deepStrictEqual(providerLookupCalls, []);
+    assert.deepStrictEqual(providerLookupCalls, [{
+        providerId: "github.com",
+        uid: "1"
+    }]);
     assert.deepStrictEqual(emailLookupCalls, []);
     assert.deepStrictEqual(updatedUsers, []);
     assert.deepStrictEqual(createdUsers, []);

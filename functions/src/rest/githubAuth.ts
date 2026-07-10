@@ -50,18 +50,10 @@ export async function requestGithubTokensWithCode(
         clientSecret
     );
     const userData = await requestGitHubUser(accessToken);
-    const {
-        providerUID,
-        email,
-        providerToLink
-    } = await githubLoginData(
+    const providerUID = githubProviderUID(userData);
+    const linkedUID = await firebaseUIDForGitHubUser(providerUID);
+    const uid = linkedUID ?? await firebaseUIDForUnlinkedGitHubLogin(
         accessToken,
-        userData
-    );
-    const uid = await firebaseUIDForGitHubLogin(
-        providerUID,
-        email,
-        providerToLink,
         userData
     );
     const customToken = await admin.auth().createCustomToken(uid);
@@ -170,14 +162,9 @@ async function requestGitHubUser(accessToken: string): Promise<GitHubUser> {
     return response.data;
 }
 
-// Firebase Auth 라우팅에 필요한 GitHub user id, verified email, provider payload를 구성합니다.
-async function githubLoginData(
-    accessToken: string,
-    userData: GitHubUser
-) {
-    const email = await resolveEmail(accessToken);
-
-    if (!userData.id || !email) {
+// GitHub user id를 Firebase provider uid 문자열로 변환합니다.
+function githubProviderUID(userData: GitHubUser): string {
+    if (!userData.id) {
         throw new HttpsError(
             "internal",
             "GitHub 사용자 데이터를 가져오지 못했습니다.",
@@ -185,7 +172,25 @@ async function githubLoginData(
         );
     }
 
-    const providerUID = String(userData.id);
+    return String(userData.id);
+}
+
+// Firebase Auth 라우팅에 필요한 GitHub user id, verified email, provider payload를 구성합니다.
+async function githubLoginData(
+    accessToken: string,
+    userData: GitHubUser
+) {
+    const providerUID = githubProviderUID(userData);
+    const email = await resolveEmail(accessToken);
+
+    if (!email) {
+        throw new HttpsError(
+            "internal",
+            "GitHub 사용자 데이터를 가져오지 못했습니다.",
+            { reason: EMAIL_UNAVAILABLE_REASON }
+        );
+    }
+
     const providerToLink = githubProviderForUser(
         providerUID,
         email,
@@ -199,20 +204,23 @@ async function githubLoginData(
     };
 }
 
-// 기존 GitHub provider 연결을 우선하고 미연결이면 verified email로 Firebase uid를 확정합니다.
-async function firebaseUIDForGitHubLogin(
-    providerUID: string,
-    email: string,
-    providerToLink: UserProvider,
+// 미연결 GitHub provider를 verified email 기준 Firebase uid에 연결합니다.
+async function firebaseUIDForUnlinkedGitHubLogin(
+    accessToken: string,
     userData: GitHubUser
 ): Promise<string> {
-    const linkedUID = await firebaseUIDForGitHubUser(providerUID);
-    const uid = linkedUID ?? await firebaseUIDForGitHubEmail(
+    const {
+        email,
+        providerToLink
+    } = await githubLoginData(
+        accessToken,
+        userData
+    );
+    return firebaseUIDForGitHubEmail(
         email,
         providerToLink,
         userData
     );
-    return uid;
 }
 
 // GitHub provider가 다른 사용자에 묶여 있지 않을 때만 현재 사용자에 연결합니다.
