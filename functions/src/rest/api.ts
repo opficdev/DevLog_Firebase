@@ -21,6 +21,7 @@ import {
     revokeAppleAccessTokenWithToken
 } from "./appleAuth";
 import {
+    linkGithubProviderWithCode,
     requestGithubTokensWithCode,
     revokeGithubAccessTokenWithDatabase
 } from "./githubAuth";
@@ -113,6 +114,11 @@ async function handleRoute(
         );
     case "requestGithubTokens":
         return requestGithubTokensWithCode(requiredBodyString(body, "code"));
+    case "linkGithubProvider":
+        return linkGithubProviderWithCode(
+            requiredUID(uid),
+            requiredBodyString(body, "code")
+        );
     case "revokeGithubAccessToken":
         return revokeGithubAccessTokenWithDatabase(db, requiredUID(uid), body.accessToken);
     }

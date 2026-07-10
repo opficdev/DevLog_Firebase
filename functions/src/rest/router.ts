@@ -9,6 +9,7 @@ export type RestAction =
     "requestAppleRefreshToken" |
     "refreshAppleAccessToken" |
     "revokeAppleAccessToken" |
+    "linkGithubProvider" |
     "requestGithubTokens" |
     "revokeGithubAccessToken";
 
@@ -101,6 +102,13 @@ export function matchRestRoute(method: string, routeSegments: string[]): RestRou
         return {
             action: "requestGithubTokens",
             requiresAuth: false
+        };
+    }
+
+    if (routeSegments.join("/") === "auth/github/link" && normalizedMethod === "POST") {
+        return {
+            action: "linkGithubProvider",
+            requiresAuth: true
         };
     }
 

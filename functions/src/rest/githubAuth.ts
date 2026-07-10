@@ -26,6 +26,7 @@ interface GitHubEmail {
 }
 
 const EMAIL_UNAVAILABLE_REASON = "email_not_found";
+const EMAIL_MISMATCH_REASON = "email_mismatch";
 const ACCEPT = "application/vnd.github+json";
 const USER_AGENT = "DevLog-Firebase";
 const PROVIDER_ID = "github.com";
@@ -49,6 +50,36 @@ export async function requestGithubTokensWithCode(
         clientSecret
     );
     const userData = await requestGitHubUser(accessToken);
+    const providerUID = githubProviderUID(userData);
+    const linkedUID = await firebaseUIDForGitHubUser(providerUID);
+    const uid = linkedUID ?? await firebaseUIDForUnlinkedGitHubLogin(
+        accessToken,
+        userData
+    );
+    const customToken = await admin.auth().createCustomToken(uid);
+
+    console.log(`GitHub 사용자(${userData.login})에 대한 커스텀 토큰이 생성되었습니다. UID: ${uid}`);
+    return { accessToken, customToken };
+}
+
+// 현재 Firebase 사용자에 GitHub provider를 연결하고 access token을 반환합니다.
+export async function linkGithubProviderWithCode(
+    uid: string,
+    code: string
+): Promise<{ accessToken: string }> {
+    const clientId = process.env.GITHUB_CLIENT_ID;
+    const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+        throw new HttpsError("internal", "GitHub 환경 설정이 누락되었습니다.");
+    }
+
+    const accessToken = await requestGitHubAccessToken(
+        code,
+        clientId,
+        clientSecret
+    );
+    const userData = await requestGitHubUser(accessToken);
     const {
         providerUID,
         email,
@@ -57,16 +88,42 @@ export async function requestGithubTokensWithCode(
         accessToken,
         userData
     );
-    const uid = await firebaseUIDForGitHubLogin(
-        providerUID,
-        email,
-        providerToLink,
-        userData
-    );
-    const customToken = await admin.auth().createCustomToken(uid);
 
-    console.log(`GitHub 사용자(${userData.login})에 대한 커스텀 토큰이 생성되었습니다. UID: ${uid}`);
-    return { accessToken, customToken };
+    const emailMatches = await githubEmailMatchesUser(
+        uid,
+        email
+    );
+    if (!emailMatches) {
+        await revokeGitHubOAuthGrant(
+            uid,
+            accessToken,
+            clientId,
+            clientSecret
+        );
+        throw new HttpsError(
+            "invalid-argument",
+            "이메일이 일치하지 않습니다.",
+            { reason: EMAIL_MISMATCH_REASON }
+        );
+    }
+
+    await linkGitHubProvider(
+        uid,
+        providerUID,
+        providerToLink
+    );
+    console.log(`현재 사용자(${uid})에 GitHub provider 연결 처리가 완료되었습니다.`);
+
+    return { accessToken };
+}
+
+// 현재 사용자의 이메일과 GitHub verified email의 일치 여부를 반환합니다.
+async function githubEmailMatchesUser(
+    uid: string,
+    email: string
+): Promise<boolean> {
+    const userRecord = await admin.auth().getUser(uid);
+    return userRecord.email === email;
 }
 
 // GitHub OAuth code를 access token으로 교환합니다.
@@ -105,14 +162,9 @@ async function requestGitHubUser(accessToken: string): Promise<GitHubUser> {
     return response.data;
 }
 
-// Firebase Auth 라우팅에 필요한 GitHub user id, verified email, provider payload를 구성합니다.
-async function githubLoginData(
-    accessToken: string,
-    userData: GitHubUser
-) {
-    const email = await resolveEmail(accessToken);
-
-    if (!userData.id || !email) {
+// GitHub user id를 Firebase provider uid 문자열로 변환합니다.
+function githubProviderUID(userData: GitHubUser): string {
+    if (!userData.id) {
         throw new HttpsError(
             "internal",
             "GitHub 사용자 데이터를 가져오지 못했습니다.",
@@ -120,7 +172,25 @@ async function githubLoginData(
         );
     }
 
-    const providerUID = String(userData.id);
+    return String(userData.id);
+}
+
+// Firebase Auth 라우팅에 필요한 GitHub user id, verified email, provider payload를 구성합니다.
+async function githubLoginData(
+    accessToken: string,
+    userData: GitHubUser
+) {
+    const providerUID = githubProviderUID(userData);
+    const email = await resolveEmail(accessToken);
+
+    if (!email) {
+        throw new HttpsError(
+            "internal",
+            "GitHub 사용자 데이터를 가져오지 못했습니다.",
+            { reason: EMAIL_UNAVAILABLE_REASON }
+        );
+    }
+
     const providerToLink = githubProviderForUser(
         providerUID,
         email,
@@ -134,47 +204,69 @@ async function githubLoginData(
     };
 }
 
-// GitHub provider 연결 상태와 현재 verified email을 기준으로 Firebase uid를 확정합니다.
-async function firebaseUIDForGitHubLogin(
-    providerUID: string,
-    email: string,
-    providerToLink: UserProvider,
+// 미연결 GitHub provider를 verified email 기준 Firebase uid에 연결합니다.
+async function firebaseUIDForUnlinkedGitHubLogin(
+    accessToken: string,
     userData: GitHubUser
 ): Promise<string> {
-    const linkedUID = await firebaseUIDForGitHubUser(
-        providerUID,
-        email
+    const {
+        email,
+        providerToLink
+    } = await githubLoginData(
+        accessToken,
+        userData
     );
-    const uid = linkedUID ?? await firebaseUIDForGitHubEmail(
+    return firebaseUIDForGitHubEmail(
         email,
         providerToLink,
         userData
     );
-    return uid;
 }
 
-// 기존 GitHub provider 연결을 현재 verified email과 대조하고 오래된 연결이면 분리합니다.
-async function firebaseUIDForGitHubUser(
+// GitHub provider가 다른 사용자에 묶여 있지 않을 때만 현재 사용자에 연결합니다.
+async function linkGitHubProvider(
+    uid: string,
     providerUID: string,
-    email: string
+    providerToLink: UserProvider
+): Promise<void> {
+    try {
+        const userRecord = await admin.auth().getUserByProviderUid(
+            PROVIDER_ID,
+            providerUID
+        );
+
+        if (userRecord.uid === uid) {
+            return;
+        }
+
+        throw githubProviderLinkConflictError();
+    } catch (error) {
+        if (firebaseAuthErrorCode(error) !== "auth/user-not-found") { throw error; }
+    }
+
+    await admin.auth().updateUser(uid, { providerToLink });
+    console.log(`현재 사용자(${uid})에 GitHub provider 연결을 추가했습니다.`);
+}
+
+// 다른 사용자에 연결된 GitHub provider 충돌을 클라이언트가 구분할 수 있는 오류로 구성합니다.
+function githubProviderLinkConflictError(): HttpsError {
+    return new HttpsError(
+        "failed-precondition",
+        "GitHub provider가 다른 계정에 연결되어 있습니다.",
+        { reason: "github_email_changed_account_conflict" }
+    );
+}
+
+// 기존 GitHub provider에 연결된 Firebase uid를 반환합니다.
+async function firebaseUIDForGitHubUser(
+    providerUID: string
 ): Promise<string | undefined> {
     try {
         const userRecord = await admin.auth().getUserByProviderUid(
             PROVIDER_ID,
             providerUID
         );
-        const githubProvider = userRecord.providerData.find((item) =>
-            item.providerId === PROVIDER_ID
-        );
-        if (githubProvider?.email === email) {
-            return userRecord.uid;
-        }
-
-        await admin.auth().updateUser(userRecord.uid, {
-            providersToUnlink: [PROVIDER_ID]
-        });
-        console.log(`기존 사용자(${userRecord.uid})에서 오래된 GitHub provider 연결을 분리했습니다.`);
-        return undefined;
+        return userRecord.uid;
     } catch (error) {
         if (firebaseAuthErrorCode(error) !== "auth/user-not-found") { throw error; }
         return undefined;
@@ -254,6 +346,22 @@ export async function revokeGithubAccessTokenWithDatabase(
         throw new HttpsError("not-found", "GitHub 토큰이 존재하지 않습니다.");
     }
 
+    await revokeGitHubOAuthGrant(
+        uid,
+        accessToken,
+        clientId,
+        clientSecret
+    );
+    return { success: true };
+}
+
+// GitHub OAuth App grant를 폐기하고 이미 무효화된 토큰은 성공으로 처리합니다.
+async function revokeGitHubOAuthGrant(
+    uid: string,
+    accessToken: string,
+    clientId: string,
+    clientSecret: string
+): Promise<void> {
     try {
         const status = await requestGrantRevocation(
             clientId,
@@ -261,7 +369,7 @@ export async function revokeGithubAccessTokenWithDatabase(
             accessToken
         );
         if (status === 204) {
-            return { success: true };
+            return;
         }
     } catch (error) {
         if (await isAccessTokenAlreadyInvalid(
@@ -273,7 +381,7 @@ export async function revokeGithubAccessTokenWithDatabase(
             console.warn("GitHub OAuth App grant를 제거할 수 없지만 토큰이 이미 무효화되어 성공으로 처리합니다.", {
                 uid, github: errorMetadata(error)
             });
-            return { success: true };
+            return;
         }
 
         throw grantRevocationError(error);

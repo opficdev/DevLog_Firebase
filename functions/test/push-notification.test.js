@@ -79,17 +79,17 @@ const { sendPushNotification } = require("../lib/fcm/notification");
 
     assert.ok(
         writtenDocs.some((item) => item.path === "users/user-1/notificationDispatches/todo-1_2026-07-10"),
-        "dispatch document should keep todoId_dueDateKey id."
+        "dispatch 문서는 todoId_dueDateKey id를 유지해야 합니다."
     );
     const notificationWrite = writtenDocs.find(
         (item) => item.path === "users/user-1/notifications/todo-1"
     );
 
-    assert.ok(notificationWrite, "notification document should use todoId id.");
+    assert.ok(notificationWrite, "notification 문서는 todoId id를 사용해야 합니다.");
     assert.strictEqual(notificationWrite.data.isRead, false);
     assert.ok(
         deletedDocs.includes("users/user-1/notifications/todo-1_2026-07-09"),
-        "legacy notification documents for the same todo should be deleted."
+        "같은 todo의 기존 notification 문서는 삭제되어야 합니다."
     );
     assert.strictEqual(sentMessages.length, 1);
 
@@ -130,7 +130,7 @@ const { sendPushNotification } = require("../lib/fcm/notification");
 
     assert.ok(
         writtenDocs.some((item) => item.path === "users/user-1/notifications/todo-1"),
-        "notification document should be written when legacy documents do not exist."
+        "기존 문서가 없어도 notification 문서가 작성되어야 합니다."
     );
     assert.strictEqual(deletedDocs.length, 0);
     assert.strictEqual(sentMessages.length, 1);
@@ -183,7 +183,7 @@ const { sendPushNotification } = require("../lib/fcm/notification");
 
     assert.ok(
         writtenDocs.some((item) => item.path === "users/user-1/notifications/todo-1"),
-        "notification document should be written while cleanup spans multiple batches."
+        "cleanup이 여러 batch로 나뉘어도 notification 문서가 작성되어야 합니다."
     );
     assert.strictEqual(deletedDocs.length, 201);
     assert.strictEqual(sentMessages.length, 1);

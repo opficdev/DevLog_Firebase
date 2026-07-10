@@ -115,6 +115,14 @@ assert.deepStrictEqual(
 );
 
 assert.deepStrictEqual(
+    matchRestRoute("POST", ["auth", "github", "link"]),
+    {
+        action: "linkGithubProvider",
+        requiresAuth: true
+    }
+);
+
+assert.deepStrictEqual(
     matchRestRoute("DELETE", ["auth", "github", "access-token"]),
     {
         action: "revokeGithubAccessToken",
@@ -152,6 +160,25 @@ const emailMismatch = restErrorFrom({
 });
 assert.strictEqual(emailMismatch.status, 400);
 assert.strictEqual(emailMismatch.code, "email-mismatch");
+
+const githubLinkConflict = restErrorFrom(
+    new HttpsError("failed-precondition", "GitHub provider가 다른 계정에 연결되어 있습니다.", {
+        reason: "github_email_changed_account_conflict"
+    })
+);
+assert.strictEqual(githubLinkConflict.status, 412);
+assert.strictEqual(githubLinkConflict.code, "github-email-changed-account-conflict");
+assert.deepStrictEqual(
+    restErrorBodyFrom(
+        new HttpsError("failed-precondition", "GitHub provider가 다른 계정에 연결되어 있습니다.", {
+            reason: "github_email_changed_account_conflict"
+        })
+    ),
+    {
+        code: "github-email-changed-account-conflict",
+        message: "GitHub provider가 다른 계정에 연결되어 있습니다."
+    }
+);
 
 const invalidIDToken = restErrorFrom({
     code: "auth/invalid-id-token",
