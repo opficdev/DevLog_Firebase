@@ -402,6 +402,13 @@ async function assertGithubLinkRejectsMismatchedEmail() {
     assert.deepStrictEqual(emailLookupCalls, []);
     assert.deepStrictEqual(updatedUsers, []);
     assert.deepStrictEqual(createdUsers, []);
+    assert.strictEqual(axiosRequests.length, 1);
+    assert.strictEqual(axiosRequests[0].method, "delete");
+    assert.strictEqual(axiosRequests[0].url, "https://api.github.com/applications/client-id/grant");
+    assert.deepStrictEqual(axiosRequests[0].data, {
+        access_token: "access-token"
+    });
+    assertRevokeHeaders(axiosRequests[0]);
     assertHeaders("https://api.github.com/user");
     assertHeaders("https://api.github.com/user/emails");
 }
@@ -470,6 +477,7 @@ async function assertGithubLinkBlocksProviderConnectedToOtherUser() {
     assert.deepStrictEqual(emailLookupCalls, []);
     assert.deepStrictEqual(updatedUsers, []);
     assert.deepStrictEqual(createdUsers, []);
+    assert.deepStrictEqual(axiosRequests, []);
     assertHeaders("https://api.github.com/user");
     assertHeaders("https://api.github.com/user/emails");
 }
@@ -577,6 +585,7 @@ function fakeFirestore(accessToken) {
 // 로그인 기능 테스트가 공유하는 fake 응답 상태를 초기화합니다.
 function resetGithubLoginState() {
     axiosCalls.length = 0;
+    axiosRequests.length = 0;
     userLookupCalls.length = 0;
     providerLookupCalls.length = 0;
     emailLookupCalls.length = 0;
@@ -586,6 +595,8 @@ function resetGithubLoginState() {
     providerUIDUser = undefined;
     emailUser = undefined;
     createdUserUID = "firebase-uid";
+    grantDeleteStatus = 204;
+    tokenCheckStatus = 404;
     githubEmails = defaultGithubEmails();
 }
 

@@ -97,10 +97,24 @@ export async function linkGithubProviderWithCode(
         userData
     );
 
-    await assertGitHubEmailMatchesUser(
+    const emailMatches = await githubEmailMatchesUser(
         uid,
         email
     );
+    if (!emailMatches) {
+        await revokeGitHubOAuthGrant(
+            uid,
+            accessToken,
+            clientId,
+            clientSecret
+        );
+        throw new HttpsError(
+            "invalid-argument",
+            "이메일이 일치하지 않습니다.",
+            { reason: EMAIL_MISMATCH_REASON }
+        );
+    }
+
     await linkGitHubProvider(
         uid,
         providerUID,
@@ -111,19 +125,13 @@ export async function linkGithubProviderWithCode(
     return { accessToken };
 }
 
-// 현재 사용자의 이메일이 GitHub verified email과 같은지 검증합니다.
-async function assertGitHubEmailMatchesUser(
+// 현재 사용자의 이메일과 GitHub verified email의 일치 여부를 반환합니다.
+async function githubEmailMatchesUser(
     uid: string,
     email: string
-): Promise<void> {
+): Promise<boolean> {
     const userRecord = await admin.auth().getUser(uid);
-    if (userRecord.email === email) { return; }
-
-    throw new HttpsError(
-        "invalid-argument",
-        "이메일이 일치하지 않습니다.",
-        { reason: EMAIL_MISMATCH_REASON }
-    );
+    return userRecord.email === email;
 }
 
 // GitHub OAuth code를 access token으로 교환합니다.
@@ -345,6 +353,22 @@ export async function revokeGithubAccessTokenWithDatabase(
         throw new HttpsError("not-found", "GitHub 토큰이 존재하지 않습니다.");
     }
 
+    await revokeGitHubOAuthGrant(
+        uid,
+        accessToken,
+        clientId,
+        clientSecret
+    );
+    return { success: true };
+}
+
+// GitHub OAuth App grant를 폐기하고 이미 무효화된 토큰은 성공으로 처리합니다.
+async function revokeGitHubOAuthGrant(
+    uid: string,
+    accessToken: string,
+    clientId: string,
+    clientSecret: string
+): Promise<void> {
     try {
         const status = await requestGrantRevocation(
             clientId,
@@ -352,7 +376,7 @@ export async function revokeGithubAccessTokenWithDatabase(
             accessToken
         );
         if (status === 204) {
-            return { success: true };
+            return;
         }
     } catch (error) {
         if (await isAccessTokenAlreadyInvalid(
@@ -364,7 +388,7 @@ export async function revokeGithubAccessTokenWithDatabase(
             console.warn("GitHub OAuth App grant를 제거할 수 없지만 토큰이 이미 무효화되어 성공으로 처리합니다.", {
                 uid, github: errorMetadata(error)
             });
-            return { success: true };
+            return;
         }
 
         throw grantRevocationError(error);
