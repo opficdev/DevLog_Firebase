@@ -4,12 +4,14 @@ const axiosCalls = [];
 const axiosRequests = [];
 const consoleErrors = [];
 const consoleWarnings = [];
+const userLookupCalls = [];
 const providerLookupCalls = [];
 const emailLookupCalls = [];
 const createdUsers = [];
 const updatedUsers = [];
 let grantDeleteStatus = 204;
 let tokenCheckStatus = 404;
+let currentUser;
 let providerUIDUser;
 let emailUser;
 let createdUserUID = "firebase-uid";
@@ -88,6 +90,15 @@ const fakeAxios = {
 };
 
 const fakeAuth = {
+    // Firebase uid로 현재 사용자 조회를 기록합니다.
+    async getUser(uid) {
+        userLookupCalls.push(uid);
+        if (!currentUser) {
+            throw firebaseAuthError("auth/user-not-found");
+        }
+
+        return currentUser;
+    },
     // GitHub provider uid로 연결된 Firebase Auth 사용자 조회를 기록합니다.
     async getUserByProviderUid(providerId, uid) {
         providerLookupCalls.push({ providerId, uid });
@@ -158,6 +169,7 @@ const {
         await assertGithubLoginCreatesProviderLinkedUserForNewEmail();
         await assertGithubLoginReportsUnavailableEmail();
 
+        await assertGithubLinkRejectsMismatchedEmail();
         await assertGithubLinkKeepsCurrentProvider();
         await assertGithubLinkConnectsUnlinkedProvider();
         await assertGithubLinkBlocksProviderConnectedToOtherUser();
@@ -344,6 +356,7 @@ async function assertGithubLinkKeepsCurrentProvider() {
         "current-uid",
         [githubProviderData("old@example.com")]
     );
+    currentUser = userRecord("current-uid", [], "user@example.com");
 
     const result = await linkGithubProviderWithCode(
         "current-uid",
@@ -355,6 +368,37 @@ async function assertGithubLinkKeepsCurrentProvider() {
         providerId: "github.com",
         uid: "1"
     }]);
+    assert.deepStrictEqual(userLookupCalls, ["current-uid"]);
+    assert.deepStrictEqual(emailLookupCalls, []);
+    assert.deepStrictEqual(updatedUsers, []);
+    assert.deepStrictEqual(createdUsers, []);
+    assertHeaders("https://api.github.com/user");
+    assertHeaders("https://api.github.com/user/emails");
+}
+
+// 현재 사용자와 GitHub verified email이 다르면 provider 연결을 차단하는지 검증합니다.
+async function assertGithubLinkRejectsMismatchedEmail() {
+    resetGithubLoginState();
+    githubEmails = verifiedEmails("target@example.com");
+    currentUser = userRecord("current-uid", [], "user@example.com");
+
+    await assert.rejects(
+        () => linkGithubProviderWithCode(
+            "current-uid",
+            "github-code"
+        ),
+        (error) => {
+            assert.strictEqual(error.code, "invalid-argument");
+            assert.strictEqual(error.message, "이메일이 일치하지 않습니다.");
+            assert.deepStrictEqual(error.details, {
+                reason: "email_mismatch"
+            });
+            return true;
+        }
+    );
+
+    assert.deepStrictEqual(providerLookupCalls, []);
+    assert.deepStrictEqual(userLookupCalls, ["current-uid"]);
     assert.deepStrictEqual(emailLookupCalls, []);
     assert.deepStrictEqual(updatedUsers, []);
     assert.deepStrictEqual(createdUsers, []);
@@ -365,6 +409,7 @@ async function assertGithubLinkKeepsCurrentProvider() {
 // 연결되지 않은 GitHub provider는 현재 사용자에 연결되는지 검증합니다.
 async function assertGithubLinkConnectsUnlinkedProvider() {
     resetGithubLoginState();
+    currentUser = userRecord("current-uid", [], "user@example.com");
 
     const result = await linkGithubProviderWithCode(
         "current-uid",
@@ -376,6 +421,7 @@ async function assertGithubLinkConnectsUnlinkedProvider() {
         providerId: "github.com",
         uid: "1"
     }]);
+    assert.deepStrictEqual(userLookupCalls, ["current-uid"]);
     assert.deepStrictEqual(emailLookupCalls, []);
     assert.deepStrictEqual(updatedUsers, [{
         uid: "current-uid",
@@ -399,7 +445,7 @@ async function assertGithubLinkBlocksProviderConnectedToOtherUser() {
             googleProviderData("old@example.com")
         ]
     );
-    emailUser = userRecord("current-uid");
+    currentUser = userRecord("current-uid", [], "target@example.com");
 
     await assert.rejects(
         () => linkGithubProviderWithCode(
@@ -420,6 +466,7 @@ async function assertGithubLinkBlocksProviderConnectedToOtherUser() {
         providerId: "github.com",
         uid: "1"
     }]);
+    assert.deepStrictEqual(userLookupCalls, ["current-uid"]);
     assert.deepStrictEqual(emailLookupCalls, []);
     assert.deepStrictEqual(updatedUsers, []);
     assert.deepStrictEqual(createdUsers, []);
@@ -530,21 +577,24 @@ function fakeFirestore(accessToken) {
 // 로그인 기능 테스트가 공유하는 fake 응답 상태를 초기화합니다.
 function resetGithubLoginState() {
     axiosCalls.length = 0;
+    userLookupCalls.length = 0;
     providerLookupCalls.length = 0;
     emailLookupCalls.length = 0;
     createdUsers.length = 0;
     updatedUsers.length = 0;
+    currentUser = undefined;
     providerUIDUser = undefined;
     emailUser = undefined;
     createdUserUID = "firebase-uid";
     githubEmails = defaultGithubEmails();
 }
 
-// Firebase Auth 사용자 응답에 필요한 uid와 provider 목록을 구성합니다.
-function userRecord(uid, providerData = []) {
+// Firebase Auth 사용자 응답에 필요한 uid, provider 목록, 이메일을 구성합니다.
+function userRecord(uid, providerData = [], email) {
     return {
         uid,
-        providerData
+        providerData,
+        email
     };
 }
 

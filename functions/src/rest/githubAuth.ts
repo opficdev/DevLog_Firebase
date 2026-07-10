@@ -26,6 +26,7 @@ interface GitHubEmail {
 }
 
 const EMAIL_UNAVAILABLE_REASON = "email_not_found";
+const EMAIL_MISMATCH_REASON = "email_mismatch";
 const ACCEPT = "application/vnd.github+json";
 const USER_AGENT = "DevLog-Firebase";
 const PROVIDER_ID = "github.com";
@@ -89,12 +90,17 @@ export async function linkGithubProviderWithCode(
     const userData = await requestGitHubUser(accessToken);
     const {
         providerUID,
+        email,
         providerToLink
     } = await githubLoginData(
         accessToken,
         userData
     );
 
+    await assertGitHubEmailMatchesUser(
+        uid,
+        email
+    );
     await linkGitHubProvider(
         uid,
         providerUID,
@@ -103,6 +109,21 @@ export async function linkGithubProviderWithCode(
     console.log(`현재 사용자(${uid})에 GitHub provider 연결 처리가 완료되었습니다.`);
 
     return { accessToken };
+}
+
+// 현재 사용자의 이메일이 GitHub verified email과 같은지 검증합니다.
+async function assertGitHubEmailMatchesUser(
+    uid: string,
+    email: string
+): Promise<void> {
+    const userRecord = await admin.auth().getUser(uid);
+    if (userRecord.email === email) { return; }
+
+    throw new HttpsError(
+        "invalid-argument",
+        "이메일이 일치하지 않습니다.",
+        { reason: EMAIL_MISMATCH_REASON }
+    );
 }
 
 // GitHub OAuth code를 access token으로 교환합니다.
