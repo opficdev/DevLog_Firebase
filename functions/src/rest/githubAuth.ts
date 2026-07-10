@@ -199,17 +199,14 @@ async function githubLoginData(
     };
 }
 
-// GitHub provider 연결 상태와 현재 verified email을 기준으로 Firebase uid를 확정합니다.
+// 기존 GitHub provider 연결을 우선하고 미연결이면 verified email로 Firebase uid를 확정합니다.
 async function firebaseUIDForGitHubLogin(
     providerUID: string,
     email: string,
     providerToLink: UserProvider,
     userData: GitHubUser
 ): Promise<string> {
-    const linkedUID = await firebaseUIDForGitHubUser(
-        providerUID,
-        email
-    );
+    const linkedUID = await firebaseUIDForGitHubUser(providerUID);
     const uid = linkedUID ?? await firebaseUIDForGitHubEmail(
         email,
         providerToLink,
@@ -252,28 +249,16 @@ function githubProviderLinkConflictError(): HttpsError {
     );
 }
 
-// 기존 GitHub provider 연결을 현재 verified email과 대조하고 오래된 연결이면 분리합니다.
+// 기존 GitHub provider에 연결된 Firebase uid를 반환합니다.
 async function firebaseUIDForGitHubUser(
-    providerUID: string,
-    email: string
+    providerUID: string
 ): Promise<string | undefined> {
     try {
         const userRecord = await admin.auth().getUserByProviderUid(
             PROVIDER_ID,
             providerUID
         );
-        const githubProvider = userRecord.providerData.find((item) =>
-            item.providerId === PROVIDER_ID
-        );
-        if (githubProvider?.email === email) {
-            return userRecord.uid;
-        }
-
-        await admin.auth().updateUser(userRecord.uid, {
-            providersToUnlink: [PROVIDER_ID]
-        });
-        console.log(`기존 사용자(${userRecord.uid})에서 오래된 GitHub provider 연결을 분리했습니다.`);
-        return undefined;
+        return userRecord.uid;
     } catch (error) {
         if (firebaseAuthErrorCode(error) !== "auth/user-not-found") { throw error; }
         return undefined;
