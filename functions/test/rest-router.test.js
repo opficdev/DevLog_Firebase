@@ -180,6 +180,37 @@ assert.deepStrictEqual(
     }
 );
 
+const appleErrors = [
+    ["invalid_apple_challenge", 400, "invalid-apple-challenge"],
+    ["expired_apple_challenge", 410, "expired-apple-challenge"],
+    ["consumed_apple_challenge", 409, "consumed-apple-challenge"],
+    ["invalid_apple_proof", 401, "invalid-apple-proof"],
+    ["apple_provider_link_conflict", 409, "apple-provider-link-conflict"],
+    ["last_provider", 412, "last-provider"],
+    ["apple_credential_not_found", 404, "apple-credential-not-found"],
+    ["apple_revoke_failed", 502, "apple-revoke-failed"]
+];
+
+for (const [reason, status, code] of appleErrors) {
+    const restError = restErrorFrom(
+        new HttpsError("failed-precondition", "Apple 인증 처리 실패", { reason })
+    );
+    assert.strictEqual(restError.status, status);
+    assert.strictEqual(restError.code, code);
+}
+
+const hyphenatedReasons = [
+    ["email-not-found", 400, "email-not-found"],
+    ["github-email-changed-account-conflict", 412, "github-email-changed-account-conflict"],
+    ["expired-apple-challenge", 410, "expired-apple-challenge"]
+];
+
+for (const [reason, status, code] of hyphenatedReasons) {
+    const restError = restErrorFrom({ reason, message: "구분 가능한 오류" });
+    assert.strictEqual(restError.status, status);
+    assert.strictEqual(restError.code, code);
+}
+
 const invalidIDToken = restErrorFrom({
     code: "auth/invalid-id-token",
     message: "Firebase ID token has invalid signature."
