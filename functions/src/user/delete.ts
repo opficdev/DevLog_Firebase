@@ -15,21 +15,28 @@ export const cleanupDeletedUserFirestoreData = functions
         const errors: unknown[] = [];
 
         for (const firebaseDB of firebaseDBs()) {
-            try {
-                const db = firestoreFor(firebaseDB);
-                const userDocRef = db.doc(FirestorePath.user(uid));
-                await db.recursiveDelete(userDocRef);
-                logger.info("Auth 사용자 삭제 후 Firestore 사용자 데이터 삭제 완료", {
-                    firebaseDB,
-                    uid
-                });
-            } catch (error) {
-                logger.error("Auth 사용자 삭제 후 Firestore 사용자 데이터 삭제 실패", {
-                    firebaseDB,
-                    uid,
-                    error
-                });
-                errors.push(error);
+            const db = firestoreFor(firebaseDB);
+            const paths = [
+                FirestorePath.user(uid),
+                FirestorePath.authCredential(uid)
+            ];
+            for (const path of paths) {
+                try {
+                    await db.recursiveDelete(db.doc(path));
+                    logger.info("Auth 사용자 삭제 후 Firestore 데이터 삭제 완료", {
+                        firebaseDB,
+                        uid,
+                        path
+                    });
+                } catch (error) {
+                    logger.error("Auth 사용자 삭제 후 Firestore 데이터 삭제 실패", {
+                        firebaseDB,
+                        uid,
+                        path,
+                        error
+                    });
+                    errors.push(error);
+                }
             }
         }
 

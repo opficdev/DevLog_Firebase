@@ -1,5 +1,74 @@
 import { HttpsError } from "firebase-functions/v2/https";
 
+// reason에 대응하는 REST 오류 응답 정의를 나타냅니다.
+interface RestErrorDefinition {
+    // HTTP 응답 상태를 저장합니다.
+    status: number;
+    // 클라이언트가 구분할 오류 code를 저장합니다.
+    code: string;
+    // 원본 오류 message가 없을 때 사용할 기본 문구를 저장합니다.
+    message: string;
+}
+
+// 정규화된 reason별 REST 오류 응답 정의를 저장합니다.
+const restErrorByReason: Record<string, RestErrorDefinition> = {
+    email_not_found: {
+        status: 400,
+        code: "email-not-found",
+        message: "이메일을 찾을 수 없습니다."
+    },
+    email_mismatch: {
+        status: 400,
+        code: "email-mismatch",
+        message: "이메일이 일치하지 않습니다."
+    },
+    github_email_changed_account_conflict: {
+        status: 412,
+        code: "github-email-changed-account-conflict",
+        message: "GitHub provider가 다른 계정에 연결되어 있습니다."
+    },
+    invalid_apple_challenge: {
+        status: 400,
+        code: "invalid-apple-challenge",
+        message: "Apple 인증 challenge가 유효하지 않습니다."
+    },
+    expired_apple_challenge: {
+        status: 410,
+        code: "expired-apple-challenge",
+        message: "Apple 인증 challenge가 만료되었습니다."
+    },
+    consumed_apple_challenge: {
+        status: 409,
+        code: "consumed-apple-challenge",
+        message: "Apple 인증 challenge가 이미 사용되었습니다."
+    },
+    invalid_apple_proof: {
+        status: 401,
+        code: "invalid-apple-proof",
+        message: "Apple 인증 증명이 유효하지 않습니다."
+    },
+    apple_provider_link_conflict: {
+        status: 409,
+        code: "apple-provider-link-conflict",
+        message: "Apple provider가 다른 계정에 연결되어 있습니다."
+    },
+    last_provider: {
+        status: 412,
+        code: "last-provider",
+        message: "마지막 로그인 provider는 해제할 수 없습니다."
+    },
+    apple_credential_not_found: {
+        status: 404,
+        code: "apple-credential-not-found",
+        message: "Apple credential을 찾을 수 없습니다."
+    },
+    apple_revoke_failed: {
+        status: 502,
+        code: "apple-revoke-failed",
+        message: "Apple grant 폐기에 실패했습니다."
+    }
+};
+
 export class RestError extends Error {
     constructor(
         readonly status: number,
@@ -16,23 +85,9 @@ export function restErrorFrom(error: unknown): RestError {
     }
 
     const reason = errorReason(error);
-    if (reason === "email_not_found" || reason === "email-not-found") {
-        return new RestError(400, "email-not-found", messageFrom(error, "이메일을 찾을 수 없습니다."));
-    }
-
-    if (reason === "email_mismatch" || reason === "email-mismatch") {
-        return new RestError(400, "email-mismatch", messageFrom(error, "이메일이 일치하지 않습니다."));
-    }
-
-    if (
-        reason === "github_email_changed_account_conflict" ||
-        reason === "github-email-changed-account-conflict"
-    ) {
-        return new RestError(
-            412,
-            "github-email-changed-account-conflict",
-            messageFrom(error, "GitHub provider가 다른 계정에 연결되어 있습니다.")
-        );
+    const reasonError = restErrorForReason(reason, error);
+    if (reasonError) {
+        return reasonError;
     }
 
     if (error instanceof HttpsError) {
@@ -45,6 +100,24 @@ export function restErrorFrom(error: unknown): RestError {
     }
 
     return new RestError(500, "internal", messageFrom(error, "서버 오류가 발생했습니다."));
+}
+
+// reason을 정규화하고 대응하는 REST 오류로 변환합니다.
+function restErrorForReason(
+    reason: string | undefined,
+    error: unknown
+): RestError | undefined {
+    const normalizedReason = reason?.replace(/-/g, "_");
+    const matched = normalizedReason ? restErrorByReason[normalizedReason] : undefined;
+    if (!matched) {
+        return undefined;
+    }
+
+    return new RestError(
+        matched.status,
+        matched.code,
+        messageFrom(error, matched.message)
+    );
 }
 
 // REST 오류 응답으로 내려갈 JSON body를 구성합니다.

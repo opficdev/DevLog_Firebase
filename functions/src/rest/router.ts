@@ -5,7 +5,10 @@ export type RestAction =
     "undoWebPageDeletion" |
     "requestPushNotificationDeletion" |
     "undoPushNotificationDeletion" |
+    "createAppleChallenge" |
     "requestAppleCustomToken" |
+    "linkAppleProvider" |
+    "unlinkAppleProvider" |
     "requestAppleRefreshToken" |
     "refreshAppleAccessToken" |
     "revokeAppleAccessToken" |
@@ -74,6 +77,27 @@ export function matchRestRoute(method: string, routeSegments: string[]): RestRou
         return {
             action: "requestAppleCustomToken",
             requiresAuth: false
+        };
+    }
+
+    if (routeSegments.join("/") === "auth/apple/challenges" && normalizedMethod === "POST") {
+        return {
+            action: "createAppleChallenge",
+            requiresAuth: false
+        };
+    }
+
+    if (routeSegments.join("/") === "auth/apple/account-link" && normalizedMethod === "PUT") {
+        return {
+            action: "linkAppleProvider",
+            requiresAuth: true
+        };
+    }
+
+    if (routeSegments.join("/") === "auth/apple/account-link" && normalizedMethod === "DELETE") {
+        return {
+            action: "unlinkAppleProvider",
+            requiresAuth: true
         };
     }
 

@@ -75,10 +75,34 @@ assert.deepStrictEqual(
 );
 
 assert.deepStrictEqual(
+    matchRestRoute("POST", ["auth", "apple", "challenges"]),
+    {
+        action: "createAppleChallenge",
+        requiresAuth: false
+    }
+);
+
+assert.deepStrictEqual(
     matchRestRoute("POST", ["auth", "apple", "custom-token"]),
     {
         action: "requestAppleCustomToken",
         requiresAuth: false
+    }
+);
+
+assert.deepStrictEqual(
+    matchRestRoute("PUT", ["auth", "apple", "account-link"]),
+    {
+        action: "linkAppleProvider",
+        requiresAuth: true
+    }
+);
+
+assert.deepStrictEqual(
+    matchRestRoute("DELETE", ["auth", "apple", "account-link"]),
+    {
+        action: "unlinkAppleProvider",
+        requiresAuth: true
     }
 );
 
@@ -105,6 +129,9 @@ assert.deepStrictEqual(
         requiresAuth: true
     }
 );
+
+assert.strictEqual(matchRestRoute("GET", ["auth", "apple", "challenges"]), undefined);
+assert.strictEqual(matchRestRoute("POST", ["auth", "apple", "account-link"]), undefined);
 
 assert.deepStrictEqual(
     matchRestRoute("POST", ["auth", "github", "tokens"]),
@@ -179,6 +206,37 @@ assert.deepStrictEqual(
         message: "GitHub provider가 다른 계정에 연결되어 있습니다."
     }
 );
+
+const appleErrors = [
+    ["invalid_apple_challenge", 400, "invalid-apple-challenge"],
+    ["expired_apple_challenge", 410, "expired-apple-challenge"],
+    ["consumed_apple_challenge", 409, "consumed-apple-challenge"],
+    ["invalid_apple_proof", 401, "invalid-apple-proof"],
+    ["apple_provider_link_conflict", 409, "apple-provider-link-conflict"],
+    ["last_provider", 412, "last-provider"],
+    ["apple_credential_not_found", 404, "apple-credential-not-found"],
+    ["apple_revoke_failed", 502, "apple-revoke-failed"]
+];
+
+for (const [reason, status, code] of appleErrors) {
+    const restError = restErrorFrom(
+        new HttpsError("failed-precondition", "Apple 인증 처리 실패", { reason })
+    );
+    assert.strictEqual(restError.status, status);
+    assert.strictEqual(restError.code, code);
+}
+
+const hyphenatedReasons = [
+    ["email-not-found", 400, "email-not-found"],
+    ["github-email-changed-account-conflict", 412, "github-email-changed-account-conflict"],
+    ["expired-apple-challenge", 410, "expired-apple-challenge"]
+];
+
+for (const [reason, status, code] of hyphenatedReasons) {
+    const restError = restErrorFrom({ reason, message: "구분 가능한 오류" });
+    assert.strictEqual(restError.status, status);
+    assert.strictEqual(restError.code, code);
+}
 
 const invalidIDToken = restErrorFrom({
     code: "auth/invalid-id-token",
