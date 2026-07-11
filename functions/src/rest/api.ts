@@ -15,11 +15,15 @@ import {
     undoWebPageDeletionByDocumentID
 } from "./webPageDeletion";
 import {
+    createAppleChallengeWithDatabase,
+    linkAppleProviderWithDatabase,
     requestAppleCustomTokenWithDatabase,
+    requestLegacyAppleCustomTokenWithDatabase,
     requestAppleRefreshTokenWithDatabase,
     refreshAppleAccessTokenWithDatabase,
-    revokeAppleAccessTokenWithToken
-} from "./appleAuth";
+    revokeAppleAccessTokenWithDatabase,
+    unlinkAppleProviderWithDatabase
+} from "./apple/auth";
 import {
     linkGithubProviderWithCode,
     requestGithubTokensWithCode,
@@ -93,11 +97,33 @@ async function handleRoute(
     case "undoPushNotificationDeletion":
         await undoPushNotificationDeletionInFirestore(db, requiredUID(uid), requiredID(route));
         return { success: true };
+    case "createAppleChallenge":
+        return createAppleChallengeWithDatabase(db);
     case "requestAppleCustomToken":
-        return requestAppleCustomTokenWithDatabase(
+        if ("challengeId" in body) {
+            return requestAppleCustomTokenWithDatabase(
+                db,
+                requiredBodyString(body, "challengeId"),
+                requiredBodyString(body, "authorizationCode")
+            );
+        }
+        return requestLegacyAppleCustomTokenWithDatabase(
             db,
             requiredBodyString(body, "idToken"),
             requiredBodyString(body, "authorizationCode")
+        );
+    case "linkAppleProvider":
+        return linkAppleProviderWithDatabase(
+            db,
+            requiredUID(uid),
+            requiredBodyString(body, "challengeId"),
+            requiredBodyString(body, "authorizationCode"),
+            optionalBodyString(body, "credentialEmail")
+        );
+    case "unlinkAppleProvider":
+        return unlinkAppleProviderWithDatabase(
+            db,
+            requiredUID(uid)
         );
     case "requestAppleRefreshToken":
         return requestAppleRefreshTokenWithDatabase(
@@ -108,9 +134,10 @@ async function handleRoute(
     case "refreshAppleAccessToken":
         return refreshAppleAccessTokenWithDatabase(db, requiredUID(uid));
     case "revokeAppleAccessToken":
-        return revokeAppleAccessTokenWithToken(
+        return revokeAppleAccessTokenWithDatabase(
+            db,
             requiredUID(uid),
-            requiredBodyString(body, "token")
+            body.token
         );
     case "requestGithubTokens":
         return requestGithubTokensWithCode(requiredBodyString(body, "code"));
@@ -209,6 +236,23 @@ function requiredBodyString(body: Record<string, unknown>, key: string): string 
         throw new HttpsError("invalid-argument", `${key}가 필요합니다.`);
     }
     return value.trim();
+}
+
+// 요청 body의 선택 문자열을 공백을 제거해 반환합니다.
+function optionalBodyString(
+    body: Record<string, unknown>,
+    key: string
+): string | undefined {
+    const value = body[key];
+    if (value === undefined || value === null) {
+        return undefined;
+    }
+    if (typeof value !== "string") {
+        throw new HttpsError("invalid-argument", `${key} 형식이 올바르지 않습니다.`);
+    }
+
+    const trimmedValue = value.trim();
+    return trimmedValue || undefined;
 }
 
 // REST 오류 응답 body와 같은 내용을 Cloud Logging에 남긴 뒤 클라이언트에 반환합니다.

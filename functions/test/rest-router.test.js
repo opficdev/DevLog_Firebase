@@ -75,10 +75,34 @@ assert.deepStrictEqual(
 );
 
 assert.deepStrictEqual(
+    matchRestRoute("POST", ["auth", "apple", "challenges"]),
+    {
+        action: "createAppleChallenge",
+        requiresAuth: false
+    }
+);
+
+assert.deepStrictEqual(
     matchRestRoute("POST", ["auth", "apple", "custom-token"]),
     {
         action: "requestAppleCustomToken",
         requiresAuth: false
+    }
+);
+
+assert.deepStrictEqual(
+    matchRestRoute("PUT", ["auth", "apple", "account-link"]),
+    {
+        action: "linkAppleProvider",
+        requiresAuth: true
+    }
+);
+
+assert.deepStrictEqual(
+    matchRestRoute("DELETE", ["auth", "apple", "account-link"]),
+    {
+        action: "unlinkAppleProvider",
+        requiresAuth: true
     }
 );
 
@@ -105,6 +129,9 @@ assert.deepStrictEqual(
         requiresAuth: true
     }
 );
+
+assert.strictEqual(matchRestRoute("GET", ["auth", "apple", "challenges"]), undefined);
+assert.strictEqual(matchRestRoute("POST", ["auth", "apple", "account-link"]), undefined);
 
 assert.deepStrictEqual(
     matchRestRoute("POST", ["auth", "github", "tokens"]),
