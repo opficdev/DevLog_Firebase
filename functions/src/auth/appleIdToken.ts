@@ -48,13 +48,16 @@ function getApplePublicKey(
 // 검증된 JWT payload가 Apple ID 토큰 페이로드 형태인지 확인하는 메서드
 function isAppleTokenPayload(
     payload: jwt.JwtPayload,
-    clientId: string
+    clientId: string,
+    expectedHashedNonce?: string
 ): payload is AppleTokenPayload {
     return payload.iss === AppleIdentityIssuer &&
         payload.aud === clientId &&
         typeof payload.sub === "string" &&
+        0 < payload.sub.length &&
         typeof payload.iat === "number" &&
-        typeof payload.exp === "number";
+        typeof payload.exp === "number" &&
+        (!expectedHashedNonce || payload.nonce === expectedHashedNonce);
 }
 
 // Apple ID 토큰의 이메일 인증 여부 claim을 boolean 값으로 변환하는 메서드
@@ -66,7 +69,8 @@ export function isAppleEmailVerified(payload: AppleTokenPayload) {
 // Apple JWKS와 필수 claim으로 Apple ID 토큰을 검증하고 페이로드를 반환하는 메서드
 export function verifyAppleIdToken(
     idToken: string,
-    clientId: string
+    clientId: string,
+    expectedHashedNonce?: string
 ) {
     return new Promise<AppleTokenPayload>((resolve, reject) => {
         jwt.verify(
@@ -86,7 +90,11 @@ export function verifyAppleIdToken(
                 if (
                     !decoded ||
                     typeof decoded === "string" ||
-                    !isAppleTokenPayload(decoded, clientId)
+                    !isAppleTokenPayload(
+                        decoded,
+                        clientId,
+                        expectedHashedNonce
+                    )
                 ) {
                     reject(new Error("Invalid Apple ID token payload"));
                     return;
