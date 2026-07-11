@@ -60,7 +60,13 @@ export async function requestAppleAccessToken(
         if (accessToken) {
             return accessToken;
         }
-    } catch {
+    } catch (error) {
+        if (appleErrorCode(error) === "invalid_grant") {
+            throw new HttpsError(
+                "unauthenticated",
+                "Apple refresh token이 만료되었거나 유효하지 않습니다."
+            );
+        }
         throw new HttpsError("internal", "Apple access token 발급에 실패했습니다.");
     }
 
@@ -163,17 +169,23 @@ export function appleConfiguration(): AppleConfiguration {
 
 // Apple API 오류가 이미 무효화된 grant를 나타내는지 확인합니다.
 function isAppleGrantAlreadyRevoked(error: unknown): boolean {
+    const code = appleErrorCode(error);
+    return code === "invalid_grant" || code === "invalid_token";
+}
+
+// Apple API 오류 응답에서 구분 코드를 추출합니다.
+function appleErrorCode(error: unknown): string | undefined {
     if (!axios.isAxiosError(error)) {
-        return false;
+        return undefined;
     }
 
     const data = error.response?.data;
     if (!data || typeof data !== "object") {
-        return false;
+        return undefined;
     }
 
     const code = (data as Record<string, unknown>).error;
-    return code === "invalid_grant" || code === "invalid_token";
+    return typeof code === "string" ? code : undefined;
 }
 
 // Apple client secret JWT를 생성합니다.

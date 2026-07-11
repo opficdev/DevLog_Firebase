@@ -209,6 +209,8 @@ const {
     await assertAccountLinkProviderFailureContinuesOnNextRequest();
     await assertAccountLinkProviderOwnershipRaceCleansCredential();
     await assertCredentialMigrationPreservesNewValue();
+    await assertInvalidRefreshGrantRequiresReauthentication();
+    await assertOtherRefreshFailureRemainsInternal();
     await assertLegacyAppleContractsRemainAvailable();
     await assertLegacyCredentialSaveFailureContinuesOnRetry();
     await assertAccessTokenDeletionKeepsProvider();
@@ -832,6 +834,44 @@ async function assertCredentialMigrationPreservesNewValue() {
         newCredentialDB.data.get("users/user-2/userData/tokens").appleRefreshToken,
         undefined
     );
+}
+
+// 무효 Apple refresh token이 재인증 가능한 오류를 반환하고 credential을 보존하는지 검증합니다.
+async function assertInvalidRefreshGrantRequiresReauthentication() {
+    resetState();
+    const db = fakeFirestore({
+        "authCredentials/user-1/providers/apple": { refreshToken: "invalid-refresh-token" }
+    });
+    tokenExchangeError = axiosError(400, { error: "invalid_grant" });
+
+    await assert.rejects(
+        () => refreshAppleAccessTokenWithDatabase(db, "user-1"),
+        (error) => {
+            assert.strictEqual(error.code, "unauthenticated");
+            return true;
+        }
+    );
+
+    assert.strictEqual(db.data.has("authCredentials/user-1/providers/apple"), true);
+}
+
+// invalid_grant가 아닌 Apple token 오류가 기존 내부 오류와 credential을 유지하는지 검증합니다.
+async function assertOtherRefreshFailureRemainsInternal() {
+    resetState();
+    const db = fakeFirestore({
+        "authCredentials/user-1/providers/apple": { refreshToken: "stored-refresh-token" }
+    });
+    tokenExchangeError = axiosError(500, { error: "server_error" });
+
+    await assert.rejects(
+        () => refreshAppleAccessTokenWithDatabase(db, "user-1"),
+        (error) => {
+            assert.strictEqual(error.code, "internal");
+            return true;
+        }
+    );
+
+    assert.strictEqual(db.data.has("authCredentials/user-1/providers/apple"), true);
 }
 
 // 지원 중인 이전 iOS의 custom token과 refresh token 계약을 유지하는지 검증합니다.
