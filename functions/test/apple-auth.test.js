@@ -201,6 +201,7 @@ const {
     await assertCustomTokenProviderOwnershipRaceCleansCredential();
     await assertLinkRequiresEmail();
     await assertLinkUsesCredentialEmailFallback();
+    await assertLinkAcceptsEmailWithDifferentLetterCase();
     await assertLinkRejectsMismatchedEmail();
     await assertLinkRejectsOtherProviderOwner();
     await assertLinkKeepsCurrentProvider();
@@ -600,6 +601,24 @@ async function assertLinkUsesCredentialEmailFallback() {
         "credential-email",
         "authorization-code",
         "user@example.com"
+    );
+
+    assert.deepStrictEqual(result, { success: true });
+    assert.strictEqual(authUpdates[0].properties.providerToLink.uid, "apple-subject");
+}
+
+// Firebase와 Apple 이메일의 대소문자만 다를 때 같은 이메일로 연결하는지 검증합니다.
+async function assertLinkAcceptsEmailWithDifferentLetterCase() {
+    resetState();
+    verifiedPayload = applePayload({ email: "User@Example.com" });
+    users.set("current-uid", firebaseUser("current-uid", "user@example.com"));
+    const db = validChallengeFirestore("email-letter-case");
+
+    const result = await linkAppleProviderWithDatabase(
+        db,
+        "current-uid",
+        "email-letter-case",
+        "authorization-code"
     );
 
     assert.deepStrictEqual(result, { success: true });

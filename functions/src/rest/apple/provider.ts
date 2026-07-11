@@ -55,7 +55,7 @@ export async function linkAppleProviderWithDatabase(
         );
     }
 
-    if (user.email !== appleEmail) {
+    if (user.email.toLowerCase() !== appleEmail.toLowerCase()) {
         await revokeExchangedTokens(proof.tokens);
         throw appleAuthError(
             "invalid-argument",
