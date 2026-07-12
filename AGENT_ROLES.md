@@ -29,37 +29,44 @@ Use these model tiers when assigning work to another LLM.
 | Tier | Use | Default model |
 | --- | --- | --- |
 | `Primary` | Planning, implementation, data-shape decisions, integration, failed-check triage | Strongest available Codex/GPT coding model |
-| `Spark` | Read-only review, checklist validation, log summarization, documentation draft, preflight | `gpt-5.3-codex-spark` when available |
-| `Fast` | File presence checks, short summaries, small text cleanup | Fastest low-cost model available |
+| `Lightweight` | Read-only review, checklist validation, log summarization, documentation draft, Firebase operations preflight | Pinned non-Primary model from the configured custom agent TOML |
+| `Fast` | File presence checks, short summaries, small text cleanup | Pinned fast model from the configured custom agent TOML when a Fast role is defined |
 
-Default role-to-model assignment:
+Default role-to-model and execution assignment:
 
-| Role | Default tier | Escalate to `Primary` when |
-| --- | --- | --- |
-| Planner | `Primary` | Always for live issues, PR scope, schema shape, deploy scope, or implementation planning |
-| Implementer | `Primary` | Always for TypeScript production code, tests, Firestore shape, Cloud Tasks, FCM, auth, or GitHub writes |
-| Code Reviewer | `Spark` for first pass, `Primary` for final blocking review | Findings involve runtime behavior, data loss, retry behavior, deploy risk, security, or test strategy |
-| Verification Runner | `Spark` | Verification fails, failure cause is unclear, or a fix is needed |
-| Firebase Operations Reviewer | `Spark` for preflight, `Primary` for deploy or migration decisions | Deploy, environment, database, index, or data migration behavior may change |
-| GitHub/CI Analyst | `Spark` | CI root cause requires code or workflow changes, or review comments conflict |
-| Documentation Writer | `Spark` | Text must explain behavior, deploy risk, issue scope, or PR scope tradeoffs |
+| Role | Execution owner or custom agent | Default tier | Escalate to `Primary` when |
+| --- | --- | --- | --- |
+| Planner | active main agent | `Primary` | Always for live issues, PR scope, schema shape, deploy scope, or implementation planning |
+| Implementer | active main agent | `Primary` | Always for TypeScript production code, tests, Firestore shape, Cloud Tasks, FCM, auth, or GitHub writes |
+| Code Reviewer | `code_reviewer` | `Lightweight` for first pass, `Primary` for final blocking review | Findings involve runtime behavior, data loss, retry behavior, deploy risk, security, or test strategy |
+| Verification Runner | `verification_runner` | `Lightweight` | Verification fails, failure cause is unclear, or a fix is needed |
+| Firebase Operations Reviewer | `firebase_operations_reviewer` | `Lightweight` for preflight, `Primary` for final deploy or migration verdict | Deploy, environment, database, index, or data migration behavior may change |
+| GitHub/CI Analyst | `github_ci_analyst` | `Lightweight` | CI root cause requires code or workflow changes, or review comments conflict |
+| Documentation Writer | `documentation_writer` | `Lightweight` | Text must explain behavior, deploy risk, issue scope, or PR scope tradeoffs |
 
-Do not assign `Spark` as the only model for production TypeScript implementation, Firestore document shape changes, Cloud Tasks queue behavior, FCM delivery behavior, auth flow changes, deploy actions, commits, pushes, PR creation, or final integration.
+Project-scoped custom agents live in `.codex/agents/`. Their TOML files pin the concrete model and sandbox for spawned sessions; this table is the canonical role-to-agent routing map.
+
+Do not assign `Lightweight` as the only model for production TypeScript implementation, Firestore document shape changes, Cloud Tasks queue behavior, FCM delivery behavior, auth flow changes, deploy actions, commits, pushes, PR creation, or final integration.
 
 ### Model dispatch requirements
 
 - A model tier assignment is an execution requirement, not a label for work the main agent already performed.
-- When a role is assigned to `Spark` or `Fast`, and tooling can select that model, the main agent must dispatch that role through a separate model or sub-agent call before using its result.
-- Do not satisfy a `Spark` or `Fast` role by completing the role directly in `Primary` and describing it as delegated work.
-- If the assigned model cannot be called, apply the fallback policy and report which role was not dispatched to its default tier.
+- `Primary` roles belong to the active main agent and must not be delegated to a sub-agent that uses or inherits the active `Primary` model.
+- Every sub-agent created through this role workflow must use either a `Lightweight` or `Fast` model that is different from the active `Primary` model.
+- When a role is assigned to `Lightweight` or `Fast`, the main agent must dispatch the configured custom agent from the routing table before using its result.
+- A sub-agent that inherits the active `Primary` model does not satisfy a `Lightweight` or `Fast` assignment.
+- Do not satisfy a `Lightweight` or `Fast` role by completing the role directly in `Primary` and describing it as delegated work.
+- A generic sub-agent spawn that does not load the configured custom agent TOML does not satisfy the role assignment.
+- If the custom agent cannot be loaded, its pinned model is unavailable, or the dispatch surface cannot select that custom agent, stop before dispatch and report which role cannot run.
+- If the assigned model is available but current tool policy requires explicit user permission before dispatch, missing permission is not fallback. Stop and ask for permission before continuing the required role.
 - `Primary` must integrate and verify delegated output, but must not skip the delegated role when the workflow requires it and the assigned model is available.
 
 ### Fallback policy
 
-- If `gpt-5.3-codex-spark` is unavailable, assign `Spark` roles to the fastest available read-only coding model.
-- If no reliable read-only model is available, assign the role to `Primary`.
+- The configured custom agent TOML is the source of truth for the non-Primary role model and sandbox.
+- If a required custom agent or its pinned non-Primary model is unavailable, do not fall back to another model; stop and report the unavailable role.
 - If `Primary` is unavailable, do not perform implementation, final integration, git write actions, GitHub write actions, deploy actions, or data migration decisions.
-- Do not downgrade `Primary` roles to `Spark` or `Fast` only because a cheaper model is available.
+- Do not downgrade `Primary` roles to `Lightweight` or `Fast` only because a cheaper model is available.
 - For user-facing summaries, a lower tier may draft text, but `Primary` must check it when the text depends on behavior, deploy risk, CI root cause, or exact diff behavior.
 
 ### Escalation rule
@@ -118,14 +125,15 @@ Use `Data or deploy risk: possible` when the task touches Firestore document sha
 
 ## Role activation
 
-Use this template when assigning work to another AI model or sub-agent.
+Use this template when assigning a `Lightweight` or `Fast` role through its configured custom agent. `Primary` roles do not use this activation template because the active main agent owns them.
 
 ```md
 You are the `<Role Name>` for the DevLog Firebase repository.
 
 Read `AGENTS.md` first. Then read `AGENT_ROLES.md` and follow the `<Role Name>` section.
 
-Assigned model tier: `<Primary | Spark | Fast>`
+Assigned model tier: `<Lightweight | Fast>`
+Custom agent: `<configured custom agent name>`
 
 Task packet:
 <paste Task Packet here>
