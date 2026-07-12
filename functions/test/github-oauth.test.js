@@ -28,21 +28,25 @@ require.cache[require.resolve("firebase-admin")] = {
         auth: () => fakeAuth
     }
 };
-require.cache[require.resolve("../lib/rest/githubAuth")] = {
+require.cache[require.resolve("../lib/rest/githubClient")] = {
     exports: {
         requestGitHubAccessToken: async (...values) => {
             tokenExchangeCalls.push(values);
             return "github-access-token";
-        },
-        resolveGithubFirebaseUID: async () => "github-uid",
-        linkGithubProviderWithAccessToken: async (...values) => {
-            providerLinkCalls.push(values);
         },
         revokeGitHubOAuthToken: async (...values) => {
             grantRevokeCalls.push(values);
             if (tokenRevokeError) {
                 throw tokenRevokeError;
             }
+        }
+    }
+};
+require.cache[require.resolve("../lib/rest/githubProvider")] = {
+    exports: {
+        resolveGithubFirebaseUID: async () => "github-uid",
+        linkGithubProviderWithAccessToken: async (...values) => {
+            providerLinkCalls.push(values);
         }
     }
 };

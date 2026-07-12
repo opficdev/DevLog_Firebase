@@ -1,11 +1,13 @@
 import * as admin from "firebase-admin";
 import { HttpsError } from "firebase-functions/v2/https";
 import {
-    linkGithubProviderWithAccessToken,
     requestGitHubAccessToken,
-    revokeGitHubOAuthToken,
+    revokeGitHubOAuthToken
+} from "./githubClient";
+import {
+    linkGithubProviderWithAccessToken,
     resolveGithubFirebaseUID
-} from "./githubAuth";
+} from "./githubProvider";
 import type { GitHubConfiguration } from "./githubConfiguration";
 import type { FirestoreDatabase } from "../common/firestore";
 import {

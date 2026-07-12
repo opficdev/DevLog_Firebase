@@ -3,7 +3,7 @@ const assert = require("assert");
 const revokeCalls = [];
 const tokenRevokeCalls = [];
 let revokeHook;
-require.cache[require.resolve("../lib/rest/githubAuth")] = {
+require.cache[require.resolve("../lib/rest/githubClient")] = {
     exports: {
         revokeGitHubOAuthGrant: async (...values) => {
             revokeCalls.push(values);

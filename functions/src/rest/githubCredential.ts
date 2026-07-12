@@ -9,7 +9,7 @@ import type { FirestoreDatabase } from "../common/firestore";
 import {
     revokeGitHubOAuthGrant,
     revokeGitHubOAuthToken
-} from "./githubAuth";
+} from "./githubClient";
 import {
     githubRevocationConfiguration
 } from "./githubConfiguration";

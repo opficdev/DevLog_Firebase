@@ -9,7 +9,7 @@ require.cache[require.resolve("firebase-functions/logger")] = {
         error() {}
     }
 };
-require.cache[require.resolve("../lib/rest/githubAuth")] = {
+require.cache[require.resolve("../lib/rest/githubClient")] = {
     exports: {
         revokeGitHubOAuthToken: async (...values) => {
             revokeCalls.push(values);
