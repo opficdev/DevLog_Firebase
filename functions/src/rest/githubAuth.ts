@@ -1,7 +1,10 @@
 import * as admin from "firebase-admin";
 import { HttpsError } from "firebase-functions/v2/https";
 import axios from "axios";
-import type { UserProvider } from "firebase-admin/auth";
+import type {
+    UpdateRequest,
+    UserProvider
+} from "firebase-admin/auth";
 
 // GitHub authorization code 교환 응답을 나타냅니다.
 interface GitHubOAuthResponse {
@@ -182,7 +185,11 @@ export async function resolveGithubFirebaseUID(
 ): Promise<string> {
     const userData = await requestGitHubUser(accessToken);
     const providerUID = githubProviderUID(userData);
-    return await firebaseUIDForGitHubUser(providerUID) ??
+    return await firebaseUIDForGitHubUser(
+        providerUID,
+        accessToken,
+        userData
+    ) ??
         firebaseUIDForUnlinkedGitHubLogin(
             accessToken,
             userData
@@ -230,6 +237,7 @@ async function linkGitHubProvider(
         );
 
         if (userRecord.uid === uid) {
+            await admin.auth().updateUser(uid, { providerToLink });
             return;
         }
 
@@ -253,13 +261,45 @@ function githubProviderLinkConflictError(): HttpsError {
 
 // 기존 GitHub provider에 연결된 Firebase uid를 반환합니다.
 async function firebaseUIDForGitHubUser(
-    providerUID: string
+    providerUID: string,
+    accessToken: string,
+    userData: GitHubUser
 ): Promise<string | undefined> {
     try {
         const userRecord = await admin.auth().getUserByProviderUid(
             PROVIDER_ID,
             providerUID
         );
+        const email = await resolveEmail(accessToken);
+        const providerToLink = githubProviderForUser(
+            providerUID,
+            email,
+            userData
+        );
+        const update: UpdateRequest = {
+            displayName: userData.name || userData.login,
+            photoURL: userData.avatar_url ?? null,
+            providerToLink
+        };
+        const githubOnly = userRecord.providerData.every((provider) =>
+            provider.providerId === PROVIDER_ID
+        );
+        if (githubOnly) {
+            if (email) {
+                try {
+                    const emailUser = await admin.auth().getUserByEmail(email);
+                    if (emailUser.uid === userRecord.uid) {
+                        update.email = email;
+                    }
+                } catch (error) {
+                    if (firebaseAuthErrorCode(error) !== "auth/user-not-found") {
+                        throw error;
+                    }
+                    update.email = email;
+                }
+            }
+        }
+        await admin.auth().updateUser(userRecord.uid, update);
         return userRecord.uid;
     } catch (error) {
         if (firebaseAuthErrorCode(error) !== "auth/user-not-found") { throw error; }
@@ -275,7 +315,11 @@ async function firebaseUIDForGitHubEmail(
 ): Promise<string> {
     try {
         const userRecord = await admin.auth().getUserByEmail(email);
-        await admin.auth().updateUser(userRecord.uid, { providerToLink });
+        await admin.auth().updateUser(userRecord.uid, {
+            displayName: userData.name || userData.login,
+            photoURL: userData.avatar_url ?? null,
+            providerToLink
+        });
         console.log(`이메일(${email}) 기존 사용자에 GitHub provider 연결을 추가했습니다.`);
         return userRecord.uid;
     } catch (error) {
@@ -295,7 +339,7 @@ async function firebaseUIDForGitHubEmail(
 // GitHub user id 연결 정보를 Firebase Auth provider 형식으로 구성합니다.
 function githubProviderForUser(
     providerUID: string,
-    email: string,
+    email: string | undefined,
     userData: GitHubUser
 ): UserProvider {
     return {
