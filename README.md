@@ -22,9 +22,15 @@ APPLE_KEY_ID
 APPLE_PRIVATE_KEY
 APPLE_TEAM_ID
 FIRESTORE_DBS
-GITHUB_CLIENT_ID
-GITHUB_CLIENT_SECRET
+GITHUB_STAGING_CLIENT_ID
+GITHUB_STAGING_CLIENT_SECRET
+GITHUB_STAGING_CALLBACK_URL
+GITHUB_PROD_CLIENT_ID
+GITHUB_PROD_CLIENT_SECRET
+GITHUB_PROD_CALLBACK_URL
 ```
+
+새 GitHub OAuth 흐름은 staging과 prod의 OAuth App을 분리하며, 각 환경의 `GITHUB_<ENV>_CLIENT_ID`, `GITHUB_<ENV>_CLIENT_SECRET`, `GITHUB_<ENV>_CALLBACK_URL`을 사용합니다.
 
 ## 로컬 빌드
 
@@ -56,3 +62,5 @@ GitHub Actions의 action 런타임은 Node 24 대응 버전을 사용하고, Fun
 이 저장소에는 `.firebaserc`를 커밋하지 않습니다.
 
 여러 함수를 배포해야 할 때도 전체 일괄 배포보다 필요한 함수 단위로 나누어 배포합니다.
+
+GitHub OAuth 전환 배포 전에는 staging과 prod 모두 `oauthSessions.expiresAt`, `oauthTickets.expiresAt` TTL 설정을 먼저 반영합니다.

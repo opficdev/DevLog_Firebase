@@ -27,6 +27,26 @@
       "rules": "firestore.rules"
     }
   ],
+  "hosting": [
+    {
+      "site": "devlog-auth-staging",
+      "public": "hosting/staging",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "rewrites": [
+        {
+          "source": "/api/auth/github/callback",
+          "function": {
+            "functionId": "stagingApi",
+            "region": "asia-northeast3"
+          }
+        }
+      ]
+    }
+  ],
   "emulators": {
     "auth": {
       "port": 9099

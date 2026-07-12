@@ -23,9 +23,64 @@ const restErrorByReason: Record<string, RestErrorDefinition> = {
         message: "이메일이 일치하지 않습니다."
     },
     github_email_changed_account_conflict: {
-        status: 412,
+        status: 409,
         code: "github-email-changed-account-conflict",
         message: "GitHub provider가 다른 계정에 연결되어 있습니다."
+    },
+    github_revoke_failed: {
+        status: 502,
+        code: "github-revoke-failed",
+        message: "GitHub grant 폐기에 실패했습니다."
+    },
+    github_provider_failed: {
+        status: 502,
+        code: "github-provider-failed",
+        message: "GitHub 인증 서버 요청에 실패했습니다."
+    },
+    invalid_app_challenge: {
+        status: 400,
+        code: "invalid-app-challenge",
+        message: "app challenge가 유효하지 않습니다."
+    },
+    invalid_oauth_session: {
+        status: 400,
+        code: "invalid-oauth-session",
+        message: "OAuth session이 유효하지 않습니다."
+    },
+    expired_oauth_session: {
+        status: 410,
+        code: "expired-oauth-session",
+        message: "OAuth session이 만료되었습니다."
+    },
+    consumed_oauth_session: {
+        status: 409,
+        code: "consumed-oauth-session",
+        message: "OAuth session이 이미 처리되었습니다."
+    },
+    invalid_oauth_ticket: {
+        status: 400,
+        code: "invalid-oauth-ticket",
+        message: "OAuth ticket이 유효하지 않습니다."
+    },
+    expired_oauth_ticket: {
+        status: 410,
+        code: "expired-oauth-ticket",
+        message: "OAuth ticket이 만료되었습니다."
+    },
+    consumed_oauth_ticket: {
+        status: 409,
+        code: "consumed-oauth-ticket",
+        message: "OAuth ticket이 이미 사용되었습니다."
+    },
+    mismatched_oauth_ticket: {
+        status: 403,
+        code: "mismatched-oauth-ticket",
+        message: "OAuth ticket 결합 정보가 일치하지 않습니다."
+    },
+    invalid_app_verifier: {
+        status: 401,
+        code: "invalid-app-verifier",
+        message: "app verifier가 유효하지 않습니다."
     },
     invalid_apple_challenge: {
         status: 400,
@@ -141,6 +196,8 @@ function statusCodeFor(code: string): number {
         return 404;
     case "failed-precondition":
         return 412;
+    case "aborted":
+        return 409;
     default:
         return 500;
     }
@@ -159,7 +216,17 @@ function authErrorCode(error: unknown): string | undefined {
     }
 
     const code = (error as Record<string, unknown>).code;
-    if (typeof code === "string" && code.startsWith("auth/")) {
+    if (
+        typeof code === "string" &&
+        [
+            "auth/argument-error",
+            "auth/id-token-expired",
+            "auth/id-token-revoked",
+            "auth/invalid-id-token",
+            "auth/user-disabled",
+            "auth/user-not-found"
+        ].includes(code)
+    ) {
         return code;
     }
 

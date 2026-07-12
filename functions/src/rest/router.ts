@@ -12,8 +12,12 @@ export type RestAction =
     "requestAppleRefreshToken" |
     "refreshAppleAccessToken" |
     "revokeAppleAccessToken" |
-    "linkGithubProvider" |
-    "requestGithubTokens" |
+    "createGithubSignInSession" |
+    "githubCallback" |
+    "requestGithubCustomToken" |
+    "createGithubAccountLinkSession" |
+    "linkGithubAccount" |
+    "unlinkGithubAccount" |
     "revokeGithubAccessToken";
 
 export interface RestRoute {
@@ -122,16 +126,47 @@ export function matchRestRoute(method: string, routeSegments: string[]): RestRou
         };
     }
 
-    if (routeSegments.join("/") === "auth/github/tokens" && normalizedMethod === "POST") {
+    if (routeSegments.join("/") === "auth/github/sign-in-sessions" && normalizedMethod === "POST") {
         return {
-            action: "requestGithubTokens",
+            action: "createGithubSignInSession",
             requiresAuth: false
         };
     }
 
-    if (routeSegments.join("/") === "auth/github/link" && normalizedMethod === "POST") {
+    if (routeSegments.join("/") === "auth/github/callback" && normalizedMethod === "GET") {
         return {
-            action: "linkGithubProvider",
+            action: "githubCallback",
+            requiresAuth: false
+        };
+    }
+
+    if (routeSegments.join("/") === "auth/github/custom-token" && normalizedMethod === "POST") {
+        return {
+            action: "requestGithubCustomToken",
+            requiresAuth: false
+        };
+    }
+
+    if (
+        routeSegments.join("/") === "auth/github/account-link-sessions" &&
+        normalizedMethod === "POST"
+    ) {
+        return {
+            action: "createGithubAccountLinkSession",
+            requiresAuth: true
+        };
+    }
+
+    if (routeSegments.join("/") === "auth/github/account-link" && normalizedMethod === "PUT") {
+        return {
+            action: "linkGithubAccount",
+            requiresAuth: true
+        };
+    }
+
+    if (routeSegments.join("/") === "auth/github/account-link" && normalizedMethod === "DELETE") {
+        return {
+            action: "unlinkGithubAccount",
             requiresAuth: true
         };
     }
