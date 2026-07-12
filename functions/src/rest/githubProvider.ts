@@ -186,15 +186,9 @@ async function firebaseUIDForGitHubUser(
             providerUID
         );
         const email = await requestGitHubVerifiedEmail(accessToken);
-        const providerToLink = githubProviderForUser(
-            providerUID,
-            email,
-            userData
-        );
         const update: UpdateRequest = {
             displayName: userData.name || userData.login,
-            photoURL: userData.avatar_url ?? null,
-            providerToLink
+            photoURL: userData.avatar_url ?? null
         };
         const githubOnly = userRecord.providerData.every((provider) =>
             provider.providerId === PROVIDER_ID

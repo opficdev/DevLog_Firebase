@@ -263,8 +263,7 @@ async function assertGithubLoginKeepsProviderWithoutVerifiedEmail() {
         uid: "linked-uid",
         properties: {
             displayName: "GitHub User",
-            photoURL: "https://example.com/avatar.png",
-            providerToLink: githubProviderData(undefined)
+            photoURL: "https://example.com/avatar.png"
         }
     }]);
     assertHeaders("https://api.github.com/user");
@@ -289,8 +288,7 @@ async function assertGithubLoginRefreshesSoleProviderProfile() {
         properties: {
             displayName: "GitHub User",
             email: "new@example.com",
-            photoURL: "https://example.com/avatar.png",
-            providerToLink: githubProviderData("new@example.com")
+            photoURL: "https://example.com/avatar.png"
         }
     }]);
 }
@@ -318,8 +316,7 @@ async function assertGithubLoginKeepsProviderWhenEmailChangesWithoutEmailUser() 
         uid: "old-uid",
         properties: {
             displayName: "GitHub User",
-            photoURL: "https://example.com/avatar.png",
-            providerToLink: githubProviderData("new@example.com")
+            photoURL: "https://example.com/avatar.png"
         }
     }]);
     assert.deepStrictEqual(createdUsers, []);
@@ -353,8 +350,7 @@ async function assertGithubLoginKeepsProviderWhenEmailChangesWithEmailUser() {
         uid: "old-uid",
         properties: {
             displayName: "GitHub User",
-            photoURL: "https://example.com/avatar.png",
-            providerToLink: githubProviderData("target@example.com")
+            photoURL: "https://example.com/avatar.png"
         }
     }]);
     assertHeaders("https://api.github.com/user");
