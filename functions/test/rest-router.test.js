@@ -133,21 +133,8 @@ assert.deepStrictEqual(
 assert.strictEqual(matchRestRoute("GET", ["auth", "apple", "challenges"]), undefined);
 assert.strictEqual(matchRestRoute("POST", ["auth", "apple", "account-link"]), undefined);
 
-assert.deepStrictEqual(
-    matchRestRoute("POST", ["auth", "github", "tokens"]),
-    {
-        action: "requestGithubTokens",
-        requiresAuth: false
-    }
-);
-
-assert.deepStrictEqual(
-    matchRestRoute("POST", ["auth", "github", "link"]),
-    {
-        action: "linkGithubProvider",
-        requiresAuth: true
-    }
-);
+assert.strictEqual(matchRestRoute("POST", ["auth", "github", "tokens"]), undefined);
+assert.strictEqual(matchRestRoute("POST", ["auth", "github", "link"]), undefined);
 
 assert.deepStrictEqual(
     matchRestRoute("DELETE", ["auth", "github", "access-token"]),
@@ -156,6 +143,22 @@ assert.deepStrictEqual(
         requiresAuth: true
     }
 );
+
+const githubOAuthRoutes = [
+    ["POST", ["auth", "github", "sign-in-sessions"], "createGithubSignInSession", false],
+    ["GET", ["auth", "github", "callback"], "githubCallback", false],
+    ["POST", ["auth", "github", "custom-token"], "requestGithubCustomToken", false],
+    ["POST", ["auth", "github", "account-link-sessions"], "createGithubAccountLinkSession", true],
+    ["PUT", ["auth", "github", "account-link"], "linkGithubAccount", true],
+    ["DELETE", ["auth", "github", "account-link"], "unlinkGithubAccount", true]
+];
+
+for (const [method, segments, action, requiresAuth] of githubOAuthRoutes) {
+    assert.deepStrictEqual(
+        matchRestRoute(method, segments),
+        { action, requiresAuth }
+    );
+}
 
 assert.strictEqual(matchRestRoute("GET", ["todos", "todo-1", "deletion-request"]), undefined);
 assert.strictEqual(matchRestRoute("POST", ["todos", "", "deletion-request"]), undefined);
@@ -193,7 +196,7 @@ const githubLinkConflict = restErrorFrom(
         reason: "github_email_changed_account_conflict"
     })
 );
-assert.strictEqual(githubLinkConflict.status, 412);
+assert.strictEqual(githubLinkConflict.status, 409);
 assert.strictEqual(githubLinkConflict.code, "github-email-changed-account-conflict");
 assert.deepStrictEqual(
     restErrorBodyFrom(
@@ -218,6 +221,39 @@ const appleErrors = [
     ["apple_revoke_failed", 502, "apple-revoke-failed"]
 ];
 
+const oauthErrors = [
+    ["invalid_app_challenge", 400, "invalid-app-challenge"],
+    ["invalid_oauth_session", 400, "invalid-oauth-session"],
+    ["expired_oauth_session", 410, "expired-oauth-session"],
+    ["consumed_oauth_session", 409, "consumed-oauth-session"],
+    ["invalid_oauth_ticket", 400, "invalid-oauth-ticket"],
+    ["expired_oauth_ticket", 410, "expired-oauth-ticket"],
+    ["consumed_oauth_ticket", 409, "consumed-oauth-ticket"],
+    ["mismatched_oauth_ticket", 403, "mismatched-oauth-ticket"],
+    ["invalid_app_verifier", 401, "invalid-app-verifier"]
+];
+
+const githubErrors = [
+    ["github_provider_failed", 502, "github-provider-failed"],
+    ["github_revoke_failed", 502, "github-revoke-failed"]
+];
+
+for (const [reason, status, code] of oauthErrors) {
+    const error = restErrorFrom(new HttpsError("failed-precondition", reason, { reason }));
+    assert.strictEqual(error.status, status);
+    assert.strictEqual(error.code, code);
+}
+
+for (const [reason, status, code] of githubErrors) {
+    const error = restErrorFrom(new HttpsError("internal", reason, { reason }));
+    assert.strictEqual(error.status, status);
+    assert.strictEqual(error.code, code);
+}
+
+const aborted = restErrorFrom(new HttpsError("aborted", "transaction 충돌"));
+assert.strictEqual(aborted.status, 409);
+assert.strictEqual(aborted.code, "aborted");
+
 for (const [reason, status, code] of appleErrors) {
     const restError = restErrorFrom(
         new HttpsError("failed-precondition", "Apple 인증 처리 실패", { reason })
@@ -228,7 +264,7 @@ for (const [reason, status, code] of appleErrors) {
 
 const hyphenatedReasons = [
     ["email-not-found", 400, "email-not-found"],
-    ["github-email-changed-account-conflict", 412, "github-email-changed-account-conflict"],
+    ["github-email-changed-account-conflict", 409, "github-email-changed-account-conflict"],
     ["expired-apple-challenge", 410, "expired-apple-challenge"]
 ];
 
@@ -244,3 +280,10 @@ const invalidIDToken = restErrorFrom({
 });
 assert.strictEqual(invalidIDToken.status, 401);
 assert.strictEqual(invalidIDToken.code, "auth/invalid-id-token");
+
+const firebaseInternalError = restErrorFrom({
+    code: "auth/internal-error",
+    message: "Firebase Auth 내부 오류"
+});
+assert.strictEqual(firebaseInternalError.status, 500);
+assert.strictEqual(firebaseInternalError.code, "internal");

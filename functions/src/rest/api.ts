@@ -24,11 +24,17 @@ import {
     revokeAppleAccessTokenWithDatabase,
     unlinkAppleProviderWithDatabase
 } from "./apple/auth";
+import { githubConfiguration } from "./githubConfiguration";
 import {
-    linkGithubProviderWithCode,
-    requestGithubTokensWithCode,
-    revokeGithubAccessTokenWithDatabase
-} from "./githubAuth";
+    createGithubAccountLinkSession,
+    createGithubSignInSession,
+    githubCallbackFailureURL,
+    githubCallbackURL,
+    linkGithubAccount,
+    requestGithubCustomToken,
+    revokeGithubAccessToken,
+    unlinkGithubAccount
+} from "./githubOAuth";
 import {
     RestError,
     restErrorBodyFrom,
@@ -62,9 +68,41 @@ function restApiFor(firebaseDB: FirestoreDatabase) {
 
             const db = firestoreFor(firebaseDB);
             const uid = route.requiresAuth ? await authenticatedUID(request) : undefined;
-            const result = await handleRoute(route, db, body, uid);
+            if (route.action === "githubCallback") {
+                let configuration;
+                try {
+                    configuration = githubConfiguration(firebaseDB);
+                } catch (error) {
+                    logger.error("GitHub OAuth callback 환경 설정 확인 실패", {
+                        firebaseDB,
+                        error: toError(error).message
+                    });
+                    response.redirect(302, githubCallbackFailureURL());
+                    return;
+                }
+                const redirectURL = await githubCallbackURL(
+                    db,
+                    configuration,
+                    optionalQueryString(request.query.state),
+                    optionalQueryString(request.query.code)
+                );
+                response.redirect(302, redirectURL);
+                return;
+            }
 
-            response.status(200).json(result);
+            const result = await handleRoute(
+                route,
+                db,
+                firebaseDB,
+                body,
+                uid
+            );
+
+            if (result === undefined) {
+                response.status(204).send();
+            } else {
+                response.status(200).json(result);
+            }
         } catch (error) {
             sendRestError(request, response, error);
         }
@@ -75,10 +113,13 @@ function restApiFor(firebaseDB: FirestoreDatabase) {
 async function handleRoute(
     route: RestRoute,
     db: FirebaseFirestore.Firestore,
+    firebaseDB: FirestoreDatabase,
     body: Record<string, unknown>,
     uid?: string
 ): Promise<unknown> {
     switch (route.action) {
+    case "githubCallback":
+        return undefined;
     case "requestTodoDeletion":
         await requestTodoDeletionInFirestore(db, requiredUID(uid), requiredID(route));
         return { success: true };
@@ -139,16 +180,52 @@ async function handleRoute(
             requiredUID(uid),
             body.token
         );
-    case "requestGithubTokens":
-        return requestGithubTokensWithCode(requiredBodyString(body, "code"));
-    case "linkGithubProvider":
-        return linkGithubProviderWithCode(
+    case "createGithubSignInSession":
+        return createGithubSignInSession(
+            db,
+            githubConfiguration(firebaseDB),
+            requiredBodyString(body, "appChallenge")
+        );
+    case "requestGithubCustomToken":
+        return requestGithubCustomToken(
+            db,
+            firebaseDB,
+            requiredBodyString(body, "ticket"),
+            requiredBodyString(body, "appVerifier")
+        );
+    case "createGithubAccountLinkSession":
+        return createGithubAccountLinkSession(
+            db,
+            githubConfiguration(firebaseDB),
             requiredUID(uid),
-            requiredBodyString(body, "code")
+            requiredBodyString(body, "appChallenge")
+        );
+    case "linkGithubAccount":
+        return linkGithubAccount(
+            db,
+            firebaseDB,
+            requiredUID(uid),
+            requiredBodyString(body, "ticket"),
+            requiredBodyString(body, "appVerifier")
+        );
+    case "unlinkGithubAccount":
+        return unlinkGithubAccount(
+            db,
+            requiredUID(uid),
+            firebaseDB
         );
     case "revokeGithubAccessToken":
-        return revokeGithubAccessTokenWithDatabase(db, requiredUID(uid), body.accessToken);
+        return revokeGithubAccessToken(
+            db,
+            requiredUID(uid),
+            firebaseDB
+        );
     }
+}
+
+// query parameter에서 하나의 필수 문자열을 반환합니다.
+function optionalQueryString(value: unknown): string | undefined {
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 async function authenticatedUID(request: Request): Promise<string> {
