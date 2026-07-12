@@ -10,6 +10,56 @@ DevLog의 Firebase Cloud Functions와 Firestore index 설정을 관리하는 저
 - `functions`: Cloud Functions TypeScript 소스
 - `functions/.env.example`: 로컬 환경 변수 key 목록
 
+## AI 역할 분리
+
+```mermaid
+flowchart LR
+	subgraph Primary["Primary"]
+		Planner["Planner"]
+		Implementer["Implementer"]
+		Integrator["Final Integration"]
+	end
+
+	subgraph Lightweight["Lightweight"]
+		FirebaseOperationsReviewer["Firebase Operations Reviewer"]
+		CodeReviewer["Code Reviewer"]
+		VerificationRunner["Verification Runner"]
+		GitHubCIAnalyst["GitHub/CI Analyst"]
+		DocumentationWriter["Documentation Writer"]
+	end
+
+	subgraph Gate["Gate"]
+		TaskPacket["Task Packet"]
+		OperationsGate["Operations Gate"]
+		ReviewGate["Review Gate"]
+		VerificationGate["Verification Gate"]
+	end
+
+	TaskPacket --> Planner
+	Planner -->|"No operations risk"| Implementer
+	Planner -->|"Operations risk"| FirebaseOperationsReviewer
+	FirebaseOperationsReviewer -->|Pass| OperationsGate
+	FirebaseOperationsReviewer -->|Block / Decision| Integrator
+	OperationsGate --> Implementer
+	Implementer --> CodeReviewer
+	CodeReviewer --> ReviewGate
+	ReviewGate --> VerificationRunner
+	VerificationRunner --> VerificationGate
+	GitHubCIAnalyst --> Planner
+	DocumentationWriter --> Integrator
+	VerificationGate --> Integrator
+```
+
+| 역할 | Custom Agent | 모델 | 담당 | 다음 흐름 |
+| --- | --- | --- | --- | --- |
+| Planner | active main agent | Primary | 이슈, 요청, 변경 범위, role routing 정리 | Implementer / Firebase Operations Reviewer |
+| Implementer | active main agent | Primary | task packet 기준 코드 또는 문서 수정 | Code Reviewer |
+| Firebase Operations Reviewer | `firebase_operations_reviewer` | `gpt-5.3-codex-spark` (`Lightweight`) | deploy scope, env, Firestore database, index, data-shape, migration 위험 검토 | Implementer / Final Integration |
+| Code Reviewer | `code_reviewer` | `gpt-5.3-codex-spark` (`Lightweight`) | diff 기준 버그, 회귀, 테스트 누락, scope drift 검토 | Verification Runner |
+| Verification Runner | `verification_runner` | `gpt-5.3-codex-spark` (`Lightweight`) | build, test, docs check 결과 기록 | Final Integration |
+| GitHub/CI Analyst | `github_ci_analyst` | `gpt-5.3-codex-spark` (`Lightweight`) | issue, PR thread, review comment, workflow run, CI log 분석 | Planner |
+| Documentation Writer | `documentation_writer` | `gpt-5.3-codex-spark` (`Lightweight`) | PR 본문, release note, README, issue/comment 문안 작성 | Final Integration |
+
 ## 환경 변수
 
 실제 값이 들어간 `functions/.env`는 로컬 전용 파일입니다. Git에는 포함하지 않습니다.

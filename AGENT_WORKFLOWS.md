@@ -17,12 +17,12 @@ The main agent must run every workflow with this protocol.
 3. Create the task packet.
 4. Assign only the roles required by the selected workflow.
 5. Assign each role a model tier from `AGENT_ROLES.md`.
-6. Dispatch each `Spark` or `Fast` role through a separate model or sub-agent call when tooling can select that assigned model.
-7. Dispatch read-only `Spark` or `Fast` roles in parallel only when they do not depend on unfinished edits.
-8. Do not complete a required `Spark` or `Fast` role directly in `Primary` unless the fallback policy in `AGENT_ROLES.md` applies.
+6. Keep `Primary` roles with the active main agent, and dispatch every `Lightweight` or `Fast` role through the custom agent mapped in `AGENT_ROLES.md`.
+7. Dispatch read-only `Lightweight` or `Fast` roles in parallel only when they do not depend on unfinished edits.
+8. Do not complete a required `Lightweight` or `Fast` role directly in `Primary`, including when the dispatch tool would inherit the active `Primary` model.
 9. Keep `Primary` editing roles sequential unless the files and ownership boundaries are disjoint.
 10. Integrate role outputs.
-11. Escalate any `Spark` or `Fast` blocker to a `Primary` model before editing.
+11. Escalate any `Lightweight` or `Fast` blocker to a `Primary` model before editing.
 12. Run completion gates.
 13. Report changed files, data or deploy decision, verification result, delegated roles, model tiers used, and unresolved decisions.
 
@@ -38,6 +38,7 @@ Stop and ask the user before editing when:
 - A role needs to deploy functions or mutate Firebase project state.
 - The current issue or PR scope is unclear after live GitHub inspection.
 - Two editing roles would touch the same file.
+- A required `Lightweight` or `Fast` custom agent cannot be loaded or selected, its pinned model is unavailable, or current tool policy requires user permission that has not been granted.
 - A read-only role reports `Block` or `Needs Owner Decision`.
 - Verification fails for a reason that suggests a scope, data-shape, or deploy decision.
 
@@ -292,7 +293,7 @@ Use for PR body, issue text, release note, README wording, review reply draft, o
 ### Execution
 
 - Documentation Writer must inspect the actual diff before writing PR or release text.
-- When the Documentation Writer role is required and `Spark` is available, the main agent must dispatch the draft to `gpt-5.3-codex-spark` or the configured `Spark` fallback before writing the final response.
+- When the Documentation Writer role is required, the main agent must dispatch `documentation_writer` before writing the final response.
 - `Primary` must review the Documentation Writer output against the template, issue scope, and diff before returning or posting it.
 - Do not write AI workflow documents under `docs/`.
 - If the user asks only for text, return text directly and do not create files.
@@ -330,6 +331,7 @@ Firebase Operations Reviewer is required only if the change modifies Firebase de
 - Keep AI workflow entry files at the repository root.
 - Do not add AI workflow documents under `docs/`.
 - `AGENTS.md` should stay the canonical entrypoint.
+- `.codex/agents/*.toml` should define the concrete model and sandbox for each delegated custom agent.
 - `AGENT_ROLES.md` should define role permissions, output formats, and handoff packet shape.
 - `AGENT_WORKFLOWS.md` should define executable role sequences.
 - Do not copy iOS module, Tuist, Widget, StorePattern, or Swift workflow rules into this repository.
@@ -339,10 +341,11 @@ Firebase Operations Reviewer is required only if the change modifies Firebase de
 Verification Runner must run:
 
 ```sh
-git diff --check -- AGENTS.md AGENT_ROLES.md AGENT_WORKFLOWS.md
+git diff --check -- AGENTS.md AGENT_ROLES.md AGENT_WORKFLOWS.md README.md .codex/agents
+rg -n "gpt-5\\.3-codex-spark|\\bSpark\\b|\\bLightweight\\b|\\bFast\\b" --glob "*.md" --glob "*.toml" .
 ```
 
-If only Markdown workflow files changed, no Functions build is required.
+If only Markdown workflow files or `.codex/agents/*.toml` changed, no Functions build is required.
 
 ### Completion
 
@@ -396,15 +399,15 @@ Include the selected workflow name in the task packet `Source` or `Goal` field s
 ## Task Packet
 
 - Source: User request
-- Goal: Add repository-root AI role and workflow documents for DevLog Firebase.
-- Scope: Update root AI workflow files only.
-- Out of scope: TypeScript source, tests, Firebase deploy config, GitHub Actions, deploy actions.
-- Expected changed files: `AGENTS.md`, `AGENT_ROLES.md`, `AGENT_WORKFLOWS.md`
+- Goal: Add delegated-role routing documents, custom agent definitions, and README role mapping for DevLog Firebase.
+- Scope: Update `AGENT_ROLES.md`, `AGENT_WORKFLOWS.md`, `README.md`, and `.codex/agents/*.toml` only.
+- Out of scope: `AGENTS.md`, TypeScript source, tests, Firebase deploy config, GitHub Actions, deploy actions.
+- Expected changed files: `AGENT_ROLES.md`, `AGENT_WORKFLOWS.md`, `README.md`, `.codex/agents/*.toml`
 - Current owner: repository workflow documentation
 - Data or deploy risk: none
 - Required roles: Planner, Implementer, Code Reviewer, Verification Runner
-- Model assignment: Planner=Primary, Implementer=Primary, Code Reviewer=Spark, Verification Runner=Spark
-- Verification: `git diff --check -- AGENTS.md AGENT_ROLES.md AGENT_WORKFLOWS.md`
+- Model assignment: Planner=Primary, Implementer=Primary, Code Reviewer=`code_reviewer` (`Lightweight`), Verification Runner=`verification_runner` (`Lightweight`)
+- Verification: `git diff --check -- AGENTS.md AGENT_ROLES.md AGENT_WORKFLOWS.md README.md .codex/agents`; `rg -n "gpt-5\\.3-codex-spark|\\bSpark\\b|\\bLightweight\\b|\\bFast\\b" --glob "*.md" --glob "*.toml" .`
 - Stop conditions: request to change deploy policy, TypeScript source changes, Firebase config changes
 ```
 
@@ -421,7 +424,7 @@ Include the selected workflow name in the task packet `Source` or `Goal` field s
 - Current owner: <source area identified by Planner>
 - Data or deploy risk: none / possible / confirmed
 - Required roles: Planner, Implementer, Code Reviewer, Verification Runner
-- Model assignment: Planner=Primary, Implementer=Primary, Code Reviewer=Spark -> Primary if blocking, Verification Runner=Spark
+- Model assignment: Planner=Primary, Implementer=Primary, Code Reviewer=`code_reviewer` (`Lightweight`) -> Primary if blocking, Verification Runner=`verification_runner` (`Lightweight`)
 - Verification: `npm run build` from `functions`; `npm test` from `functions` when behavior or tests changed
 - Stop conditions: data migration needed, env key missing, deploy required, test-purpose production seam requested
 ```
