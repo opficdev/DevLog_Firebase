@@ -8,7 +8,9 @@ export namespace FirestorePath {
         webPages = "webPages",
         authChallenges = "authChallenges",
         authCredentials = "authCredentials",
-        providers = "providers"
+        providers = "providers",
+        oauthSessions = "oauthSessions",
+        oauthTickets = "oauthTickets"
     }
 
     export enum UserDataDocument {
@@ -76,8 +78,34 @@ export namespace FirestorePath {
         return `${Collection.authCredentials}/${userId}`;
     }
 
+    // 지정한 사용자의 서버 전용 provider credential 컬렉션 경로를 반환합니다.
+    export function authCredentialProviders(userId: string): string {
+        return `${authCredential(userId)}/${Collection.providers}`;
+    }
+
     // 지정한 사용자의 서버 전용 Apple 자격 증명 문서 경로를 반환합니다.
     export function appleCredential(userId: string): string {
         return `${authCredential(userId)}/${Collection.providers}/apple`;
+    }
+
+    // 지정한 사용자의 서버 전용 GitHub 자격 증명 문서 경로를 반환합니다.
+    export function githubCredential(userId: string): string {
+        return `${authCredential(userId)}/${Collection.providers}/github`;
+    }
+
+    // provider 공통 OAuth session 컬렉션 경로를 저장합니다.
+    export const oauthSessions = Collection.oauthSessions;
+
+    // 지정한 OAuth state에 대응하는 session 문서 경로를 반환합니다.
+    export function oauthSession(state: string): string {
+        return `${oauthSessions}/${state}`;
+    }
+
+    // provider 공통 OAuth ticket 컬렉션 경로를 저장합니다.
+    export const oauthTickets = Collection.oauthTickets;
+
+    // 지정한 OAuth ticket 문서 경로를 반환합니다.
+    export function oauthTicket(ticket: string): string {
+        return `${oauthTickets}/${ticket}`;
     }
 }
