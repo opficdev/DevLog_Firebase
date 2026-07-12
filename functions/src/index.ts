@@ -47,6 +47,10 @@ import {
     prodApi,
     stagingApi
 } from "./rest/api";
+import {
+    cleanupExpiredOAuthSessions,
+    cleanupExpiredOAuthTickets
+} from "./rest/oauth/cleanup";
 
 // Cloud Functions REST base URLs:
 // staging: https://${region}-${projectId}.cloudfunctions.net/stagingApi/api
@@ -67,6 +71,8 @@ for (const firebaseDB of firebaseDBs()) {
     firestoreDatabaseFunctionGroups[firebaseDB] = {
         removeTodoNotificationDocuments: removeTodoNotificationDocuments(firebaseDB),
         removeCompletedTodoNotificationRecords: removeCompletedTodoNotificationRecords(firebaseDB),
+        cleanupExpiredOAuthSessions: cleanupExpiredOAuthSessions(firebaseDB),
+        cleanupExpiredOAuthTickets: cleanupExpiredOAuthTickets(firebaseDB),
         syncTodoNotificationCategory: syncTodoNotificationCategory(firebaseDB),
         requestMoveRemovedCategoryTodosToEtc: requestMoveRemovedCategoryTodosToEtc(firebaseDB)
     };
