@@ -61,6 +61,28 @@ Do not assign `Lightweight` as the only model for production TypeScript implemen
 - If the assigned model is available but current tool policy requires explicit user permission before dispatch, missing permission is not fallback. Stop and ask for permission before continuing the required role.
 - `Primary` must integrate and verify delegated output, but must not skip the delegated role when the workflow requires it and the assigned model is available.
 
+### Connected side-task dispatch
+
+- Run every `Lightweight` or `Fast` role as a side task connected to the current main task.
+- Use `spawn_agent` from tools or `Option-Command-S` from the UI. Treat both as the same connected dispatch surface.
+- Set `spawn_agent.task_name` to the exact `.codex/agents/<name>.toml` filename without the extension and the exact TOML `name` value.
+- Do not add arbitrary prefixes or suffixes to `task_name`. Names such as `issue34_documentation_writer` and `documentation_writer_issue34` do not select the configured custom agent.
+- Return each role result to the current main task so `Primary` can review and integrate it.
+- Send later work for the same role to the existing agent with `followup_task` instead of creating another agent name.
+- Do not use external `codex exec` or a separate user-owned `create_thread` as a repository role dispatch surface.
+- Do not count a generic sub-agent that does not select the configured custom agent as a `Lightweight` or `Fast` role execution.
+- Do not treat a failure from external `codex exec`, `create_thread`, or an arbitrary `task_name` as proof that the configured custom agent or pinned model is unavailable.
+
+Use these exact role identifiers:
+
+| Role | Exact `task_name` | Configuration |
+| --- | --- | --- |
+| Firebase Operations Reviewer | `firebase_operations_reviewer` | `.codex/agents/firebase_operations_reviewer.toml` |
+| Code Reviewer | `code_reviewer` | `.codex/agents/code_reviewer.toml` |
+| Verification Runner | `verification_runner` | `.codex/agents/verification_runner.toml` |
+| GitHub/CI Analyst | `github_ci_analyst` | `.codex/agents/github_ci_analyst.toml` |
+| Documentation Writer | `documentation_writer` | `.codex/agents/documentation_writer.toml` |
+
 ### Fallback policy
 
 - The configured custom agent TOML is the source of truth for the non-Primary role model and sandbox.
@@ -126,6 +148,8 @@ Use `Data or deploy risk: possible` when the task touches Firestore document sha
 ## Role activation
 
 Use this template when assigning a `Lightweight` or `Fast` role through its configured custom agent. `Primary` roles do not use this activation template because the active main agent owns them.
+
+Create the connected side task with `spawn_agent.task_name` set to the exact identifier in the routing table. When using the UI, create the same connected side task with `Option-Command-S`. After the first dispatch, use `followup_task` for later work assigned to the same role.
 
 ```md
 You are the `<Role Name>` for the DevLog Firebase repository.

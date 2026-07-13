@@ -20,12 +20,12 @@ flowchart LR
 		Integrator["Final Integration"]
 	end
 
-	subgraph Lightweight["Lightweight"]
-		FirebaseOperationsReviewer["Firebase Operations Reviewer"]
-		CodeReviewer["Code Reviewer"]
-		VerificationRunner["Verification Runner"]
-		GitHubCIAnalyst["GitHub/CI Analyst"]
-		DocumentationWriter["Documentation Writer"]
+	subgraph ConnectedSideTasks["현재 task 연결형 사이드 작업<br/>spawn_agent / Option-Command-S"]
+		FirebaseOperationsReviewer["Firebase Operations Reviewer<br/>firebase_operations_reviewer"]
+		CodeReviewer["Code Reviewer<br/>code_reviewer"]
+		VerificationRunner["Verification Runner<br/>verification_runner"]
+		GitHubCIAnalyst["GitHub/CI Analyst<br/>github_ci_analyst"]
+		DocumentationWriter["Documentation Writer<br/>documentation_writer"]
 	end
 
 	subgraph Gate["Gate"]
@@ -37,7 +37,7 @@ flowchart LR
 
 	TaskPacket --> Planner
 	Planner -->|"No operations risk"| Implementer
-	Planner -->|"Operations risk"| FirebaseOperationsReviewer
+	Planner -->|"Operations risk<br/>task_name 선택"| FirebaseOperationsReviewer
 	FirebaseOperationsReviewer -->|Pass| OperationsGate
 	FirebaseOperationsReviewer -->|Block / Decision| Integrator
 	OperationsGate --> Implementer
@@ -45,12 +45,12 @@ flowchart LR
 	CodeReviewer --> ReviewGate
 	ReviewGate --> VerificationRunner
 	VerificationRunner --> VerificationGate
-	GitHubCIAnalyst --> Planner
-	DocumentationWriter --> Integrator
+	GitHubCIAnalyst -->|"현재 task로 결과 반환"| Planner
+	DocumentationWriter -->|"현재 task로 결과 반환"| Integrator
 	VerificationGate --> Integrator
 ```
 
-| 역할 | Custom Agent | 모델 | 담당 | 다음 흐름 |
+| 역할 | 정확한 `task_name` / Custom Agent | 모델 | 담당 | 다음 흐름 |
 | --- | --- | --- | --- | --- |
 | Planner | active main agent | Primary | 이슈, 요청, 변경 범위, role routing 정리 | Implementer / Firebase Operations Reviewer |
 | Implementer | active main agent | Primary | task packet 기준 코드 또는 문서 수정 | Code Reviewer |
@@ -59,6 +59,12 @@ flowchart LR
 | Verification Runner | `verification_runner` | `gpt-5.3-codex-spark` (`Lightweight`) | build, test, docs check 결과 기록 | Final Integration |
 | GitHub/CI Analyst | `github_ci_analyst` | `gpt-5.3-codex-spark` (`Lightweight`) | issue, PR thread, review comment, workflow run, CI log 분석 | Planner |
 | Documentation Writer | `documentation_writer` | `gpt-5.3-codex-spark` (`Lightweight`) | PR 본문, release note, README, issue/comment 문안 작성 | Final Integration |
+
+`Lightweight`와 `Fast` 역할은 현재 main task에 연결되는 사이드 작업으로 실행합니다. 도구에서는 `spawn_agent`, UI에서는 `Option-Command-S`를 사용하며, 역할 결과는 현재 main task로 돌아와 `Primary`가 검토하고 통합합니다.
+
+`spawn_agent.task_name`은 표의 이름, `.codex/agents/<name>.toml` 파일명, TOML의 `name`과 정확히 일치해야 합니다. 임의의 접두어나 접미사를 붙인 이름은 configured custom agent 위임으로 인정하지 않습니다.
+
+같은 역할에 후속 작업을 맡길 때는 새 이름의 agent를 만들지 않고 기존 agent에 `followup_task`를 전달합니다. 외부 `codex exec`, 별도의 사용자 소유 `create_thread`, 임의 이름의 일반 sub-agent는 저장소 역할 위임 수단이 아닙니다. 이러한 실행 경로의 실패만으로 configured custom agent나 고정 모델을 사용할 수 없다고 판단하지 않습니다.
 
 ## 환경 변수
 
