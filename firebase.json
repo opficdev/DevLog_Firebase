@@ -43,6 +43,38 @@
             "functionId": "stagingApi",
             "region": "asia-northeast3"
           }
+        },
+        {
+          "source": "/api/auth/google/callback",
+          "function": {
+            "functionId": "stagingApi",
+            "region": "asia-northeast3"
+          }
+        }
+      ]
+    },
+    {
+      "site": "devlog-auth-prod",
+      "public": "hosting/staging",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "rewrites": [
+        {
+          "source": "/api/auth/github/callback",
+          "function": {
+            "functionId": "prodApi",
+            "region": "asia-northeast3"
+          }
+        },
+        {
+          "source": "/api/auth/google/callback",
+          "function": {
+            "functionId": "prodApi",
+            "region": "asia-northeast3"
+          }
         }
       ]
     }
