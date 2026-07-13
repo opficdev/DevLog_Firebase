@@ -107,6 +107,9 @@ const fakeAuth = {
         if ("displayName" in properties) {
             user.displayName = properties.displayName;
         }
+        if ("photoURL" in properties) {
+            user.photoURL = properties.photoURL ?? undefined;
+        }
         users.set(uid, user);
         return user;
     },
@@ -211,6 +214,7 @@ const {
     await assertBlankDisplayNameUsesStoredAppleName();
     await assertBlankDisplayNameDoesNotSetProfile();
     await assertFirebaseDisplayNameIsPreserved();
+    await assertAppleProfileClearsPhotoURL();
     await assertProfileUpdateFailureContinuesOnNextRequest();
     await assertProviderChangeFailureContinuesOnNextRequest();
     await assertCustomTokenProviderOwnershipRaceCleansCredential();
@@ -615,6 +619,28 @@ async function assertFirebaseDisplayNameIsPreserved() {
     assert.strictEqual(
         authUpdates.some((update) => "displayName" in update.properties),
         false
+    );
+}
+
+// Apple 로그인은 이름 자료가 없어도 기존 Firebase Auth photoURL을 제거하는지 검증합니다.
+async function assertAppleProfileClearsPhotoURL() {
+    resetState();
+    users.set("email-uid", {
+        ...firebaseUser("email-uid", "user@example.com"),
+        photoURL: "https://example.com/profile.png"
+    });
+    const db = validChallengeFirestore("photo-url");
+
+    await requestAppleCustomTokenWithDatabase(
+        db,
+        "photo-url",
+        "authorization-code"
+    );
+
+    assert.strictEqual(users.get("email-uid").photoURL, undefined);
+    assert.strictEqual(
+        authUpdates.some((update) => update.properties.photoURL === null),
+        true
     );
 }
 

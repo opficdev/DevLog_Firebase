@@ -33,6 +33,8 @@ export interface FirebaseAuthClient {
             providersToUnlink?: string[];
             // Firebase Auth profile에 저장할 표시 이름을 저장합니다.
             displayName?: string;
+            // Firebase Auth profile에 저장할 사진 URL을 저장합니다.
+            photoURL?: string | null;
         }
     ): Promise<FirebaseAuthUser>;
     // 지정한 uid로 Firebase custom token을 생성합니다.

@@ -10,7 +10,10 @@ export async function updateAppleProfile(
 ): Promise<void> {
     const providedDisplayName = normalizedDisplayName(displayName);
     if (providedDisplayName) {
-        await auth.updateUser(uid, { displayName: providedDisplayName });
+        await auth.updateUser(uid, {
+            displayName: providedDisplayName,
+            photoURL: null
+        });
         return;
     }
 
@@ -19,8 +22,14 @@ export async function updateAppleProfile(
     ).get();
     const storedDisplayName = normalizedDisplayName(infoSnapshot.data()?.appleName);
     if (storedDisplayName) {
-        await auth.updateUser(uid, { displayName: storedDisplayName });
+        await auth.updateUser(uid, {
+            displayName: storedDisplayName,
+            photoURL: null
+        });
+        return;
     }
+
+    await auth.updateUser(uid, { photoURL: null });
 }
 
 // 공백이 아닌 문자열을 앞뒤 공백을 제거해 반환합니다.
