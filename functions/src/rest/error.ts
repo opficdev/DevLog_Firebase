@@ -37,6 +37,21 @@ const restErrorByReason: Record<string, RestErrorDefinition> = {
         code: "github-provider-failed",
         message: "GitHub 인증 서버 요청에 실패했습니다."
     },
+    google_provider_link_conflict: {
+        status: 409,
+        code: "google-provider-link-conflict",
+        message: "Google provider가 다른 계정에 연결되어 있습니다."
+    },
+    google_revoke_failed: {
+        status: 502,
+        code: "google-revoke-failed",
+        message: "Google grant 폐기에 실패했습니다."
+    },
+    google_provider_failed: {
+        status: 502,
+        code: "google-provider-failed",
+        message: "Google 인증 서버 요청에 실패했습니다."
+    },
     invalid_app_challenge: {
         status: 400,
         code: "invalid-app-challenge",

@@ -37,6 +37,7 @@ const {
 (async () => {
     await assertExpiredTicketRevokesStoredToken();
     await assertExpiredSessionRevokesCompensationToken();
+    await assertExpiredGoogleTicketDoesNotRevokeProjectGrant();
     await assertCleanupFailureIsRetried();
 })().catch((error) => {
     console.error(error);
@@ -93,6 +94,27 @@ async function assertExpiredSessionRevokesCompensationToken() {
         "prod-client-id",
         "prod-client-id-secret"
     ]]);
+}
+
+// 만료된 Google ticket은 비밀값만 TTL 삭제하고 project grant를 자동 폐기하지 않는지 검증합니다.
+async function assertExpiredGoogleTicketDoesNotRevokeProjectGrant() {
+    resetState();
+    const cleanup = cleanupExpiredOAuthTickets("staging");
+    const wrapped = functionsTest.wrap(cleanup);
+
+    await wrapped({
+        data: {
+            provider: "google",
+            payload: {
+                accessToken: "google-access-token",
+                refreshToken: "google-refresh-token",
+                clientId: "google-client-id"
+            }
+        },
+        params: { documentId: "google-ticket-1" }
+    });
+
+    assert.deepStrictEqual(revokeCalls, []);
 }
 
 // token 폐기 실패가 성공으로 삼켜지지 않고 retry-enabled trigger에 전달되는지 검증합니다.
