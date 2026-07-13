@@ -15,6 +15,7 @@ let revokeError;
 let verifyError;
 let providerLookupError;
 let authUpdateError;
+let authProfileUpdateError;
 let authUpdateOwnerRaceUID;
 
 const fakeAuth = {
@@ -77,6 +78,11 @@ const fakeAuth = {
             authUpdateError = undefined;
             throw error;
         }
+        if (authProfileUpdateError && "displayName" in properties) {
+            const error = authProfileUpdateError;
+            authProfileUpdateError = undefined;
+            throw error;
+        }
         authUpdates.push({ uid, properties });
         const user = users.get(uid) ?? { uid, providerData: [] };
         if (properties.providerToLink) {
@@ -97,6 +103,12 @@ const fakeAuth = {
                     providerOwners.delete(subject);
                 }
             }
+        }
+        if ("displayName" in properties) {
+            user.displayName = properties.displayName;
+        }
+        if ("photoURL" in properties) {
+            user.photoURL = properties.photoURL ?? undefined;
         }
         users.set(uid, user);
         return user;
@@ -196,7 +208,17 @@ const {
     await assertAuthFailureRevokesExchangedCredential();
     await assertCredentialSaveFailureContinuesOnNextRequest();
     await assertCustomTokenUsesProofAndExistingEmailUID();
+    await assertUnverifiedEmailUsesAppleSubjectUID();
     await assertCustomTokenUsesAppleSubjectUIDWithoutEmail();
+    await assertProvidedDisplayNameUpdatesProfile();
+    await assertStoredAppleNameRestoresProfile();
+    await assertBlankDisplayNameUsesStoredAppleName();
+    await assertMissingDisplayNameRejectsCustomToken();
+    await assertFirebaseDisplayNameSkipsCurrentProfileUpdate();
+    await assertFirebaseDisplayNameTrimsCurrentProfile();
+    await assertAppleProfileClearsPhotoURL();
+    await assertProfileUpdateFailureContinuesOnNextRequest();
+    await assertProfileRetryWithoutNameFails();
     await assertProviderChangeFailureContinuesOnNextRequest();
     await assertCustomTokenProviderOwnershipRaceCleansCredential();
     await assertLinkRequiresEmail();
@@ -438,7 +460,8 @@ async function assertCredentialSaveFailureContinuesOnNextRequest() {
         () => requestAppleCustomTokenWithDatabase(
             db,
             "save-failure",
-            "authorization-code"
+            "authorization-code",
+            "Apple User"
         ),
         /credential write failed/
     );
@@ -470,7 +493,8 @@ async function assertCustomTokenUsesProofAndExistingEmailUID() {
     const result = await requestAppleCustomTokenWithDatabase(
         db,
         "login",
-        "authorization-code"
+        "authorization-code",
+        "Apple User"
     );
 
     assert.deepStrictEqual(result, { customToken: "custom-token:email-uid" });
@@ -487,6 +511,28 @@ async function assertCustomTokenUsesProofAndExistingEmailUID() {
     );
 }
 
+// 검증되지 않은 Apple email은 기존 Firebase 사용자를 선택하지 않는지 검증합니다.
+async function assertUnverifiedEmailUsesAppleSubjectUID() {
+    resetState();
+    verifiedPayload = applePayload({ email_verified: false });
+    users.set("email-uid", firebaseUser("email-uid", "user@example.com"));
+    const db = validChallengeFirestore("unverified-email");
+
+    const result = await requestAppleCustomTokenWithDatabase(
+        db,
+        "unverified-email",
+        "authorization-code",
+        "Apple User"
+    );
+
+    assert.deepStrictEqual(result, {
+        customToken: "custom-token:apple:apple-subject"
+    });
+    assert.strictEqual(authCreates[0].uid, "apple:apple-subject");
+    assert.strictEqual(authCreates[0].email, undefined);
+    assert.strictEqual(providerOwners.get("apple-subject"), "apple:apple-subject");
+}
+
 // 이메일이 없는 Apple 계정은 apple subject uid로 사용자와 provider를 생성하는지 검증합니다.
 async function assertCustomTokenUsesAppleSubjectUIDWithoutEmail() {
     resetState();
@@ -496,7 +542,8 @@ async function assertCustomTokenUsesAppleSubjectUIDWithoutEmail() {
     const result = await requestAppleCustomTokenWithDatabase(
         db,
         "subject-login",
-        "authorization-code"
+        "authorization-code",
+        "Apple User"
     );
 
     assert.deepStrictEqual(result, { customToken: "custom-token:apple:apple-subject" });
@@ -505,10 +552,246 @@ async function assertCustomTokenUsesAppleSubjectUIDWithoutEmail() {
     assert.strictEqual(authUpdates[0].properties.providerToLink.providerId, "apple.com");
 }
 
+// 전달된 이름을 정리해 선택된 Firebase Auth 사용자의 profile에 반영하는지 검증합니다.
+async function assertProvidedDisplayNameUpdatesProfile() {
+    resetState();
+    users.set("email-uid", firebaseUser("email-uid", "user@example.com"));
+    const db = validChallengeFirestore("provided-name");
+
+    const result = await requestAppleCustomTokenWithDatabase(
+        db,
+        "provided-name",
+        "authorization-code",
+        "  Apple User  "
+    );
+
+    assert.deepStrictEqual(result, { customToken: "custom-token:email-uid" });
+    assert.strictEqual(users.get("email-uid").displayName, "Apple User");
+    assert.deepStrictEqual(customTokenUIDs, ["email-uid"]);
+}
+
+// 전달된 이름이 없으면 기존 Firestore appleName을 Firebase Auth profile에 반영하는지 검증합니다.
+async function assertStoredAppleNameRestoresProfile() {
+    resetState();
+    users.set("email-uid", {
+        ...firebaseUser("email-uid", "user@example.com"),
+        displayName: "Firebase Apple User"
+    });
+    const db = fakeFirestore({
+        "authChallenges/stored-name": challengeData(Date.now() + 60_000),
+        "users/email-uid/userData/info": { appleName: "Stored Apple User" }
+    });
+
+    await requestAppleCustomTokenWithDatabase(
+        db,
+        "stored-name",
+        "authorization-code"
+    );
+
+    assert.strictEqual(users.get("email-uid").displayName, "Stored Apple User");
+}
+
+// 공백 이름은 없는 값으로 처리해 기존 Firestore appleName을 사용하는지 검증합니다.
+async function assertBlankDisplayNameUsesStoredAppleName() {
+    resetState();
+    users.set("email-uid", firebaseUser("email-uid", "user@example.com"));
+    const db = fakeFirestore({
+        "authChallenges/blank-name": challengeData(Date.now() + 60_000),
+        "users/email-uid/userData/info": { appleName: "Existing Apple User" }
+    });
+
+    await requestAppleCustomTokenWithDatabase(
+        db,
+        "blank-name",
+        "authorization-code",
+        "   "
+    );
+
+    assert.strictEqual(users.get("email-uid").displayName, "Existing Apple User");
+}
+
+// 모든 이름 자료가 비어 있으면 custom token과 credential 없이 token을 폐기하는지 검증합니다.
+async function assertMissingDisplayNameRejectsCustomToken() {
+    resetState();
+    users.set("email-uid", firebaseUser("email-uid", "user@example.com"));
+    const db = validChallengeFirestore("empty-name");
+
+    await assertAppleReason(
+        () => requestAppleCustomTokenWithDatabase(
+            db,
+            "empty-name",
+            "authorization-code",
+            "   "
+        ),
+        "apple_profile_incomplete"
+    );
+
+    assert.deepStrictEqual(customTokenUIDs, []);
+    assert.strictEqual(db.data.has("authCredentials/email-uid/providers/apple"), false);
+    assert.deepStrictEqual(revokeRequests, [{
+        token: "refresh-token",
+        tokenTypeHint: "refresh_token"
+    }]);
+}
+
+// Firebase Auth 이름을 선택한 현재 profile에는 불필요한 갱신을 하지 않는지 검증합니다.
+async function assertFirebaseDisplayNameSkipsCurrentProfileUpdate() {
+    resetState();
+    users.set("email-uid", {
+        ...firebaseUser("email-uid", "user@example.com"),
+        displayName: "Firebase Apple User"
+    });
+    const db = validChallengeFirestore("firebase-name");
+
+    await requestAppleCustomTokenWithDatabase(
+        db,
+        "firebase-name",
+        "authorization-code"
+    );
+
+    assert.strictEqual(users.get("email-uid").displayName, "Firebase Apple User");
+    assert.strictEqual(
+        authUpdates.some((update) => "displayName" in update.properties),
+        false
+    );
+}
+
+// Firebase Auth 이름의 앞뒤 공백은 정리해 profile에 반영하는지 검증합니다.
+async function assertFirebaseDisplayNameTrimsCurrentProfile() {
+    resetState();
+    users.set("email-uid", {
+        ...firebaseUser("email-uid", "user@example.com"),
+        displayName: "  Firebase Apple User  "
+    });
+    const db = validChallengeFirestore("firebase-name-trim");
+
+    await requestAppleCustomTokenWithDatabase(
+        db,
+        "firebase-name-trim",
+        "authorization-code"
+    );
+
+    assert.strictEqual(users.get("email-uid").displayName, "Firebase Apple User");
+}
+
+// Apple 로그인은 이름 자료가 없어도 기존 Firebase Auth photoURL을 제거하는지 검증합니다.
+async function assertAppleProfileClearsPhotoURL() {
+    resetState();
+    users.set("email-uid", {
+        ...firebaseUser("email-uid", "user@example.com"),
+        displayName: "Firebase Apple User",
+        photoURL: "https://example.com/profile.png"
+    });
+    const db = validChallengeFirestore("photo-url");
+
+    await requestAppleCustomTokenWithDatabase(
+        db,
+        "photo-url",
+        "authorization-code"
+    );
+
+    assert.strictEqual(users.get("email-uid").photoURL, undefined);
+    assert.strictEqual(
+        authUpdates.some((update) => update.properties.photoURL === null),
+        true
+    );
+}
+
+// profile 갱신 실패가 token을 폐기하고 다음 요청에서 profile과 credential 저장을 완료하는지 검증합니다.
+async function assertProfileUpdateFailureContinuesOnNextRequest() {
+    resetState();
+    users.set("email-uid", {
+        ...firebaseUser("email-uid", "user@example.com"),
+        displayName: "Existing Apple User"
+    });
+    const db = fakeFirestore({
+        "authChallenges/profile-failure": challengeData(Date.now() + 60_000),
+        "authChallenges/profile-retry": challengeData(Date.now() + 60_000)
+    });
+    authProfileUpdateError = new Error("profile update failed");
+
+    await assert.rejects(
+        () => requestAppleCustomTokenWithDatabase(
+            db,
+            "profile-failure",
+            "first-code",
+            "First Apple User"
+        ),
+        /profile update failed/
+    );
+
+    assert.strictEqual(db.data.has("authCredentials/email-uid/providers/apple"), false);
+    assert.strictEqual(providerOwners.get("apple-subject"), "email-uid");
+    assert.deepStrictEqual(revokeRequests, [{
+        token: "refresh-token",
+        tokenTypeHint: "refresh_token"
+    }]);
+    assert.deepStrictEqual(customTokenUIDs, []);
+
+    tokenResponse.refresh_token = "second-refresh-token";
+    const result = await requestAppleCustomTokenWithDatabase(
+        db,
+        "profile-retry",
+        "second-code"
+    );
+
+    assert.deepStrictEqual(result, { customToken: "custom-token:email-uid" });
+    assert.strictEqual(users.get("email-uid").displayName, "Existing Apple User");
+    assert.strictEqual(
+        db.data.get("authCredentials/email-uid/providers/apple").refreshToken,
+        "second-refresh-token"
+    );
+}
+
+// profile 갱신 실패 뒤 재시도에도 이름 자료가 없으면 profile 미완성 오류를 반환하는지 검증합니다.
+async function assertProfileRetryWithoutNameFails() {
+    resetState();
+    users.set("email-uid", firebaseUser("email-uid", "user@example.com"));
+    const db = fakeFirestore({
+        "authChallenges/profile-missing-failure": challengeData(Date.now() + 60_000),
+        "authChallenges/profile-missing-retry": challengeData(Date.now() + 60_000)
+    });
+    authProfileUpdateError = new Error("profile update failed");
+
+    await assert.rejects(
+        () => requestAppleCustomTokenWithDatabase(
+            db,
+            "profile-missing-failure",
+            "first-code",
+            "First Apple User"
+        ),
+        /profile update failed/
+    );
+
+    tokenResponse.refresh_token = "second-refresh-token";
+    await assertAppleReason(
+        () => requestAppleCustomTokenWithDatabase(
+            db,
+            "profile-missing-retry",
+            "second-code"
+        ),
+        "apple_profile_incomplete"
+    );
+
+    assert.deepStrictEqual(customTokenUIDs, []);
+    assert.strictEqual(db.data.has("authCredentials/email-uid/providers/apple"), false);
+    assert.strictEqual(providerOwners.get("apple-subject"), "email-uid");
+    assert.deepStrictEqual(revokeRequests, [{
+        token: "refresh-token",
+        tokenTypeHint: "refresh_token"
+    }, {
+        token: "second-refresh-token",
+        tokenTypeHint: "refresh_token"
+    }]);
+}
+
 // provider 변경 실패 뒤 교환 token을 폐기하고 다음 요청에서 연결을 완료하는지 검증합니다.
 async function assertProviderChangeFailureContinuesOnNextRequest() {
     resetState();
-    users.set("email-uid", firebaseUser("email-uid", "user@example.com"));
+    users.set("email-uid", {
+        ...firebaseUser("email-uid", "user@example.com"),
+        displayName: "Existing Apple User"
+    });
     const db = fakeFirestore({
         "authChallenges/first-provider-attempt": challengeData(Date.now() + 60_000),
         "authChallenges/second-provider-attempt": challengeData(Date.now() + 60_000)
@@ -1158,6 +1441,7 @@ function resetState() {
     verifyError = undefined;
     providerLookupError = undefined;
     authUpdateError = undefined;
+    authProfileUpdateError = undefined;
     authUpdateOwnerRaceUID = undefined;
 }
 
@@ -1237,6 +1521,13 @@ function documentReference(db, path, id = path.split("/").at(-1)) {
     return {
         path,
         id,
+        async get() {
+            const value = db.data.get(path);
+            return {
+                exists: value !== undefined,
+                data: () => value
+            };
+        },
         async create(value) {
             assert.strictEqual(db.data.has(path), false);
             db.data.set(path, { ...value });

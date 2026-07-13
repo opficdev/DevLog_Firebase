@@ -216,6 +216,7 @@ const appleErrors = [
     ["consumed_apple_challenge", 409, "consumed-apple-challenge"],
     ["invalid_apple_proof", 401, "invalid-apple-proof"],
     ["apple_provider_link_conflict", 409, "apple-provider-link-conflict"],
+    ["apple_profile_incomplete", 412, "apple-profile-incomplete"],
     ["last_provider", 412, "last-provider"],
     ["apple_credential_not_found", 404, "apple-credential-not-found"],
     ["apple_revoke_failed", 502, "apple-revoke-failed"]

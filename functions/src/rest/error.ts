@@ -107,6 +107,11 @@ const restErrorByReason: Record<string, RestErrorDefinition> = {
         code: "apple-provider-link-conflict",
         message: "Apple provider가 다른 계정에 연결되어 있습니다."
     },
+    apple_profile_incomplete: {
+        status: 412,
+        code: "apple-profile-incomplete",
+        message: "Apple 프로필 이름을 찾을 수 없습니다."
+    },
     last_provider: {
         status: 412,
         code: "last-provider",
