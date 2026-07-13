@@ -415,7 +415,7 @@ Include the selected workflow name in the task packet `Source` or `Goal` field s
 - Required roles: Planner, Implementer, Code Reviewer, Verification Runner
 - Model assignment: Planner=Primary, Implementer=Primary, Code Reviewer=`code_reviewer` (`Lightweight`), Verification Runner=`verification_runner` (`Lightweight`)
 - Custom agent `task_name`: Code Reviewer=`code_reviewer`, Verification Runner=`verification_runner`
-- Result recipient: current main task의 `Primary`
+- Result recipient: Primary of the current main task
 - Verification: `git diff --check -- AGENTS.md AGENT_ROLES.md AGENT_WORKFLOWS.md README.md .codex/agents`; `rg -n "gpt-5\\.3-codex-spark|\\bSpark\\b|\\bLightweight\\b|\\bFast\\b" --glob "*.md" --glob "*.toml" .`
 - Stop conditions: request to change deploy policy, TypeScript source changes, Firebase config changes
 ```
