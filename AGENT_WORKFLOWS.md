@@ -17,16 +17,21 @@ The main agent must run every workflow with this protocol.
 3. Create the task packet.
 4. Assign only the roles required by the selected workflow.
 5. Assign each role a model tier from `AGENT_ROLES.md`.
-6. Keep `Primary` roles with the active main agent, and dispatch every `Lightweight` or `Fast` role through the custom agent mapped in `AGENT_ROLES.md`.
-7. Dispatch read-only `Lightweight` or `Fast` roles in parallel only when they do not depend on unfinished edits.
-8. Do not complete a required `Lightweight` or `Fast` role directly in `Primary`, including when the dispatch tool would inherit the active `Primary` model.
-9. Keep `Primary` editing roles sequential unless the files and ownership boundaries are disjoint.
-10. Integrate role outputs.
-11. Escalate any `Lightweight` or `Fast` blocker to a `Primary` model before editing.
-12. Run completion gates.
-13. Report changed files, data or deploy decision, verification result, delegated roles, model tiers used, and unresolved decisions.
+6. Keep `Primary` roles with the active main agent.
+7. Find the exact custom agent name in `AGENT_ROLES.md` and its matching `.codex/agents/<name>.toml` before dispatching a `Lightweight` or `Fast` role.
+8. Create a side task connected to the current main task with `spawn_agent.task_name` set to that exact custom agent name. In the UI, use `Option-Command-S` for the same connected dispatch surface.
+9. Dispatch read-only `Lightweight` or `Fast` roles in parallel only when they do not depend on unfinished edits.
+10. Send later work for the same role to its existing agent with `followup_task`; do not create a new agent with an arbitrary name.
+11. Do not complete a required `Lightweight` or `Fast` role directly in `Primary`, including when the dispatch tool would inherit the active `Primary` model.
+12. Keep `Primary` editing roles sequential unless the files and ownership boundaries are disjoint.
+13. Return each delegated result to the current main task and integrate it in `Primary`.
+14. Escalate any `Lightweight` or `Fast` blocker to a `Primary` model before editing.
+15. Run completion gates.
+16. Report changed files, data or deploy decision, verification result, delegated roles, model tiers used, and unresolved decisions.
 
 Do not skip the task packet. The task packet is the contract between models.
+
+Do not use external `codex exec`, a separate user-owned `create_thread`, or a generic sub-agent with an arbitrary `task_name` for repository role dispatch. A failure from one of those paths does not mean the configured custom agent or pinned model is unavailable. Apply the stop condition only after the connected dispatch surface cannot select the exact configured custom agent or its pinned model.
 
 ## Universal stop conditions
 
@@ -363,6 +368,8 @@ Report:
 
 ## Parallel dispatch guide
 
+Use only side tasks connected to the current main task for parallel role dispatch. Create them with exact configured custom agent names through `spawn_agent` or with `Option-Command-S` in the UI.
+
 Parallelize only these combinations:
 
 - GitHub/CI Analyst reading live GitHub state while Planner inspects local files.
@@ -407,6 +414,8 @@ Include the selected workflow name in the task packet `Source` or `Goal` field s
 - Data or deploy risk: none
 - Required roles: Planner, Implementer, Code Reviewer, Verification Runner
 - Model assignment: Planner=Primary, Implementer=Primary, Code Reviewer=`code_reviewer` (`Lightweight`), Verification Runner=`verification_runner` (`Lightweight`)
+- Custom agent `task_name`: Code Reviewer=`code_reviewer`, Verification Runner=`verification_runner`
+- Result recipient: current main task의 `Primary`
 - Verification: `git diff --check -- AGENTS.md AGENT_ROLES.md AGENT_WORKFLOWS.md README.md .codex/agents`; `rg -n "gpt-5\\.3-codex-spark|\\bSpark\\b|\\bLightweight\\b|\\bFast\\b" --glob "*.md" --glob "*.toml" .`
 - Stop conditions: request to change deploy policy, TypeScript source changes, Firebase config changes
 ```
