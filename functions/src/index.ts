@@ -3,10 +3,6 @@ import * as dotenv from "dotenv";
 import * as path from "path";
 import { firebaseDBs } from "./common/firestore";
 
-// import {
-
-// } from "./auth/google";
-
 import {
     cleanupDeletedUserFirestoreData
 } from "./user/delete";
@@ -78,8 +74,6 @@ for (const firebaseDB of firebaseDBs()) {
     };
 }
 Object.assign(exports, firestoreDatabaseFunctionGroups);
-
-// Google 인증 함수들 (나중에 구현되면 추가)
 
 export {
     cleanupDeletedUserFirestoreData
