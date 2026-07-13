@@ -14,6 +14,10 @@ import {
     revokePendingGithubCredentials,
     revokeGithubCredential
 } from "../rest/githubCredential";
+import {
+    googleCredentialForUser,
+    revokeGoogleCredential
+} from "../rest/googleCredential";
 
 const DELETION_MARKER_LIFETIME_MILLISECONDS = 24 * 60 * 60 * 1000;
 
@@ -31,53 +35,41 @@ export const cleanupDeletedUserFirestoreData = functions
 
         for (const firebaseDB of firebaseDBs()) {
             const db = firestoreFor(firebaseDB);
-            let credentialReady = false;
             try {
                 await markAuthCredentialDeletion(db, uid);
-                const credential = await githubCredentialForUser(
-                    db,
-                    uid
-                );
-                if (credential) {
-                    await revokePendingGithubCredentials(
-                        db,
-                        uid,
-                        firebaseDB
-                    );
-                    await revokeGithubCredential(
-                        db,
-                        uid,
-                        githubRevocationConfiguration(
-                            firebaseDB,
-                            credential.clientId
-                        ),
-                        credential
-                    );
-                }
-                await deleteCredentialProviders(
-                    db,
-                    firebaseDB,
-                    uid,
-                    errors
-                );
-                credentialReady = true;
             } catch (error) {
-                logger.error("Auth 사용자 삭제 후 GitHub credential 정리 실패", {
+                logger.error("Auth 사용자 삭제 표식 기록 실패", {
                     firebaseDB,
                     uid,
                     error
                 });
                 errors.push(error);
+                continue;
             }
-            if (credentialReady) {
-                await deleteRoot(
-                    db,
-                    firebaseDB,
-                    uid,
-                    FirestorePath.user(uid),
-                    errors
-                );
+
+            const providerErrors = await revokeProviderCredentials(
+                db,
+                firebaseDB,
+                uid
+            );
+            errors.push(...providerErrors);
+            if (providerErrors.length !== 0) {
+                continue;
             }
+
+            await deleteCredentialProviders(
+                db,
+                firebaseDB,
+                uid,
+                errors
+            );
+            await deleteRoot(
+                db,
+                firebaseDB,
+                uid,
+                FirestorePath.user(uid),
+                errors
+            );
         }
 
         if (errors.length !== 0) {
@@ -85,6 +77,66 @@ export const cleanupDeletedUserFirestoreData = functions
         }
     }
 );
+
+// 지정한 database의 provider credential을 각각 폐기하고 발생한 오류를 반환합니다.
+async function revokeProviderCredentials(
+    db: FirebaseFirestore.Firestore,
+    firebaseDB: string,
+    uid: string
+): Promise<unknown[]> {
+    const errors: unknown[] = [];
+    try {
+        const credential = await githubCredentialForUser(
+            db,
+            uid
+        );
+        if (credential) {
+            await revokePendingGithubCredentials(
+                db,
+                uid,
+                firebaseDB
+            );
+            await revokeGithubCredential(
+                db,
+                uid,
+                githubRevocationConfiguration(
+                    firebaseDB,
+                    credential.clientId
+                ),
+                credential
+            );
+        }
+    } catch (error) {
+        logger.error("Auth 사용자 삭제 후 GitHub credential 정리 실패", {
+            firebaseDB,
+            uid,
+            error
+        });
+        errors.push(error);
+    }
+
+    try {
+        const credential = await googleCredentialForUser(
+            db,
+            uid
+        );
+        if (credential) {
+            await revokeGoogleCredential(
+                db,
+                uid,
+                credential
+            );
+        }
+    } catch (error) {
+        logger.error("Auth 사용자 삭제 후 Google credential 정리 실패", {
+            firebaseDB,
+            uid,
+            error
+        });
+        errors.push(error);
+    }
+    return errors;
+}
 
 // 늦게 도착한 인증 요청이 삭제 중인 uid에 credential을 저장하지 못하도록 표식을 기록합니다.
 async function markAuthCredentialDeletion(

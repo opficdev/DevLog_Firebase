@@ -25,6 +25,7 @@ import {
     unlinkAppleProviderWithDatabase
 } from "./apple/auth";
 import { githubConfiguration } from "./githubConfiguration";
+import { googleConfiguration } from "./googleConfiguration";
 import {
     createGithubAccountLinkSession,
     createGithubSignInSession,
@@ -35,6 +36,16 @@ import {
     revokeGithubAccessToken,
     unlinkGithubAccount
 } from "./githubOAuth";
+import {
+    createGoogleAccountLinkSession,
+    createGoogleSignInSession,
+    googleCallbackFailureURL,
+    googleCallbackURL,
+    linkGoogleAccount,
+    requestGoogleCustomToken,
+    revokeGoogleAccessToken,
+    unlinkGoogleAccount
+} from "./googleAuth";
 import {
     RestError,
     restErrorBodyFrom,
@@ -89,6 +100,27 @@ function restApiFor(firebaseDB: FirestoreDatabase) {
                 response.redirect(302, redirectURL);
                 return;
             }
+            if (route.action === "googleCallback") {
+                let configuration;
+                try {
+                    configuration = googleConfiguration(firebaseDB);
+                } catch (error) {
+                    logger.error("Google OAuth callback 환경 설정 확인 실패", {
+                        firebaseDB,
+                        error: toError(error).message
+                    });
+                    response.redirect(302, googleCallbackFailureURL());
+                    return;
+                }
+                const redirectURL = await googleCallbackURL(
+                    db,
+                    configuration,
+                    optionalQueryString(request.query.state),
+                    optionalQueryString(request.query.code)
+                );
+                response.redirect(302, redirectURL);
+                return;
+            }
 
             const result = await handleRoute(
                 route,
@@ -119,6 +151,7 @@ async function handleRoute(
 ): Promise<unknown> {
     switch (route.action) {
     case "githubCallback":
+    case "googleCallback":
         return undefined;
     case "requestTodoDeletion":
         await requestTodoDeletionInFirestore(db, requiredUID(uid), requiredID(route));
@@ -220,6 +253,42 @@ async function handleRoute(
             db,
             requiredUID(uid),
             firebaseDB
+        );
+    case "createGoogleSignInSession":
+        return createGoogleSignInSession(
+            db,
+            googleConfiguration(firebaseDB),
+            requiredBodyString(body, "appChallenge")
+        );
+    case "requestGoogleCustomToken":
+        return requestGoogleCustomToken(
+            db,
+            requiredBodyString(body, "ticket"),
+            requiredBodyString(body, "appVerifier")
+        );
+    case "createGoogleAccountLinkSession":
+        return createGoogleAccountLinkSession(
+            db,
+            googleConfiguration(firebaseDB),
+            requiredUID(uid),
+            requiredBodyString(body, "appChallenge")
+        );
+    case "linkGoogleAccount":
+        return linkGoogleAccount(
+            db,
+            requiredUID(uid),
+            requiredBodyString(body, "ticket"),
+            requiredBodyString(body, "appVerifier")
+        );
+    case "unlinkGoogleAccount":
+        return unlinkGoogleAccount(
+            db,
+            requiredUID(uid)
+        );
+    case "revokeGoogleAccessToken":
+        return revokeGoogleAccessToken(
+            db,
+            requiredUID(uid)
         );
     }
 }

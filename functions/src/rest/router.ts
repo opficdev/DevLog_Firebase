@@ -18,7 +18,14 @@ export type RestAction =
     "createGithubAccountLinkSession" |
     "linkGithubAccount" |
     "unlinkGithubAccount" |
-    "revokeGithubAccessToken";
+    "revokeGithubAccessToken" |
+    "createGoogleSignInSession" |
+    "googleCallback" |
+    "requestGoogleCustomToken" |
+    "createGoogleAccountLinkSession" |
+    "linkGoogleAccount" |
+    "unlinkGoogleAccount" |
+    "revokeGoogleAccessToken";
 
 export interface RestRoute {
     action: RestAction;
@@ -174,6 +181,58 @@ export function matchRestRoute(method: string, routeSegments: string[]): RestRou
     if (routeSegments.join("/") === "auth/github/access-token" && normalizedMethod === "DELETE") {
         return {
             action: "revokeGithubAccessToken",
+            requiresAuth: true
+        };
+    }
+
+    if (routeSegments.join("/") === "auth/google/sign-in-sessions" && normalizedMethod === "POST") {
+        return {
+            action: "createGoogleSignInSession",
+            requiresAuth: false
+        };
+    }
+
+    if (routeSegments.join("/") === "auth/google/callback" && normalizedMethod === "GET") {
+        return {
+            action: "googleCallback",
+            requiresAuth: false
+        };
+    }
+
+    if (routeSegments.join("/") === "auth/google/custom-token" && normalizedMethod === "POST") {
+        return {
+            action: "requestGoogleCustomToken",
+            requiresAuth: false
+        };
+    }
+
+    if (
+        routeSegments.join("/") === "auth/google/account-link-sessions" &&
+        normalizedMethod === "POST"
+    ) {
+        return {
+            action: "createGoogleAccountLinkSession",
+            requiresAuth: true
+        };
+    }
+
+    if (routeSegments.join("/") === "auth/google/account-link" && normalizedMethod === "PUT") {
+        return {
+            action: "linkGoogleAccount",
+            requiresAuth: true
+        };
+    }
+
+    if (routeSegments.join("/") === "auth/google/account-link" && normalizedMethod === "DELETE") {
+        return {
+            action: "unlinkGoogleAccount",
+            requiresAuth: true
+        };
+    }
+
+    if (routeSegments.join("/") === "auth/google/access-token" && normalizedMethod === "DELETE") {
+        return {
+            action: "revokeGoogleAccessToken",
             requiresAuth: true
         };
     }

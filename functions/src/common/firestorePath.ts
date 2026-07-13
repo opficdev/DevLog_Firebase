@@ -93,6 +93,11 @@ export namespace FirestorePath {
         return `${authCredential(userId)}/${Collection.providers}/github`;
     }
 
+    // 지정한 사용자의 서버 전용 Google 자격 증명 문서 경로를 반환합니다.
+    export function googleCredential(userId: string): string {
+        return `${authCredential(userId)}/${Collection.providers}/google`;
+    }
+
     // provider 공통 OAuth session 컬렉션 경로를 저장합니다.
     export const oauthSessions = Collection.oauthSessions;
 
