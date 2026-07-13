@@ -131,7 +131,7 @@ export async function unlinkAppleProviderWithDatabase(
     return { success: true };
 }
 
-// 기존 Apple provider, 이메일, Apple subject uid 순서로 Firebase uid를 결정합니다.
+// 기존 Apple provider, 검증된 이메일, Apple subject uid 순서로 Firebase uid를 결정합니다.
 export async function resolveAppleFirebaseUID(
     auth: FirebaseAuthClient,
     payload: AppleTokenPayload
@@ -144,9 +144,10 @@ export async function resolveAppleFirebaseUID(
         return ownerUID;
     }
 
-    if (payload.email) {
+    const appleEmail = verifiedAppleEmail(payload);
+    if (appleEmail) {
         try {
-            return (await auth.getUserByEmail(payload.email)).uid;
+            return (await auth.getUserByEmail(appleEmail)).uid;
         } catch (error) {
             if (firebaseAuthErrorCode(error) !== "auth/user-not-found") {
                 throw error;
@@ -155,12 +156,12 @@ export async function resolveAppleFirebaseUID(
 
         try {
             return (await auth.createUser({
-                email: payload.email,
-                emailVerified: isAppleEmailVerified(payload)
+                email: appleEmail,
+                emailVerified: true
             })).uid;
         } catch (error) {
             if (firebaseAuthErrorCode(error) === "auth/email-already-exists") {
-                return (await auth.getUserByEmail(payload.email)).uid;
+                return (await auth.getUserByEmail(appleEmail)).uid;
             }
             throw error;
         }

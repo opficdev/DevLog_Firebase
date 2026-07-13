@@ -208,6 +208,7 @@ const {
     await assertAuthFailureRevokesExchangedCredential();
     await assertCredentialSaveFailureContinuesOnNextRequest();
     await assertCustomTokenUsesProofAndExistingEmailUID();
+    await assertUnverifiedEmailUsesAppleSubjectUID();
     await assertCustomTokenUsesAppleSubjectUIDWithoutEmail();
     await assertProvidedDisplayNameUpdatesProfile();
     await assertStoredAppleNameRestoresProfile();
@@ -504,6 +505,27 @@ async function assertCustomTokenUsesProofAndExistingEmailUID() {
         () => requestAppleCustomTokenWithDatabase(db, "login", "second-code"),
         "consumed_apple_challenge"
     );
+}
+
+// 검증되지 않은 Apple email은 기존 Firebase 사용자를 선택하지 않는지 검증합니다.
+async function assertUnverifiedEmailUsesAppleSubjectUID() {
+    resetState();
+    verifiedPayload = applePayload({ email_verified: false });
+    users.set("email-uid", firebaseUser("email-uid", "user@example.com"));
+    const db = validChallengeFirestore("unverified-email");
+
+    const result = await requestAppleCustomTokenWithDatabase(
+        db,
+        "unverified-email",
+        "authorization-code"
+    );
+
+    assert.deepStrictEqual(result, {
+        customToken: "custom-token:apple:apple-subject"
+    });
+    assert.strictEqual(authCreates[0].uid, "apple:apple-subject");
+    assert.strictEqual(authCreates[0].email, undefined);
+    assert.strictEqual(providerOwners.get("apple-subject"), "apple:apple-subject");
 }
 
 // 이메일이 없는 Apple 계정은 apple subject uid로 사용자와 provider를 생성하는지 검증합니다.
