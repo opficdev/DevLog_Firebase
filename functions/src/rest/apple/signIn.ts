@@ -14,12 +14,14 @@ import {
     ensureAppleProvider,
     resolveAppleFirebaseUID
 } from "./provider";
+import { updateAppleProfile } from "./profile";
 
 // challenge 기반 Apple 인증 증명으로 Firebase custom token을 생성합니다.
 export async function requestAppleCustomTokenWithDatabase(
     db: FirebaseFirestore.Firestore,
     challengeId: string,
-    authorizationCode: string
+    authorizationCode: string,
+    displayName?: string
 ): Promise<{ customToken: string }> {
     const proof = await requestAppleProofWithChallenge(
         db,
@@ -43,6 +45,12 @@ export async function requestAppleCustomTokenWithDatabase(
             auth,
             uid,
             proof.payload
+        );
+        await updateAppleProfile(
+            db,
+            auth,
+            uid,
+            displayName
         );
         await saveAppleCredential(
             db,

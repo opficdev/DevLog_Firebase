@@ -145,7 +145,8 @@ async function handleRoute(
             return requestAppleCustomTokenWithDatabase(
                 db,
                 requiredBodyString(body, "challengeId"),
-                requiredBodyString(body, "authorizationCode")
+                requiredBodyString(body, "authorizationCode"),
+                optionalBodyString(body, "displayName")
             );
         }
         return requestLegacyAppleCustomTokenWithDatabase(
