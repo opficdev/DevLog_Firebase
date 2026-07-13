@@ -1,35 +1,39 @@
 import { FirestorePath } from "../../common/firestorePath";
+import { appleAuthError } from "./error";
 import type { FirebaseAuthClient } from "./FirebaseAuthClient";
 
-// 전달된 이름 또는 기존 Firestore Apple 이름을 Firebase Auth profile에 반영합니다.
+// 요청, Firestore, Firebase Auth 순서로 Apple 이름을 선택해 profile에 반영합니다.
 export async function updateAppleProfile(
     db: FirebaseFirestore.Firestore,
     auth: FirebaseAuthClient,
     uid: string,
     displayName?: string
 ): Promise<void> {
-    const providedDisplayName = normalizedDisplayName(displayName);
-    if (providedDisplayName) {
-        await auth.updateUser(uid, {
-            displayName: providedDisplayName,
-            photoURL: null
-        });
-        return;
+    let selectedDisplayName = normalizedDisplayName(displayName);
+    if (!selectedDisplayName) {
+        const infoSnapshot = await db.doc(
+            FirestorePath.userData(uid, FirestorePath.UserDataDocument.info)
+        ).get();
+        selectedDisplayName = normalizedDisplayName(infoSnapshot.data()?.appleName);
     }
 
-    const infoSnapshot = await db.doc(
-        FirestorePath.userData(uid, FirestorePath.UserDataDocument.info)
-    ).get();
-    const storedDisplayName = normalizedDisplayName(infoSnapshot.data()?.appleName);
-    if (storedDisplayName) {
-        await auth.updateUser(uid, {
-            displayName: storedDisplayName,
-            photoURL: null
-        });
-        return;
+    if (!selectedDisplayName) {
+        const user = await auth.getUser(uid);
+        selectedDisplayName = normalizedDisplayName(user.displayName);
     }
 
-    await auth.updateUser(uid, { photoURL: null });
+    if (!selectedDisplayName) {
+        throw appleAuthError(
+            "failed-precondition",
+            "apple_profile_incomplete",
+            "Apple 프로필 이름을 찾을 수 없습니다."
+        );
+    }
+
+    await auth.updateUser(uid, {
+        displayName: selectedDisplayName,
+        photoURL: null
+    });
 }
 
 // 공백이 아닌 문자열을 앞뒤 공백을 제거해 반환합니다.
