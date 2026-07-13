@@ -214,7 +214,8 @@ const {
     await assertStoredAppleNameRestoresProfile();
     await assertBlankDisplayNameUsesStoredAppleName();
     await assertMissingDisplayNameRejectsCustomToken();
-    await assertFirebaseDisplayNameUpdatesProfile();
+    await assertFirebaseDisplayNameSkipsCurrentProfileUpdate();
+    await assertFirebaseDisplayNameTrimsCurrentProfile();
     await assertAppleProfileClearsPhotoURL();
     await assertProfileUpdateFailureContinuesOnNextRequest();
     await assertProfileRetryWithoutNameFails();
@@ -572,7 +573,10 @@ async function assertProvidedDisplayNameUpdatesProfile() {
 // 전달된 이름이 없으면 기존 Firestore appleName을 Firebase Auth profile에 반영하는지 검증합니다.
 async function assertStoredAppleNameRestoresProfile() {
     resetState();
-    users.set("email-uid", firebaseUser("email-uid", "user@example.com"));
+    users.set("email-uid", {
+        ...firebaseUser("email-uid", "user@example.com"),
+        displayName: "Firebase Apple User"
+    });
     const db = fakeFirestore({
         "authChallenges/stored-name": challengeData(Date.now() + 60_000),
         "users/email-uid/userData/info": { appleName: "Stored Apple User" }
@@ -630,8 +634,8 @@ async function assertMissingDisplayNameRejectsCustomToken() {
     }]);
 }
 
-// 이름 입력과 Firestore appleName이 없으면 기존 Firebase Auth displayName을 profile에 반영하는지 검증합니다.
-async function assertFirebaseDisplayNameUpdatesProfile() {
+// Firebase Auth 이름을 선택한 현재 profile에는 불필요한 갱신을 하지 않는지 검증합니다.
+async function assertFirebaseDisplayNameSkipsCurrentProfileUpdate() {
     resetState();
     users.set("email-uid", {
         ...firebaseUser("email-uid", "user@example.com"),
@@ -646,13 +650,28 @@ async function assertFirebaseDisplayNameUpdatesProfile() {
     );
 
     assert.strictEqual(users.get("email-uid").displayName, "Firebase Apple User");
-    assert.deepStrictEqual(
-        authUpdates.find((update) => "displayName" in update.properties).properties,
-        {
-            displayName: "Firebase Apple User",
-            photoURL: null
-        }
+    assert.strictEqual(
+        authUpdates.some((update) => "displayName" in update.properties),
+        false
     );
+}
+
+// Firebase Auth 이름의 앞뒤 공백은 정리해 profile에 반영하는지 검증합니다.
+async function assertFirebaseDisplayNameTrimsCurrentProfile() {
+    resetState();
+    users.set("email-uid", {
+        ...firebaseUser("email-uid", "user@example.com"),
+        displayName: "  Firebase Apple User  "
+    });
+    const db = validChallengeFirestore("firebase-name-trim");
+
+    await requestAppleCustomTokenWithDatabase(
+        db,
+        "firebase-name-trim",
+        "authorization-code"
+    );
+
+    assert.strictEqual(users.get("email-uid").displayName, "Firebase Apple User");
 }
 
 // Apple 로그인은 이름 자료가 없어도 기존 Firebase Auth photoURL을 제거하는지 검증합니다.

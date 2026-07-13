@@ -20,6 +20,13 @@ export async function updateAppleProfile(
     if (!selectedDisplayName) {
         const user = await auth.getUser(uid);
         selectedDisplayName = normalizedDisplayName(user.displayName);
+        if (
+            selectedDisplayName &&
+            user.displayName === selectedDisplayName &&
+            !user.photoURL
+        ) {
+            return;
+        }
     }
 
     if (!selectedDisplayName) {

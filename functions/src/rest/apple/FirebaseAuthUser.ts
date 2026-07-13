@@ -6,6 +6,8 @@ export interface FirebaseAuthUser {
     email?: string;
     // Firebase Auth 사용자 profile의 표시 이름을 저장합니다.
     displayName?: string;
+    // Firebase Auth 사용자 profile의 사진 URL을 저장합니다.
+    photoURL?: string;
     // Firebase Auth 사용자 provider 목록을 저장합니다.
     providerData?: Array<{
         // 연결된 provider id를 저장합니다.
