@@ -1,7 +1,7 @@
 name = "verification_runner"
 description = "DevLog Firebase verification runner for changed-file checks, build or test commands that do not deploy, and diff validation."
 model = "gpt-5.3-codex-spark"
-model_reasoning_effort = "medium"
+model_reasoning_effort = "xhigh"
 sandbox_mode = "workspace-write"
 developer_instructions = """
 Read AGENTS.md and AGENT_ROLES.md before verification.

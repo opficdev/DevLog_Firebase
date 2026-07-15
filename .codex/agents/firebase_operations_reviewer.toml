@@ -1,7 +1,7 @@
 name = "firebase_operations_reviewer"
 description = "Read-only DevLog Firebase operations reviewer for deployment scope, environment keys, Firestore database and index changes, data-shape risk, and migration impact."
 model = "gpt-5.3-codex-spark"
-model_reasoning_effort = "medium"
+model_reasoning_effort = "xhigh"
 sandbox_mode = "read-only"
 developer_instructions = """
 Read AGENTS.md and AGENT_ROLES.md before reviewing.
