@@ -14,20 +14,19 @@ const originalEnvironment = { ...process.env };
 try {
     process.env[secretName] = JSON.stringify(configuration);
 
-    assert.deepStrictEqual(githubConfiguration("staging"), configuration);
-    assert.deepStrictEqual(githubConfiguration("prod"), configuration);
+    assert.deepStrictEqual(githubConfiguration(), configuration);
     assert.strictEqual(
-        githubRevocationConfiguration("staging", "client-id").clientSecret,
+        githubRevocationConfiguration("client-id").clientSecret,
         "client-secret"
     );
     assert.throws(
-        () => githubRevocationConfiguration("staging", "unknown-client-id"),
+        () => githubRevocationConfiguration("unknown-client-id"),
         /GitHub credential을 발급한 OAuth App 설정을 찾을 수 없습니다/
     );
 
     assertRejectedConfiguration(undefined, /No value found for secret parameter/);
     assertRejectedConfiguration("{", /could not be parsed as JSON/);
-    assertRejectedConfiguration(JSON.stringify([]), /GitHub staging OAuth App 설정 형식/);
+    assertRejectedConfiguration(JSON.stringify([]), /GitHub OAuth App 설정 형식/);
     assertRejectedConfiguration(JSON.stringify({
         clientId: "client-id",
         clientSecret: "client-secret"
@@ -55,7 +54,7 @@ function assertRejectedConfiguration(
         process.env[secretName] = value;
     }
     assert.throws(
-        () => githubConfiguration("staging"),
+        () => githubConfiguration(),
         expectedMessage
     );
 }

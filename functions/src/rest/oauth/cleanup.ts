@@ -56,10 +56,7 @@ function expiredOAuthCleanupFunction(
         }
 
         try {
-            const configuration = githubRevocationConfiguration(
-                firebaseDB,
-                clientId
-            );
+            const configuration = githubRevocationConfiguration(clientId);
             await revokeGitHubOAuthToken(
                 `oauth-expired:${event.params.documentId}`,
                 accessToken,

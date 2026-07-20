@@ -30,10 +30,10 @@ require.cache[require.resolve("../lib/common/firestore")] = {
 require.cache[require.resolve("../lib/rest/githubConfiguration")] = {
     exports: {
         githubOAuthConfigurationSecret: "GITHUB_OAUTH_CONFIG",
-        githubRevocationConfiguration: (firebaseDB) => ({
-            clientId: `${firebaseDB}-client-id`,
-            clientSecret: `${firebaseDB}-client-secret`,
-            callbackURL: `https://example.com/${firebaseDB}/callback`
+        githubRevocationConfiguration: (clientId) => ({
+            clientId,
+            clientSecret: `${clientId}-secret`,
+            callbackURL: "https://example.com/callback"
         })
     }
 };
@@ -124,7 +124,7 @@ async function assertGithubGrantIsRevokedBeforeCredentialRootDeletion() {
         accessToken: call.credential.accessToken
     })), [
         { uid: "user-1", clientId: "staging-client-id", accessToken: "github-token" },
-        { uid: "user-1", clientId: "prod-client-id", accessToken: "github-token" }
+        { uid: "user-1", clientId: "staging-client-id", accessToken: "github-token" }
     ]);
     assert.deepStrictEqual(lifecycleEvents, [
         "staging:deletion-marker",

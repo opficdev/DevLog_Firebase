@@ -95,16 +95,12 @@ async function revokeProviderCredentials(
         if (credential) {
             await revokePendingGithubCredentials(
                 db,
-                uid,
-                firebaseDB
+                uid
             );
             await revokeGithubCredential(
                 db,
                 uid,
-                githubRevocationConfiguration(
-                    firebaseDB,
-                    credential.clientId
-                ),
+                githubRevocationConfiguration(credential.clientId),
                 credential
             );
         }

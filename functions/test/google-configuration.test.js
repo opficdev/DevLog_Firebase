@@ -11,12 +11,11 @@ const originalEnvironment = { ...process.env };
 try {
     process.env[secretName] = JSON.stringify(configuration);
 
-    assert.deepStrictEqual(googleConfiguration("staging"), configuration);
-    assert.deepStrictEqual(googleConfiguration("prod"), configuration);
+    assert.deepStrictEqual(googleConfiguration(), configuration);
 
     assertRejectedConfiguration(undefined, /No value found for secret parameter/);
     assertRejectedConfiguration("{", /could not be parsed as JSON/);
-    assertRejectedConfiguration(JSON.stringify([]), /Google staging OAuth client 설정 형식/);
+    assertRejectedConfiguration(JSON.stringify([]), /Google OAuth client 설정 형식/);
     assertRejectedConfiguration(JSON.stringify({
         clientId: "client-id",
         clientSecret: "client-secret"
@@ -44,7 +43,7 @@ function assertRejectedConfiguration(
         process.env[secretName] = value;
     }
     assert.throws(
-        () => googleConfiguration("staging"),
+        () => googleConfiguration(),
         expectedMessage
     );
 }

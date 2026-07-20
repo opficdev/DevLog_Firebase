@@ -94,7 +94,7 @@ function restApiFor(firebaseDB: FirestoreDatabase) {
             if (route.action === "githubCallback") {
                 let configuration;
                 try {
-                    configuration = githubConfiguration(firebaseDB);
+                    configuration = githubConfiguration();
                 } catch (error) {
                     logger.error("GitHub OAuth callback 환경 설정 확인 실패", {
                         firebaseDB,
@@ -115,7 +115,7 @@ function restApiFor(firebaseDB: FirestoreDatabase) {
             if (route.action === "googleCallback") {
                 let configuration;
                 try {
-                    configuration = googleConfiguration(firebaseDB);
+                    configuration = googleConfiguration();
                 } catch (error) {
                     logger.error("Google OAuth callback 환경 설정 확인 실패", {
                         firebaseDB,
@@ -229,27 +229,25 @@ async function handleRoute(
     case "createGithubSignInSession":
         return createGithubSignInSession(
             db,
-            githubConfiguration(firebaseDB),
+            githubConfiguration(),
             requiredBodyString(body, "appChallenge")
         );
     case "requestGithubCustomToken":
         return requestGithubCustomToken(
             db,
-            firebaseDB,
             requiredBodyString(body, "ticket"),
             requiredBodyString(body, "appVerifier")
         );
     case "createGithubAccountLinkSession":
         return createGithubAccountLinkSession(
             db,
-            githubConfiguration(firebaseDB),
+            githubConfiguration(),
             requiredUID(uid),
             requiredBodyString(body, "appChallenge")
         );
     case "linkGithubAccount":
         return linkGithubAccount(
             db,
-            firebaseDB,
             requiredUID(uid),
             requiredBodyString(body, "ticket"),
             requiredBodyString(body, "appVerifier")
@@ -257,19 +255,17 @@ async function handleRoute(
     case "unlinkGithubAccount":
         return unlinkGithubAccount(
             db,
-            requiredUID(uid),
-            firebaseDB
+            requiredUID(uid)
         );
     case "revokeGithubAccessToken":
         return revokeGithubAccessToken(
             db,
-            requiredUID(uid),
-            firebaseDB
+            requiredUID(uid)
         );
     case "createGoogleSignInSession":
         return createGoogleSignInSession(
             db,
-            googleConfiguration(firebaseDB),
+            googleConfiguration(),
             requiredBodyString(body, "appChallenge")
         );
     case "requestGoogleCustomToken":
@@ -281,7 +277,7 @@ async function handleRoute(
     case "createGoogleAccountLinkSession":
         return createGoogleAccountLinkSession(
             db,
-            googleConfiguration(firebaseDB),
+            googleConfiguration(),
             requiredUID(uid),
             requiredBodyString(body, "appChallenge")
         );

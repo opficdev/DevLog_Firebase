@@ -9,7 +9,6 @@ import {
     resolveGithubFirebaseUID
 } from "./githubProvider";
 import type { GitHubConfiguration } from "./githubConfiguration";
-import type { FirestoreDatabase } from "../common/firestore";
 import {
     githubRevocationConfiguration
 } from "./githubConfiguration";
@@ -179,7 +178,6 @@ function callbackErrorMetadata(error: unknown): { name: string; message: string 
 // GitHub 로그인 ticket을 검증하고 Firebase custom token만 반환합니다.
 export async function requestGithubCustomToken(
     db: FirebaseFirestore.Firestore,
-    firebaseDB: FirestoreDatabase,
     ticket: string,
     appVerifier: string
 ): Promise<{ customToken: string }> {
@@ -198,7 +196,7 @@ export async function requestGithubCustomToken(
             uid,
             credential
         );
-        await revokePendingGithubCredentials(db, uid, firebaseDB);
+        await revokePendingGithubCredentials(db, uid);
         const customToken = await admin.auth().createCustomToken(uid);
         await consumeOAuthTicket(db, claimed);
         return { customToken };
@@ -211,7 +209,6 @@ export async function requestGithubCustomToken(
 // GitHub 계정 연결 ticket을 검증하고 provider와 credential을 현재 사용자에 연결합니다.
 export async function linkGithubAccount(
     db: FirebaseFirestore.Firestore,
-    firebaseDB: FirestoreDatabase,
     uid: string,
     ticket: string,
     appVerifier: string
@@ -235,7 +232,7 @@ export async function linkGithubAccount(
             uid,
             credential
         );
-        await revokePendingGithubCredentials(db, uid, firebaseDB);
+        await revokePendingGithubCredentials(db, uid);
         await consumeOAuthTicket(db, claimed);
     } catch (error) {
         await releaseOAuthTicket(db, claimed);
@@ -246,8 +243,7 @@ export async function linkGithubAccount(
 // GitHub grant와 credential을 정리한 뒤 현재 사용자의 provider 연결을 해제합니다.
 export async function unlinkGithubAccount(
     db: FirebaseFirestore.Firestore,
-    uid: string,
-    firebaseDB: FirestoreDatabase
+    uid: string
 ): Promise<void> {
     const auth = admin.auth();
     const user = await auth.getUser(uid);
@@ -256,8 +252,8 @@ export async function unlinkGithubAccount(
         provider.providerId === PROVIDER_ID
     );
     if (!hasGithubProvider) {
-        const context = await revocationContext(db, uid, firebaseDB);
-        await revokePendingGithubCredentials(db, uid, firebaseDB);
+        const context = await revocationContext(db, uid);
+        await revokePendingGithubCredentials(db, uid);
         await revokeGithubCredential(
             db,
             uid,
@@ -274,8 +270,8 @@ export async function unlinkGithubAccount(
         );
     }
 
-    const context = await revocationContext(db, uid, firebaseDB);
-    await revokePendingGithubCredentials(db, uid, firebaseDB);
+    const context = await revocationContext(db, uid);
+    await revokePendingGithubCredentials(db, uid);
     await revokeGithubCredential(
         db,
         uid,
@@ -290,21 +286,17 @@ export async function unlinkGithubAccount(
 // 일반 로그아웃과 별개로 GitHub grant와 서버 credential만 폐기합니다.
 export async function revokeGithubAccessToken(
     db: FirebaseFirestore.Firestore,
-    uid: string,
-    firebaseDB: FirestoreDatabase
+    uid: string
 ): Promise<void> {
     const credential = await githubCredentialForUser(
         db,
         uid
     );
-    await revokePendingGithubCredentials(db, uid, firebaseDB);
+    await revokePendingGithubCredentials(db, uid);
     await revokeGithubCredential(
         db,
         uid,
-        githubRevocationConfiguration(
-            firebaseDB,
-            credential?.clientId
-        ),
+        githubRevocationConfiguration(credential?.clientId),
         credential
     );
 }
@@ -369,8 +361,7 @@ interface GitHubRevocationContext {
 // 현재 credential과 같은 snapshot에서 결정한 grant 폐기 설정을 반환합니다.
 async function revocationContext(
     db: FirebaseFirestore.Firestore,
-    uid: string,
-    firebaseDB: FirestoreDatabase
+    uid: string
 ): Promise<GitHubRevocationContext> {
     const credential = await githubCredentialForUser(
         db,
@@ -378,10 +369,7 @@ async function revocationContext(
     );
     return {
         credential,
-        configuration: githubRevocationConfiguration(
-            firebaseDB,
-            credential?.clientId
-        )
+        configuration: githubRevocationConfiguration(credential?.clientId)
     };
 }
 
