@@ -1,5 +1,6 @@
-import { HttpsError } from "firebase-functions/v2/https";
+import { defineJsonSecret } from "firebase-functions/params";
 import type { FirestoreDatabase } from "../common/firestore";
+import { requiredAuthenticationConfigurationValue } from "./authenticationConfiguration";
 
 // Google OAuth 요청에 필요한 환경별 설정을 나타냅니다.
 export interface GoogleConfiguration {
@@ -11,21 +12,30 @@ export interface GoogleConfiguration {
     callbackURL: string;
 }
 
-// Firestore 데이터베이스에 대응하는 Google OAuth client 설정을 반환합니다.
+// Google OAuth client 설정 전체를 project별 JSON Secret에서 제공합니다.
+export const googleOAuthConfigurationSecret = defineJsonSecret<GoogleConfiguration>("GOOGLE_OAUTH_CONFIG");
+
+// Firebase project에 대응하는 Google OAuth client 설정을 반환합니다.
 export function googleConfiguration(
     firebaseDB: FirestoreDatabase
 ): GoogleConfiguration {
-    const prefix = firebaseDB.toUpperCase().replace(/[^A-Z0-9]/g, "_");
-    const clientId = process.env[`GOOGLE_${prefix}_CLIENT_ID`]?.trim();
-    const clientSecret = process.env[`GOOGLE_${prefix}_CLIENT_SECRET`]?.trim();
-    const callbackURL = process.env[`GOOGLE_${prefix}_CALLBACK_URL`]?.trim();
-
-    if (!clientId || !clientSecret || !callbackURL) {
-        throw new HttpsError(
-            "internal",
-            `Google ${firebaseDB} OAuth client 설정이 누락되었습니다.`
-        );
-    }
+    const configuration = googleOAuthConfigurationSecret.value();
+    const provider = `Google ${firebaseDB} OAuth client`;
+    const clientId = requiredAuthenticationConfigurationValue(
+        configuration,
+        "clientId",
+        provider
+    );
+    const clientSecret = requiredAuthenticationConfigurationValue(
+        configuration,
+        "clientSecret",
+        provider
+    );
+    const callbackURL = requiredAuthenticationConfigurationValue(
+        configuration,
+        "callbackURL",
+        provider
+    );
 
     return {
         clientId,

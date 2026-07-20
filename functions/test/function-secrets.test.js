@@ -14,10 +14,14 @@ const {
     cleanupDeletedUserFirestoreData
 } = require("../lib/user/delete");
 
+const apiSecretKeys = [
+    "GITHUB_OAUTH_CONFIG",
+    "GOOGLE_OAUTH_CONFIG"
+];
 const githubSecretKeys = ["GITHUB_OAUTH_CONFIG"];
 
-assert.deepStrictEqual(secretKeys(stagingApi), githubSecretKeys);
-assert.deepStrictEqual(secretKeys(prodApi), githubSecretKeys);
+assert.deepStrictEqual(secretKeys(stagingApi), apiSecretKeys);
+assert.deepStrictEqual(secretKeys(prodApi), apiSecretKeys);
 assert.deepStrictEqual(
     secretKeys(cleanupExpiredOAuthSessions("staging")),
     githubSecretKeys

@@ -28,7 +28,10 @@ import {
     githubConfiguration,
     githubOAuthConfigurationSecret
 } from "./githubConfiguration";
-import { googleConfiguration } from "./googleConfiguration";
+import {
+    googleConfiguration,
+    googleOAuthConfigurationSecret
+} from "./googleConfiguration";
 import {
     createGithubAccountLinkSession,
     createGithubSignInSession,
@@ -66,7 +69,10 @@ function restApiFor(firebaseDB: FirestoreDatabase) {
         cors: true,
         maxInstances: 3,
         region: LOCATION,
-        secrets: [githubOAuthConfigurationSecret]
+        secrets: [
+            githubOAuthConfigurationSecret,
+            googleOAuthConfigurationSecret
+        ]
     },
     async (request, response) => {
         try {

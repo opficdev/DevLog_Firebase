@@ -82,7 +82,9 @@ FIRESTORE_DBS
 
 GitHub OAuth 설정은 일반 환경 변수나 `.env`에 저장하지 않고 Firebase project별 Secret Manager의 `GITHUB_OAUTH_CONFIG` JSON Secret에서 관리합니다.
 
-JSON에는 `clientId`, `clientSecret`, `callbackURL` 필드를 모두 포함합니다.
+Google OAuth 설정은 일반 환경 변수나 `.env`에 저장하지 않고 Firebase project별 Secret Manager의 `GOOGLE_OAUTH_CONFIG` JSON Secret에서 관리합니다.
+
+각 JSON에는 `clientId`, `clientSecret`, `callbackURL` 필드를 모두 포함합니다.
 
 ## 로컬 빌드
 
