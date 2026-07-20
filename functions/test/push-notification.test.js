@@ -114,6 +114,13 @@ const { sendPushNotification } = require("../lib/fcm/notification");
         "같은 todo의 기존 notification 문서는 삭제되어야 합니다."
     );
     assert.strictEqual(sentMessages.length, 1);
+    assert.deepStrictEqual(
+        sentMessages[0].notification,
+        {
+            title: "DevLog",
+            body: "제목 없는 Todo의 마감일이 내일입니다."
+        }
+    );
 
     resetStores();
 
@@ -136,7 +143,8 @@ const { sendPushNotification } = require("../lib/fcm/notification");
     firestoreDocs.set(
         "users/user-1/userData/tokens",
         {
-            fcmToken: "fcm-token"
+            fcmToken: "fcm-token",
+            pushLanguageCode: "en"
         }
     );
 
@@ -144,9 +152,7 @@ const { sendPushNotification } = require("../lib/fcm/notification");
         data: {
             userId: "user-1",
             todoId: "todo-1",
-            dueDateKey: "2026-07-10",
-            title: "DevLog",
-            body: "Todo reminder"
+            dueDateKey: "2026-07-10"
         }
     });
 
@@ -166,6 +172,13 @@ const { sendPushNotification } = require("../lib/fcm/notification");
     assert.strictEqual(titledNotification.todoCategory, "work");
     assert.strictEqual(deletedDocs.length, 0);
     assert.strictEqual(sentMessages.length, 1);
+    assert.deepStrictEqual(
+        sentMessages[0].notification,
+        {
+            title: "DevLog",
+            body: "  테스트 작성   is due tomorrow."
+        }
+    );
 
     resetStores();
 
@@ -187,7 +200,8 @@ const { sendPushNotification } = require("../lib/fcm/notification");
     firestoreDocs.set(
         "users/user-1/userData/tokens",
         {
-            fcmToken: "fcm-token"
+            fcmToken: "fcm-token",
+            pushLanguageCode: "ja"
         }
     );
 
@@ -218,6 +232,55 @@ const { sendPushNotification } = require("../lib/fcm/notification");
     );
     assert.strictEqual(deletedDocs.length, 201);
     assert.strictEqual(sentMessages.length, 1);
+    assert.deepStrictEqual(
+        sentMessages[0].notification,
+        {
+            title: "DevLog",
+            body: "제목 없는 Todo의 마감일이 내일입니다."
+        }
+    );
+
+    resetStores();
+    setReminderDocuments("영어 공부", "ko");
+
+    await sendPushNotification.run({
+        data: {
+            firebaseDB: "prod",
+            userId: "user-1",
+            todoId: "todo-1",
+            dueDateKey: "2026-07-10"
+        }
+    });
+
+    assert.strictEqual(sentMessages.length, 1);
+    assert.deepStrictEqual(
+        sentMessages[0].notification,
+        {
+            title: "DevLog",
+            body: "'영어 공부'의 마감일이 내일입니다."
+        }
+    );
+
+    resetStores();
+    setReminderDocuments(undefined, "en");
+
+    await sendPushNotification.run({
+        data: {
+            firebaseDB: "prod",
+            userId: "user-1",
+            todoId: "todo-1",
+            dueDateKey: "2026-07-10"
+        }
+    });
+
+    assert.strictEqual(sentMessages.length, 1);
+    assert.deepStrictEqual(
+        sentMessages[0].notification,
+        {
+            title: "DevLog",
+            body: "An untitled Todo is due tomorrow."
+        }
+    );
 })().catch((error) => {
     console.error(error);
     process.exitCode = 1;
@@ -228,6 +291,32 @@ function resetStores() {
     writtenDocs.length = 0;
     deletedDocs.length = 0;
     sentMessages.length = 0;
+}
+
+function setReminderDocuments(title, pushLanguageCode) {
+    firestoreDocs.set(
+        "users/user-1/userData/settings",
+        {
+            allowPushNotification: true,
+            timeZone: "UTC"
+        }
+    );
+    firestoreDocs.set(
+        "users/user-1/todoLists/todo-1",
+        {
+            dueDate: new Date("2026-07-10T09:00:00.000Z"),
+            category: "work",
+            isCompleted: false,
+            ...(title === undefined ? {} : { title })
+        }
+    );
+    firestoreDocs.set(
+        "users/user-1/userData/tokens",
+        {
+            fcmToken: "fcm-token",
+            pushLanguageCode
+        }
+    );
 }
 
 function fakeFirestore() {

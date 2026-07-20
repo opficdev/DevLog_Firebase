@@ -24,11 +24,10 @@ type TaskPayload = {
     todoId: string;
     // 멱등성 확인에 사용할 예상 로컬 마감일 키를 저장합니다.
     dueDateKey: string;
-    // FCM으로 보낼 알림 제목을 저장합니다.
-    title: string;
-    // FCM으로 보낼 알림 본문을 저장합니다.
-    body: string;
 };
+
+// 시스템 푸시 본문 생성에 지원하는 앱 언어 코드를 나타냅니다.
+type PushLanguageCode = "ko" | "en";
 
 // 큐에 적재된 알림 payload 검증 및 실제 푸시 발송 수행
 export const sendPushNotification = onTaskDispatched({
@@ -47,13 +46,10 @@ export const sendPushNotification = onTaskDispatched({
         const prepared = await prepareNotification(parsed, req.data);
         if (!prepared) { return; }
 
-        const {
-            userId, todoId, dueDateKey,
-            title, body
-        } = parsed;
+        const { userId, todoId, dueDateKey } = parsed;
         const {
             db, dispatchDocRef, notificationDocRef,
-            dispatchId, todoCategory, notificationData
+            dispatchId, todoTitle, todoCategory, notificationData
         } = prepared;
 
         try {
@@ -79,6 +75,7 @@ export const sendPushNotification = onTaskDispatched({
             updatedAt: FieldValue.serverTimestamp()
         };
         let fcmToken: string | undefined;
+        let pushLanguageCode: PushLanguageCode = "ko";
         let unreadNotificationCount = 0;
 
         try {
@@ -96,7 +93,9 @@ export const sendPushNotification = onTaskDispatched({
                 tokenDocPromise,
                 unreadCountPromise
             ]);
-            fcmToken = tokenDoc.data()?.fcmToken;
+            const tokenData = tokenDoc.data();
+            fcmToken = tokenData?.fcmToken;
+            pushLanguageCode = tokenData?.pushLanguageCode === "en" ? "en" : "ko";
             unreadNotificationCount = unreadCountSnapshot.data().count;
 
             if (!fcmToken) {
@@ -114,8 +113,9 @@ export const sendPushNotification = onTaskDispatched({
 
         // 2. 푸시 알림 발송
         const collapseId = createHash("sha256").update(dispatchId).digest("hex");
+        const body = makeTodoDueTomorrowBody(pushLanguageCode, todoTitle);
         const message: Message = {
-            notification: { title, body },
+            notification: { title: "DevLog", body },
             data: {
                 todoId: todoId,
                 todoCategory: todoCategory
@@ -175,6 +175,7 @@ async function prepareNotification(
     const dispatchId = `${todoId}_${dueDateKey}`;
     const dispatchDocRef = db.doc(FirestorePath.notificationDispatch(userId, dispatchId));
     const notificationDocRef = db.doc(FirestorePath.notification(userId, todoId));
+    let todoTitle: string | undefined;
     let todoCategory = "";
     let notificationData: FirebaseFirestore.DocumentData | null = null;
 
@@ -194,7 +195,7 @@ async function prepareNotification(
         if (!todoDoc.exists || !todoData || todoData.isCompleted === true) { return null; }
         todoCategory = typeof todoData.category === "string" ? todoData.category.trim() : "";
         if (!todoCategory) { return null; }
-        const todoTitle = typeof todoData.title === "string" && todoData.title.trim() ?
+        todoTitle = typeof todoData.title === "string" && todoData.title.trim() ?
             todoData.title :
             undefined;
 
@@ -233,8 +234,24 @@ async function prepareNotification(
 
     return {
         db, dispatchDocRef, notificationDocRef,
-        dispatchId, todoCategory, notificationData
+        dispatchId, todoTitle, todoCategory, notificationData
     };
+}
+
+// 앱 언어 코드와 Todo 제목을 기준으로 마감 임박 푸시 본문을 생성합니다.
+function makeTodoDueTomorrowBody(
+    pushLanguageCode: PushLanguageCode,
+    todoTitle: string | undefined
+) {
+    if (pushLanguageCode === "en") {
+        return todoTitle ?
+            `${todoTitle} is due tomorrow.` :
+            "An untitled Todo is due tomorrow.";
+    }
+
+    return todoTitle ?
+        `'${todoTitle}'의 마감일이 내일입니다.` :
+        "제목 없는 Todo의 마감일이 내일입니다.";
 }
 
 // dispatch 문서를 트랜잭션으로 선점하고 이미 완료된 작업은 건너뜁니다.
@@ -413,17 +430,13 @@ function parseTaskPayload(data: FirebaseFirestore.DocumentData | undefined): Tas
     const {
         userId,
         todoId,
-        dueDateKey,
-        title,
-        body
+        dueDateKey
     } = data ?? {};
 
     if (
         typeof userId !== "string" ||
         typeof todoId !== "string" ||
-        typeof dueDateKey !== "string" ||
-        typeof title !== "string" ||
-        typeof body !== "string"
+        typeof dueDateKey !== "string"
     ) {
         return null;
     }
@@ -435,8 +448,6 @@ function parseTaskPayload(data: FirebaseFirestore.DocumentData | undefined): Tas
     return {
         userId,
         todoId,
-        dueDateKey,
-        title,
-        body
+        dueDateKey
     };
 }
