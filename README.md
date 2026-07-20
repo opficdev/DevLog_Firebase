@@ -73,20 +73,14 @@ flowchart LR
 새 환경을 구성할 때는 `functions/.env.example`의 key를 기준으로 `functions/.env`를 만듭니다.
 
 ```text
-APPLE_CLIENT_ID
-APPLE_KEY_ID
-APPLE_PRIVATE_KEY
-APPLE_TEAM_ID
 FIRESTORE_DBS
-GITHUB_STAGING_CLIENT_ID
-GITHUB_STAGING_CLIENT_SECRET
-GITHUB_STAGING_CALLBACK_URL
-GITHUB_PROD_CLIENT_ID
-GITHUB_PROD_CLIENT_SECRET
-GITHUB_PROD_CALLBACK_URL
 ```
 
-새 GitHub OAuth 흐름은 staging과 prod의 OAuth App을 분리하며, 각 환경의 `GITHUB_<ENV>_CLIENT_ID`, `GITHUB_<ENV>_CLIENT_SECRET`, `GITHUB_<ENV>_CALLBACK_URL`을 사용합니다.
+GitHub, Google, Apple 인증 설정은 일반 환경 변수나 `.env`에 저장하지 않고 Firebase project별 Secret Manager의 `GITHUB_OAUTH_CONFIG`, `GOOGLE_OAUTH_CONFIG`, `APPLE_AUTH_CONFIG` JSON Secret에서 각각 관리합니다.
+
+GitHub과 Google의 각 JSON에는 `clientId`, `clientSecret`, `callbackURL` 필드를 모두 포함합니다.
+
+Apple JSON에는 `teamId`, `clientId`, `keyId`, `privateKey` 필드를 모두 포함합니다.
 
 ## 로컬 빌드
 

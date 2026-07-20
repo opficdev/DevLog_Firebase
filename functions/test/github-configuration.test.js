@@ -4,44 +4,58 @@ const {
     githubRevocationConfiguration
 } = require("../lib/rest/githubConfiguration");
 
+const secretName = "GITHUB_OAUTH_CONFIG";
+const configuration = {
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    callbackURL: "https://example.com/callback"
+};
 const originalEnvironment = { ...process.env };
 try {
-    process.env.GITHUB_STAGING_CLIENT_ID = "staging-client-id";
-    process.env.GITHUB_STAGING_CLIENT_SECRET = "staging-client-secret";
-    process.env.GITHUB_STAGING_CALLBACK_URL = "https://example.com/staging/callback";
-    process.env.GITHUB_PROD_CLIENT_ID = "prod-client-id";
-    process.env.GITHUB_PROD_CLIENT_SECRET = "prod-client-secret";
-    process.env.GITHUB_PROD_CALLBACK_URL = "https://example.com/prod/callback";
+    process.env[secretName] = JSON.stringify(configuration);
 
-    assert.deepStrictEqual(githubConfiguration("staging"), {
-        clientId: "staging-client-id",
-        clientSecret: "staging-client-secret",
-        callbackURL: "https://example.com/staging/callback"
-    });
-    assert.deepStrictEqual(githubConfiguration("prod"), {
-        clientId: "prod-client-id",
-        clientSecret: "prod-client-secret",
-        callbackURL: "https://example.com/prod/callback"
-    });
+    assert.deepStrictEqual(githubConfiguration("staging"), configuration);
+    assert.deepStrictEqual(githubConfiguration("prod"), configuration);
     assert.strictEqual(
-        githubRevocationConfiguration("staging", "staging-client-id").clientSecret,
-        "staging-client-secret"
+        githubRevocationConfiguration("staging", "client-id").clientSecret,
+        "client-secret"
     );
     assert.throws(
         () => githubRevocationConfiguration("staging", "unknown-client-id"),
         /GitHub credential을 발급한 OAuth App 설정을 찾을 수 없습니다/
     );
 
-    delete process.env.GITHUB_STAGING_CLIENT_ID;
-    awaitRejectedConfiguration();
+    assertRejectedConfiguration(undefined, /No value found for secret parameter/);
+    assertRejectedConfiguration("{", /could not be parsed as JSON/);
+    assertRejectedConfiguration(JSON.stringify([]), /GitHub staging OAuth App 설정 형식/);
+    assertRejectedConfiguration(JSON.stringify({
+        clientId: "client-id",
+        clientSecret: "client-secret"
+    }), /callbackURL/);
+    assertRejectedConfiguration(JSON.stringify({
+        ...configuration,
+        clientId: " "
+    }), /clientId/);
+    assertRejectedConfiguration(JSON.stringify({
+        ...configuration,
+        clientSecret: 1
+    }), /clientSecret/);
 } finally {
     process.env = originalEnvironment;
 }
 
-// 환경별 OAuth App 설정이 없을 때 기존 공통 값으로 대체하지 않는지 검증합니다.
-function awaitRejectedConfiguration() {
+// 잘못된 JSON Secret 값이 GitHub OAuth App 설정으로 허용되지 않는지 검증합니다.
+function assertRejectedConfiguration(
+    value,
+    expectedMessage
+) {
+    if (value === undefined) {
+        delete process.env[secretName];
+    } else {
+        process.env[secretName] = value;
+    }
     assert.throws(
         () => githubConfiguration("staging"),
-        /GitHub staging OAuth App 설정이 누락되었습니다/
+        expectedMessage
     );
 }

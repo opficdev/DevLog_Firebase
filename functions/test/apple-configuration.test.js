@@ -1,39 +1,43 @@
 const assert = require("assert");
-const { googleConfiguration } = require("../lib/rest/googleConfiguration");
+const { appleConfiguration } = require("../lib/rest/apple/appleClient");
 
-const secretName = "GOOGLE_OAUTH_CONFIG";
+const secretName = "APPLE_AUTH_CONFIG";
 const configuration = {
+    teamId: "team-id",
     clientId: "client-id",
-    clientSecret: "client-secret",
-    callbackURL: "https://example.com/callback"
+    keyId: "key-id",
+    privateKey: "private\\nkey"
 };
 const originalEnvironment = { ...process.env };
 try {
     process.env[secretName] = JSON.stringify(configuration);
 
-    assert.deepStrictEqual(googleConfiguration("staging"), configuration);
-    assert.deepStrictEqual(googleConfiguration("prod"), configuration);
+    assert.deepStrictEqual(appleConfiguration(), {
+        ...configuration,
+        privateKey: "private\nkey"
+    });
 
     assertRejectedConfiguration(undefined, /No value found for secret parameter/);
     assertRejectedConfiguration("{", /could not be parsed as JSON/);
-    assertRejectedConfiguration(JSON.stringify([]), /Google staging OAuth client 설정 형식/);
+    assertRejectedConfiguration(JSON.stringify([]), /Apple 인증 설정 형식/);
     assertRejectedConfiguration(JSON.stringify({
+        teamId: "team-id",
         clientId: "client-id",
-        clientSecret: "client-secret"
-    }), /callbackURL/);
+        keyId: "key-id"
+    }), /privateKey/);
     assertRejectedConfiguration(JSON.stringify({
         ...configuration,
-        clientId: " "
-    }), /clientId/);
+        teamId: " "
+    }), /teamId/);
     assertRejectedConfiguration(JSON.stringify({
         ...configuration,
-        clientSecret: 1
-    }), /clientSecret/);
+        privateKey: 1
+    }), /privateKey/);
 } finally {
     process.env = originalEnvironment;
 }
 
-// 잘못된 JSON Secret 값이 Google OAuth client 설정으로 허용되지 않는지 검증합니다.
+// 잘못된 JSON Secret 값이 Apple 인증 설정으로 허용되지 않는지 검증합니다.
 function assertRejectedConfiguration(
     value,
     expectedMessage
@@ -44,7 +48,7 @@ function assertRejectedConfiguration(
         process.env[secretName] = value;
     }
     assert.throws(
-        () => googleConfiguration("staging"),
+        () => appleConfiguration(),
         expectedMessage
     );
 }

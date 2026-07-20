@@ -24,8 +24,15 @@ import {
     revokeAppleAccessTokenWithDatabase,
     unlinkAppleProviderWithDatabase
 } from "./apple/auth";
-import { githubConfiguration } from "./githubConfiguration";
-import { googleConfiguration } from "./googleConfiguration";
+import { appleAuthenticationConfigurationSecret } from "./apple/AppleConfiguration";
+import {
+    githubConfiguration,
+    githubOAuthConfigurationSecret
+} from "./githubConfiguration";
+import {
+    googleConfiguration,
+    googleOAuthConfigurationSecret
+} from "./googleConfiguration";
 import {
     createGithubAccountLinkSession,
     createGithubSignInSession,
@@ -63,6 +70,11 @@ function restApiFor(firebaseDB: FirestoreDatabase) {
         cors: true,
         maxInstances: 3,
         region: LOCATION,
+        secrets: [
+            appleAuthenticationConfigurationSecret,
+            githubOAuthConfigurationSecret,
+            googleOAuthConfigurationSecret
+        ]
     },
     async (request, response) => {
         try {

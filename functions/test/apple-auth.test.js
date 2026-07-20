@@ -196,7 +196,7 @@ const {
 } = require("../lib/rest/apple/auth");
 
 (async () => {
-    setAppleEnvironment();
+    setAppleAuthenticationConfiguration();
     assertChallengeTTLConfiguration();
     await assertChallengeCreation();
     await assertChallengeStateErrors();
@@ -1412,11 +1412,13 @@ async function assertUnlinkCompletesRemainingStepsOnRetry() {
     assert.strictEqual(revokeRequests.length, 1);
 }
 
-function setAppleEnvironment() {
-    process.env.APPLE_TEAM_ID = "apple-team-id";
-    process.env.APPLE_CLIENT_ID = "apple-client-id";
-    process.env.APPLE_KEY_ID = "apple-key-id";
-    process.env.APPLE_PRIVATE_KEY = "apple-private-key";
+function setAppleAuthenticationConfiguration() {
+    process.env.APPLE_AUTH_CONFIG = JSON.stringify({
+        teamId: "apple-team-id",
+        clientId: "apple-client-id",
+        keyId: "apple-key-id",
+        privateKey: "apple-private-key"
+    });
 }
 
 // 기능 테스트 간 공유 상태를 초기화합니다.

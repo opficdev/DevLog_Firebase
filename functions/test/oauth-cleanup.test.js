@@ -21,6 +21,7 @@ require.cache[require.resolve("../lib/rest/githubClient")] = {
 };
 require.cache[require.resolve("../lib/rest/githubConfiguration")] = {
     exports: {
+        githubOAuthConfigurationSecret: "GITHUB_OAUTH_CONFIG",
         githubRevocationConfiguration: (_, clientId) => ({
             clientId,
             clientSecret: `${clientId}-secret`,

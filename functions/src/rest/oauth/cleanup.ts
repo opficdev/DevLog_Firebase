@@ -3,7 +3,10 @@ import * as logger from "firebase-functions/logger";
 import type { FirestoreDatabase } from "../../common/firestore";
 import { toError } from "../../common/error";
 import { revokeGitHubOAuthToken } from "../githubClient";
-import { githubRevocationConfiguration } from "../githubConfiguration";
+import {
+    githubOAuthConfigurationSecret,
+    githubRevocationConfiguration
+} from "../githubConfiguration";
 
 const LOCATION = "asia-northeast3";
 
@@ -36,7 +39,8 @@ function expiredOAuthCleanupFunction(
         database: firebaseDB,
         document,
         region: LOCATION,
-        retry: true
+        retry: true,
+        secrets: [githubOAuthConfigurationSecret]
     },
     async (event) => {
         const data = event.data?.data();
