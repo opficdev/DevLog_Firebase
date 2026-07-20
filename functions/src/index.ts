@@ -39,18 +39,13 @@ import {
     cleanupSoftDeletedWebPages
 } from "./webPage/cleanup";
 
-import {
-    prodApi,
-    stagingApi
-} from "./rest/api";
+import { api } from "./rest/api";
 import {
     cleanupExpiredOAuthSessions,
     cleanupExpiredOAuthTickets
 } from "./rest/oauth/cleanup";
 
-// Cloud Functions REST base URLs:
-// staging: https://${region}-${projectId}.cloudfunctions.net/stagingApi/api
-// prod: https://${region}-${projectId}.cloudfunctions.net/prodApi/api
+// Cloud Functions REST base URL: https://${region}-${projectId}.cloudfunctions.net/api/api
 
 // .env 파일 로드
 dotenv.config({
@@ -91,6 +86,5 @@ export {
     completeMoveRemovedCategoryTodosToEtc,
     cleanupSoftDeletedNotifications,
     cleanupSoftDeletedWebPages,
-    prodApi,
-    stagingApi
+    api
 };

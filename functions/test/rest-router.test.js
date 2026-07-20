@@ -8,16 +8,6 @@ assert.deepStrictEqual(
     ["todos", "todo-1", "deletion-request"]
 );
 
-assert.deepStrictEqual(
-    parseRestRouteSegments(["stagingApi", "api", "todos", "todo-1", "deletion-request"]),
-    ["todos", "todo-1", "deletion-request"]
-);
-
-assert.deepStrictEqual(
-    parseRestRouteSegments(["prodApi", "api", "auth", "github", "tokens"]),
-    ["auth", "github", "tokens"]
-);
-
 assert.strictEqual(parseRestRouteSegments(["staging", "todos"]), undefined);
 
 assert.deepStrictEqual(

@@ -2,10 +2,7 @@ const assert = require("assert");
 
 process.env.GCLOUD_PROJECT = "devlog-test";
 
-const {
-    prodApi,
-    stagingApi
-} = require("../lib/rest/api");
+const { api } = require("../lib/rest/api");
 const {
     cleanupExpiredOAuthSessions,
     cleanupExpiredOAuthTickets
@@ -21,8 +18,7 @@ const apiSecretKeys = [
 ];
 const githubSecretKeys = ["GITHUB_OAUTH_CONFIG"];
 
-assert.deepStrictEqual(secretKeys(stagingApi), apiSecretKeys);
-assert.deepStrictEqual(secretKeys(prodApi), apiSecretKeys);
+assert.deepStrictEqual(secretKeys(api), apiSecretKeys);
 assert.deepStrictEqual(
     secretKeys(cleanupExpiredOAuthSessions("staging")),
     githubSecretKeys
