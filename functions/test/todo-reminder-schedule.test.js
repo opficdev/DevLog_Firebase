@@ -48,13 +48,18 @@ const { scheduleTodoReminder } = require("../lib/fcm/schedule");
         taskQueueName,
         "locations/asia-northeast3/functions/sendPushNotification"
     );
-    assert.deepStrictEqual(enqueuedTasks, [{
-        userId: "user-1",
-        todoId: "todo-1",
-        dueDateKey: "2026-07-10",
-        title: "DevLog",
-        body: "'마감 Todo'의 마감일이 내일입니다."
-    }]);
+    assert.deepStrictEqual(enqueuedTasks, [
+        {
+            userId: "user-1",
+            todoId: "todo-1",
+            dueDateKey: "2026-07-10"
+        },
+        {
+            userId: "user-1",
+            todoId: "todo-2",
+            dueDateKey: "2026-07-10"
+        }
+    ]);
 })().catch((error) => {
     console.error(error);
     process.exitCode = 1;
@@ -69,7 +74,10 @@ function fakeFirestore() {
         },
         collection(path) {
             assert.strictEqual(path, "users/user-1/todoLists");
-            return fakeQuery([reminderTodoDocument()]);
+            return fakeQuery([
+                reminderTodoDocument(),
+                untitledReminderTodoDocument()
+            ]);
         }
     };
 }
@@ -104,6 +112,18 @@ function reminderTodoDocument() {
         data() {
             return {
                 title: "마감 Todo"
+            };
+        }
+    };
+}
+
+// 제목 없는 다음 날 마감 Todo 문서를 반환합니다.
+function untitledReminderTodoDocument() {
+    return {
+        id: "todo-2",
+        data() {
+            return {
+                title: "   "
             };
         }
     };
