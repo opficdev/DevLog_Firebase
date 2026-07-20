@@ -15,6 +15,7 @@ const {
 } = require("../lib/user/delete");
 
 const apiSecretKeys = [
+    "APPLE_AUTH_CONFIG",
     "GITHUB_OAUTH_CONFIG",
     "GOOGLE_OAUTH_CONFIG"
 ];

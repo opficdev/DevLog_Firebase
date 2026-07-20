@@ -1,6 +1,8 @@
 import axios from "axios";
 import { HttpsError } from "firebase-functions/v2/https";
 import * as jwt from "jsonwebtoken";
+import { requiredAuthenticationConfigurationValue } from "../authenticationConfiguration";
+import { appleAuthenticationConfigurationSecret } from "./AppleConfiguration";
 import type { AppleConfiguration } from "./AppleConfiguration";
 import type { AppleTokenResponse } from "./AppleTokenResponse";
 import { appleAuthError } from "./error";
@@ -135,35 +137,36 @@ export async function revokeAppleGrant(
     }
 }
 
-// 필수 Apple OAuth 환경 설정을 검증해 반환합니다.
+// Firebase project에 대응하는 Apple 인증 설정을 반환합니다.
 export function appleConfiguration(): AppleConfiguration {
-    const teamId = process.env.APPLE_TEAM_ID;
-    const clientId = process.env.APPLE_CLIENT_ID;
-    const keyId = process.env.APPLE_KEY_ID;
-    const privateKey = (process.env.APPLE_PRIVATE_KEY || "").replace(/\\n/g, "\n");
-    const configs = {
-        APPLE_TEAM_ID: teamId,
-        APPLE_CLIENT_ID: clientId,
-        APPLE_KEY_ID: keyId,
-        APPLE_PRIVATE_KEY: privateKey
-    };
-    const missingKeys = Object.entries(configs)
-        .filter(([, value]) => !value)
-        .map(([key]) => key);
-
-    if (0 < missingKeys.length) {
-        console.error("Apple 설정이 누락되었습니다.", { missingKeys });
-        throw new HttpsError(
-            "internal",
-            `Apple 설정이 누락되었습니다: ${missingKeys.join(", ")}`
-        );
-    }
+    const configuration = appleAuthenticationConfigurationSecret.value();
+    const provider = "Apple 인증";
+    const teamId = requiredAuthenticationConfigurationValue(
+        configuration,
+        "teamId",
+        provider
+    );
+    const clientId = requiredAuthenticationConfigurationValue(
+        configuration,
+        "clientId",
+        provider
+    );
+    const keyId = requiredAuthenticationConfigurationValue(
+        configuration,
+        "keyId",
+        provider
+    );
+    const privateKey = requiredAuthenticationConfigurationValue(
+        configuration,
+        "privateKey",
+        provider
+    ).replace(/\\n/g, "\n");
 
     return {
-        teamId: teamId!,
-        clientId: clientId!,
-        keyId: keyId!,
-        privateKey: privateKey!
+        teamId,
+        clientId,
+        keyId,
+        privateKey
     };
 }
 

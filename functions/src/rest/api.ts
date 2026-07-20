@@ -24,6 +24,7 @@ import {
     revokeAppleAccessTokenWithDatabase,
     unlinkAppleProviderWithDatabase
 } from "./apple/auth";
+import { appleAuthenticationConfigurationSecret } from "./apple/AppleConfiguration";
 import {
     githubConfiguration,
     githubOAuthConfigurationSecret
@@ -70,6 +71,7 @@ function restApiFor(firebaseDB: FirestoreDatabase) {
         maxInstances: 3,
         region: LOCATION,
         secrets: [
+            appleAuthenticationConfigurationSecret,
             githubOAuthConfigurationSecret,
             googleOAuthConfigurationSecret
         ]
