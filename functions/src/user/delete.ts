@@ -7,6 +7,7 @@ import {
 import { firebaseDBs, firestoreFor } from "../common/firestore";
 import { FirestorePath } from "../common/firestorePath";
 import {
+    githubOAuthConfigurationSecret,
     githubRevocationConfiguration
 } from "../rest/githubConfiguration";
 import {
@@ -24,7 +25,8 @@ const DELETION_MARKER_LIFETIME_MILLISECONDS = 24 * 60 * 60 * 1000;
 export const cleanupDeletedUserFirestoreData = functions
     .runWith({
         maxInstances: 1,
-        failurePolicy: true
+        failurePolicy: true,
+        secrets: [githubOAuthConfigurationSecret]
     })
     .region("asia-northeast3")
     .auth

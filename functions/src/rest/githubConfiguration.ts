@@ -1,5 +1,7 @@
 import { HttpsError } from "firebase-functions/v2/https";
+import { defineJsonSecret } from "firebase-functions/params";
 import type { FirestoreDatabase } from "../common/firestore";
+import { requiredAuthenticationConfigurationValue } from "./authenticationConfiguration";
 
 // GitHub OAuth App 요청에 필요한 환경별 설정을 나타냅니다.
 export interface GitHubConfiguration {
@@ -11,21 +13,30 @@ export interface GitHubConfiguration {
     callbackURL: string;
 }
 
-// Firestore 데이터베이스에 대응하는 GitHub OAuth App 설정을 반환합니다.
+// GitHub OAuth App 설정 전체를 project별 JSON Secret에서 제공합니다.
+export const githubOAuthConfigurationSecret = defineJsonSecret<GitHubConfiguration>("GITHUB_OAUTH_CONFIG");
+
+// Firebase project에 대응하는 GitHub OAuth App 설정을 반환합니다.
 export function githubConfiguration(
     firebaseDB: FirestoreDatabase
 ): GitHubConfiguration {
-    const prefix = firebaseDB.toUpperCase().replace(/[^A-Z0-9]/g, "_");
-    const clientId = process.env[`GITHUB_${prefix}_CLIENT_ID`]?.trim();
-    const clientSecret = process.env[`GITHUB_${prefix}_CLIENT_SECRET`]?.trim();
-    const callbackURL = process.env[`GITHUB_${prefix}_CALLBACK_URL`]?.trim();
-
-    if (!clientId || !clientSecret || !callbackURL) {
-        throw new HttpsError(
-            "internal",
-            `GitHub ${firebaseDB} OAuth App 설정이 누락되었습니다.`
-        );
-    }
+    const configuration = githubOAuthConfigurationSecret.value();
+    const provider = `GitHub ${firebaseDB} OAuth App`;
+    const clientId = requiredAuthenticationConfigurationValue(
+        configuration,
+        "clientId",
+        provider
+    );
+    const clientSecret = requiredAuthenticationConfigurationValue(
+        configuration,
+        "clientSecret",
+        provider
+    );
+    const callbackURL = requiredAuthenticationConfigurationValue(
+        configuration,
+        "callbackURL",
+        provider
+    );
 
     return {
         clientId,

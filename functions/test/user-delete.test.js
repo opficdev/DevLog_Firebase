@@ -29,6 +29,7 @@ require.cache[require.resolve("../lib/common/firestore")] = {
 };
 require.cache[require.resolve("../lib/rest/githubConfiguration")] = {
     exports: {
+        githubOAuthConfigurationSecret: "GITHUB_OAUTH_CONFIG",
         githubRevocationConfiguration: (firebaseDB) => ({
             clientId: `${firebaseDB}-client-id`,
             clientSecret: `${firebaseDB}-client-secret`,

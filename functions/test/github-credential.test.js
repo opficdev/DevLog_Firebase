@@ -145,9 +145,7 @@ async function assertSameAppReplacementRevokesOnlyPreviousToken() {
         }
     });
     const originalEnvironment = { ...process.env };
-    process.env.GITHUB_STAGING_CLIENT_ID = "staging-client-id";
-    process.env.GITHUB_STAGING_CLIENT_SECRET = "staging-client-secret";
-    process.env.GITHUB_STAGING_CALLBACK_URL = "https://example.com/callback";
+    process.env.GITHUB_OAUTH_CONFIG = githubOAuthConfiguration();
     try {
         await saveGithubCredential(db, "user-1", {
             accessToken: "new-token",
@@ -184,9 +182,7 @@ async function assertReplacingCredentialRevokesTrackedPreviousGrants() {
         }
     });
     const originalEnvironment = { ...process.env };
-    process.env.GITHUB_STAGING_CLIENT_ID = "staging-client-id";
-    process.env.GITHUB_STAGING_CLIENT_SECRET = "staging-client-secret";
-    process.env.GITHUB_STAGING_CALLBACK_URL = "https://example.com/callback";
+    process.env.GITHUB_OAUTH_CONFIG = githubOAuthConfiguration();
     try {
         await saveGithubCredential(db, "user-1", {
             accessToken: "new-token",
@@ -216,6 +212,15 @@ async function assertCredentialStoresIssuingOAuthApp() {
     const credential = db.data.get("authCredentials/user-1/providers/github");
     assert.strictEqual(credential.accessToken, "new-token");
     assert.strictEqual(credential.clientId, "staging-client-id");
+}
+
+// GitHub OAuth App JSON Secret 테스트 값을 반환합니다.
+function githubOAuthConfiguration() {
+    return JSON.stringify({
+        clientId: "staging-client-id",
+        clientSecret: "staging-client-secret",
+        callbackURL: "https://example.com/callback"
+    });
 }
 
 // 새 credential이 있으면 기존 token 값으로 덮지 않고 기존 필드만 제거하는지 검증합니다.
