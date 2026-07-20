@@ -48,13 +48,27 @@ const { sendPushNotification } = require("../lib/fcm/notification");
         {
             dueDate: new Date("2026-07-10T09:00:00.000Z"),
             category: "work",
-            isCompleted: false
+            isCompleted: false,
+            title: " \n\t "
         }
     );
     firestoreDocs.set(
         "users/user-1/userData/tokens",
         {
             fcmToken: "fcm-token"
+        }
+    );
+    firestoreDocs.set(
+        "users/user-1/notifications/todo-1",
+        {
+            title: "기존 제목",
+            body: "기존 본문",
+            todoTitle: "기존 Todo 제목",
+            receivedAt: new Date("2026-07-09T09:00:00.000Z"),
+            isRead: true,
+            isDeleted: true,
+            todoId: "todo-1",
+            todoCategory: "personal"
         }
     );
     firestoreDocs.set(
@@ -85,7 +99,16 @@ const { sendPushNotification } = require("../lib/fcm/notification");
     );
 
     assert.ok(notificationWrite, "notification 문서는 todoId id를 사용해야 합니다.");
-    assert.strictEqual(notificationWrite.data.isRead, false);
+    const titlelessNotification = firestoreDocs.get("users/user-1/notifications/todo-1");
+
+    assert.strictEqual(titlelessNotification.title, undefined);
+    assert.strictEqual(titlelessNotification.body, undefined);
+    assert.strictEqual(titlelessNotification.todoTitle, undefined);
+    assert.ok(titlelessNotification.receivedAt);
+    assert.strictEqual(titlelessNotification.isRead, false);
+    assert.strictEqual(titlelessNotification.isDeleted, false);
+    assert.strictEqual(titlelessNotification.todoId, "todo-1");
+    assert.strictEqual(titlelessNotification.todoCategory, "work");
     assert.ok(
         deletedDocs.includes("users/user-1/notifications/todo-1_2026-07-09"),
         "같은 todo의 기존 notification 문서는 삭제되어야 합니다."
@@ -106,7 +129,8 @@ const { sendPushNotification } = require("../lib/fcm/notification");
         {
             dueDate: new Date("2026-07-10T09:00:00.000Z"),
             category: "work",
-            isCompleted: false
+            isCompleted: false,
+            title: "  테스트 작성  "
         }
     );
     firestoreDocs.set(
@@ -130,6 +154,16 @@ const { sendPushNotification } = require("../lib/fcm/notification");
         writtenDocs.some((item) => item.path === "users/user-1/notifications/todo-1"),
         "기존 문서가 없어도 notification 문서가 작성되어야 합니다."
     );
+    const titledNotification = firestoreDocs.get("users/user-1/notifications/todo-1");
+
+    assert.strictEqual(titledNotification.title, undefined);
+    assert.strictEqual(titledNotification.body, undefined);
+    assert.strictEqual(titledNotification.todoTitle, "  테스트 작성  ");
+    assert.ok(titledNotification.receivedAt);
+    assert.strictEqual(titledNotification.isRead, false);
+    assert.strictEqual(titledNotification.isDeleted, false);
+    assert.strictEqual(titledNotification.todoId, "todo-1");
+    assert.strictEqual(titledNotification.todoCategory, "work");
     assert.strictEqual(deletedDocs.length, 0);
     assert.strictEqual(sentMessages.length, 1);
 
@@ -221,10 +255,7 @@ function fakeDocumentReference(path) {
         },
         async set(data) {
             writtenDocs.push({ path, data });
-            firestoreDocs.set(path, {
-                ...(firestoreDocs.get(path) ?? {}),
-                ...data
-            });
+            applyDocumentWrite(path, data);
         },
         async delete() {
             deletedDocs.push(path);
@@ -320,10 +351,7 @@ function fakeTransaction() {
         },
         set(documentRef, data) {
             writtenDocs.push({ path: documentRef.path, data });
-            firestoreDocs.set(documentRef.path, {
-                ...(firestoreDocs.get(documentRef.path) ?? {}),
-                ...data
-            });
+            applyDocumentWrite(documentRef.path, data);
         }
     };
 }
@@ -352,10 +380,7 @@ function fakeBatch() {
                         path: update.path,
                         data: update.data
                     });
-                    firestoreDocs.set(update.path, {
-                        ...(firestoreDocs.get(update.path) ?? {}),
-                        ...update.data
-                    });
+                    applyDocumentWrite(update.path, update.data);
                 } else {
                     deletedDocs.push(update.path);
                     firestoreDocs.delete(update.path);
@@ -363,4 +388,19 @@ function fakeBatch() {
             });
         }
     };
+}
+
+function applyDocumentWrite(path, data) {
+    const document = {
+        ...(firestoreDocs.get(path) ?? {})
+    };
+
+    Object.entries(data).forEach(([field, value]) => {
+        if (value?.constructor?.name === "DeleteTransform") {
+            delete document[field];
+        } else {
+            document[field] = value;
+        }
+    });
+    firestoreDocs.set(path, document);
 }

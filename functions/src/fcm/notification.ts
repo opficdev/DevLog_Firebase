@@ -170,7 +170,7 @@ async function prepareNotification(
     parsed: TaskPayload,
     payload: FirebaseFirestore.DocumentData | undefined
 ) {
-    const { userId, todoId, dueDateKey, body } = parsed;
+    const { userId, todoId, dueDateKey } = parsed;
     const db = getFirestore();
     const dispatchId = `${todoId}_${dueDateKey}`;
     const dispatchDocRef = db.doc(FirestorePath.notificationDispatch(userId, dispatchId));
@@ -194,6 +194,9 @@ async function prepareNotification(
         if (!todoDoc.exists || !todoData || todoData.isCompleted === true) { return null; }
         todoCategory = typeof todoData.category === "string" ? todoData.category.trim() : "";
         if (!todoCategory) { return null; }
+        const todoTitle = typeof todoData.title === "string" && todoData.title.trim() ?
+            todoData.title :
+            undefined;
 
         const timeZone = resolveTimeZone(settingsData);
 
@@ -202,8 +205,9 @@ async function prepareNotification(
         if (formatDateKey(currentDueDate, timeZone) !== dueDateKey) { return null; }
 
         notificationData = {
-            title: "Todo 알림",
-            body,
+            title: FieldValue.delete(),
+            body: FieldValue.delete(),
+            todoTitle: todoTitle ?? FieldValue.delete(),
             receivedAt: FieldValue.serverTimestamp(),
             isRead: false,
             isDeleted: false,
