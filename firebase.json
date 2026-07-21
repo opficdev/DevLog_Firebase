@@ -22,7 +22,7 @@
   },
   "hosting": [
     {
-      "site": "devlog-auth-staging",
+      "site": "devlog-staging",
       "public": "hosting/staging",
       "ignore": [
         "firebase.json",
