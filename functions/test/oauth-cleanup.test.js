@@ -50,7 +50,7 @@ const {
 // 만료된 미소비 ticket이 저장한 GitHub token을 폐기하는지 검증합니다.
 async function assertExpiredTicketRevokesStoredToken() {
     resetState();
-    const cleanup = cleanupExpiredOAuthTickets("staging");
+    const cleanup = cleanupExpiredOAuthTickets;
     const wrapped = functionsTest.wrap(cleanup);
 
     await wrapped({
@@ -75,7 +75,7 @@ async function assertExpiredTicketRevokesStoredToken() {
 // callback 보상 실패를 저장한 session이 TTL 삭제 시 token을 폐기하는지 검증합니다.
 async function assertExpiredSessionRevokesCompensationToken() {
     resetState();
-    const cleanup = cleanupExpiredOAuthSessions("prod");
+    const cleanup = cleanupExpiredOAuthSessions;
     const wrapped = functionsTest.wrap(cleanup);
 
     await wrapped({
@@ -100,7 +100,7 @@ async function assertExpiredSessionRevokesCompensationToken() {
 // 만료된 Google ticket은 비밀값만 TTL 삭제하고 project grant를 자동 폐기하지 않는지 검증합니다.
 async function assertExpiredGoogleTicketDoesNotRevokeProjectGrant() {
     resetState();
-    const cleanup = cleanupExpiredOAuthTickets("staging");
+    const cleanup = cleanupExpiredOAuthTickets;
     const wrapped = functionsTest.wrap(cleanup);
 
     await wrapped({
@@ -122,11 +122,11 @@ async function assertExpiredGoogleTicketDoesNotRevokeProjectGrant() {
 async function assertCleanupFailureIsRetried() {
     resetState();
     revokeError = new Error("revoke failed");
-    const cleanup = cleanupExpiredOAuthTickets("staging");
+    const cleanup = cleanupExpiredOAuthTickets;
     const wrapped = functionsTest.wrap(cleanup);
 
     assert.strictEqual(cleanup.__endpoint.eventTrigger.retry, true);
-    assert.strictEqual(cleanup.__endpoint.eventTrigger.eventFilters.database, "staging");
+    assert.strictEqual(cleanup.__endpoint.eventTrigger.eventFilters.database, "(default)");
     await assert.rejects(
         () => wrapped({
             data: {

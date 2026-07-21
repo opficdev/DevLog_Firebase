@@ -1,7 +1,6 @@
 import * as admin from "firebase-admin";
 import * as dotenv from "dotenv";
 import * as path from "path";
-import { firebaseDBs } from "./common/firestore";
 
 import {
     cleanupDeletedUserFirestoreData
@@ -56,19 +55,6 @@ dotenv.config({
 // Firebase 앱 초기화
 admin.initializeApp();
 
-// 이름 지정 데이터베이스별 Firestore trigger export 묶음을 저장합니다.
-const firestoreDatabaseFunctionGroups: Record<string, unknown> = {};
-for (const firebaseDB of firebaseDBs()) {
-    firestoreDatabaseFunctionGroups[firebaseDB] = {
-        removeTodoNotificationDocuments: removeTodoNotificationDocuments(firebaseDB),
-        removeCompletedTodoNotificationRecords: removeCompletedTodoNotificationRecords(firebaseDB),
-        cleanupExpiredOAuthSessions: cleanupExpiredOAuthSessions(firebaseDB),
-        cleanupExpiredOAuthTickets: cleanupExpiredOAuthTickets(firebaseDB),
-        syncTodoNotificationCategory: syncTodoNotificationCategory(firebaseDB)
-    };
-}
-Object.assign(exports, firestoreDatabaseFunctionGroups);
-
 export {
     cleanupDeletedUserFirestoreData
 };
@@ -81,10 +67,15 @@ export {
 
 export {
     cleanupNotificationDispatches,
+    cleanupExpiredOAuthSessions,
+    cleanupExpiredOAuthTickets,
     compactSoftDeletedTodos,
     completeMoveRemovedCategoryTodosToEtc,
     requestMoveRemovedCategoryTodosToEtc,
+    removeCompletedTodoNotificationRecords,
+    removeTodoNotificationDocuments,
     cleanupSoftDeletedNotifications,
     cleanupSoftDeletedWebPages,
+    syncTodoNotificationCategory,
     api
 };
