@@ -64,8 +64,7 @@ for (const firebaseDB of firebaseDBs()) {
         removeCompletedTodoNotificationRecords: removeCompletedTodoNotificationRecords(firebaseDB),
         cleanupExpiredOAuthSessions: cleanupExpiredOAuthSessions(firebaseDB),
         cleanupExpiredOAuthTickets: cleanupExpiredOAuthTickets(firebaseDB),
-        syncTodoNotificationCategory: syncTodoNotificationCategory(firebaseDB),
-        requestMoveRemovedCategoryTodosToEtc: requestMoveRemovedCategoryTodosToEtc(firebaseDB)
+        syncTodoNotificationCategory: syncTodoNotificationCategory(firebaseDB)
     };
 }
 Object.assign(exports, firestoreDatabaseFunctionGroups);
@@ -84,6 +83,7 @@ export {
     cleanupNotificationDispatches,
     compactSoftDeletedTodos,
     completeMoveRemovedCategoryTodosToEtc,
+    requestMoveRemovedCategoryTodosToEtc,
     cleanupSoftDeletedNotifications,
     cleanupSoftDeletedWebPages,
     api
