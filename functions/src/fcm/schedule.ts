@@ -36,7 +36,7 @@ export const scheduleTodoReminder = onSchedule({
     }
 );
 
-// 현재 Firebase project의 기본 데이터베이스를 순회하며 마감 Todo 푸시 알림 작업을 적재합니다.
+// 현재 Firebase project의 기본 데이터베이스에서 마감 Todo 푸시 알림 작업을 적재합니다.
 async function enqueueTodoReminderTasks(now: Date): Promise<void> {
     const db = getFirestore();
     const queue = getFunctions().taskQueue(`locations/${LOCATION}/functions/sendPushNotification`);

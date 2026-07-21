@@ -2,9 +2,16 @@ const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
 
+const firebaseConfigurationPath = path.resolve(__dirname, "../../firebase.json");
+const firebaseConfiguration = JSON.parse(fs.readFileSync(firebaseConfigurationPath, "utf8"));
 const rulesPath = path.resolve(__dirname, "../../firestore.rules");
 const rules = fs.readFileSync(rulesPath, "utf8");
 
+assert.deepStrictEqual(firebaseConfiguration.firestore, {
+    database: "(default)",
+    indexes: "firestore.index.json",
+    rules: "firestore.rules"
+});
 assert.ok(rules.includes("function userDataWriteAllowed(userId)"));
 assert.ok(rules.includes("documents/authCredentials/$(userId)"));
 assert.ok(rules.includes("data.deletionStartedAt == null"));

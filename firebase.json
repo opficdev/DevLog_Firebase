@@ -15,18 +15,11 @@
       ]
     }
   ],
-  "firestore": [
-    {
-      "database": "staging",
-      "indexes": "firestore.index.json",
-      "rules": "firestore.rules"
-    },
-    {
-      "database": "prod",
-      "indexes": "firestore.index.json",
-      "rules": "firestore.rules"
-    }
-  ],
+  "firestore": {
+    "database": "(default)",
+    "indexes": "firestore.index.json",
+    "rules": "firestore.rules"
+  },
   "hosting": [
     {
       "site": "devlog-auth-staging",

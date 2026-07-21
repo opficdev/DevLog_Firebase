@@ -1,6 +1,4 @@
 import * as admin from "firebase-admin";
-import * as dotenv from "dotenv";
-import * as path from "path";
 
 import {
     cleanupDeletedUserFirestoreData
@@ -45,12 +43,6 @@ import {
 } from "./rest/oauth/cleanup";
 
 // Cloud Functions REST base URL: https://${region}-${projectId}.cloudfunctions.net/api/api
-
-// .env 파일 로드
-dotenv.config({
-    path: path.resolve(__dirname, "../.env"),
-    override: true
-});
 
 // Firebase 앱 초기화
 admin.initializeApp();

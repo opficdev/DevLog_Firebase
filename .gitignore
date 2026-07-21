@@ -3,6 +3,7 @@
 
 # Environment
 *.env
+.env.*
 !.env.example
 !functions/.env.example
 
