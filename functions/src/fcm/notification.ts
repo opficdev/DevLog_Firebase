@@ -4,17 +4,13 @@ import * as admin from "firebase-admin";
 import {
     FieldPath,
     FieldValue,
+    getFirestore,
     Timestamp
 } from "firebase-admin/firestore";
 import type { Message } from "firebase-admin/messaging";
 import * as logger from "firebase-functions/logger";
 import { formatDateKey, toDate } from "../common/date";
 import { toError } from "../common/error";
-import {
-    FirestoreDatabase,
-    firestoreFor,
-    isFirebaseDB
-} from "../common/firestore";
 import { FirestorePath } from "../common/firestorePath";
 import { resolveTimeZone } from "./shared";
 
@@ -22,8 +18,6 @@ const processingDurationMilliseconds = 30 * 1000;
 
 // 푸시 알림 작업 하나를 검증하고 발송하는 데 필요한 데이터를 저장합니다.
 type TaskPayload = {
-    // 작업 데이터가 속한 Firestore 데이터베이스를 저장합니다.
-    firebaseDB: FirestoreDatabase;
     // Todo와 알림 기록의 소유자를 저장합니다.
     userId: string;
     // 마감일 검증에 사용할 Todo 문서 ID를 저장합니다.
@@ -176,8 +170,8 @@ async function prepareNotification(
     parsed: TaskPayload,
     payload: FirebaseFirestore.DocumentData | undefined
 ) {
-    const { firebaseDB, userId, todoId, dueDateKey, body } = parsed;
-    const db = firestoreFor(firebaseDB);
+    const { userId, todoId, dueDateKey, body } = parsed;
+    const db = getFirestore();
     const dispatchId = `${todoId}_${dueDateKey}`;
     const dispatchDocRef = db.doc(FirestorePath.notificationDispatch(userId, dispatchId));
     const notificationDocRef = db.doc(FirestorePath.notification(userId, todoId));
@@ -413,7 +407,6 @@ async function expireProcessing(
 // 큐 payload의 발송 필수 필드 충족 여부 검증
 function parseTaskPayload(data: FirebaseFirestore.DocumentData | undefined): TaskPayload | null {
     const {
-        firebaseDB,
         userId,
         todoId,
         dueDateKey,
@@ -422,7 +415,6 @@ function parseTaskPayload(data: FirebaseFirestore.DocumentData | undefined): Tas
     } = data ?? {};
 
     if (
-        !isFirebaseDB(firebaseDB) ||
         typeof userId !== "string" ||
         typeof todoId !== "string" ||
         typeof dueDateKey !== "string" ||
@@ -437,7 +429,6 @@ function parseTaskPayload(data: FirebaseFirestore.DocumentData | undefined): Tas
     }
 
     return {
-        firebaseDB: firebaseDB.trim(),
         userId,
         todoId,
         dueDateKey,

@@ -15,18 +15,11 @@
       ]
     }
   ],
-  "firestore": [
-    {
-      "database": "staging",
-      "indexes": "firestore.index.json",
-      "rules": "firestore.rules"
-    },
-    {
-      "database": "prod",
-      "indexes": "firestore.index.json",
-      "rules": "firestore.rules"
-    }
-  ],
+  "firestore": {
+    "database": "(default)",
+    "indexes": "firestore.index.json",
+    "rules": "firestore.rules"
+  },
   "hosting": [
     {
       "site": "devlog-auth-staging",
@@ -40,14 +33,14 @@
         {
           "source": "/api/auth/github/callback",
           "function": {
-            "functionId": "stagingApi",
+            "functionId": "api",
             "region": "asia-northeast3"
           }
         },
         {
           "source": "/api/auth/google/callback",
           "function": {
-            "functionId": "stagingApi",
+            "functionId": "api",
             "region": "asia-northeast3"
           }
         }
@@ -65,14 +58,14 @@
         {
           "source": "/api/auth/github/callback",
           "function": {
-            "functionId": "prodApi",
+            "functionId": "api",
             "region": "asia-northeast3"
           }
         },
         {
           "source": "/api/auth/google/callback",
           "function": {
-            "functionId": "prodApi",
+            "functionId": "api",
             "region": "asia-northeast3"
           }
         }

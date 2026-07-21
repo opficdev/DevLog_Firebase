@@ -1,14 +1,12 @@
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { getFunctions } from "firebase-admin/functions";
-import { Timestamp } from "firebase-admin/firestore";
+import {
+    getFirestore,
+    Timestamp
+} from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 import { addDays, getZonedParts, zonedDateTimeToUTC } from "../common/date";
 import { toError } from "../common/error";
-import {
-    FirestoreDatabase,
-    firebaseDBs,
-    firestoreFor
-} from "../common/firestore";
 import { FirestorePath } from "../common/firestorePath";
 import { resolveTimeZone } from "./shared";
 
@@ -27,14 +25,10 @@ export const scheduleTodoReminder = onSchedule({
     async (event) => {
         try {
             const now = event.scheduleTime ? new Date(event.scheduleTime) : new Date();
-            for (const firebaseDB of firebaseDBs()) {
-                try {
-                    await enqueueTodoReminderTasks(firebaseDB, now);
-                } catch (error) {
-                    logger.error("알림 스케줄 작업 적재 실패", toError(error), {
-                        firebaseDB
-                    });
-                }
+            try {
+                await enqueueTodoReminderTasks(now);
+            } catch (error) {
+                logger.error("알림 스케줄 작업 적재 실패", toError(error));
             }
         } catch (error) {
             logger.error("알림 스케줄 배치 실행 중 오류 발생", toError(error));
@@ -42,12 +36,9 @@ export const scheduleTodoReminder = onSchedule({
     }
 );
 
-// 하나의 이름 지정 데이터베이스를 순회하며 마감 Todo 푸시 알림 작업을 적재합니다.
-async function enqueueTodoReminderTasks(
-    firebaseDB: FirestoreDatabase,
-    now: Date
-): Promise<void> {
-    const db = firestoreFor(firebaseDB);
+// 현재 Firebase project의 기본 데이터베이스에서 마감 Todo 푸시 알림 작업을 적재합니다.
+async function enqueueTodoReminderTasks(now: Date): Promise<void> {
+    const db = getFirestore();
     const queue = getFunctions().taskQueue(`locations/${LOCATION}/functions/sendPushNotification`);
     let settingsSnapshot: FirebaseFirestore.QuerySnapshot<FirebaseFirestore.DocumentData>;
     try {
@@ -57,7 +48,6 @@ async function enqueueTodoReminderTasks(
             .get();
     } catch (error) {
         logger.error("settings 후보 조회 실패", toError(error), {
-            firebaseDB,
             at: "collectionGroup(userData).where(allowPushNotification==true)"
         });
         return;
@@ -112,7 +102,6 @@ async function enqueueTodoReminderTasks(
                 .get();
         } catch (error) {
             logger.error("todoLists 조회 실패", toError(error), {
-                firebaseDB,
                 userId,
                 at: "todoLists.where(dueDate>=start).where(dueDate<end)",
                 startUTC: startUTC.toISOString(),
@@ -129,7 +118,6 @@ async function enqueueTodoReminderTasks(
                 "제목 없음";
 
             const notificationPayload = {
-                firebaseDB,
                 userId,
                 todoId: todoDoc.id,
                 dueDateKey,
@@ -141,7 +129,6 @@ async function enqueueTodoReminderTasks(
                 await queue.enqueue(notificationPayload);
             } catch (error) {
                 logger.error("Cloud Tasks enqueue 실패", toError(error), {
-                    firebaseDB,
                     userId,
                     todoId: todoDoc.id,
                     dueDateKey

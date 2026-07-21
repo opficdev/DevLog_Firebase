@@ -97,7 +97,7 @@ await saveNotification(
 
 - Treat `functions` as the Cloud Functions source root.
 - Keep `firebase.json` source paths aligned with the repository root layout.
-- Keep `.env` as a local-only file and commit `functions/.env.example` instead.
+- Keep general environment variable files such as `functions/.env` and `functions/.env.<project or alias>` local-only.
 - Do not commit generated dependency or build output directories such as `node_modules/` and `functions/lib/`.
 - Deploy updated functions one by one separately.
 

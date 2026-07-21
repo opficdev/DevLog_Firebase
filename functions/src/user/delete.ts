@@ -2,9 +2,9 @@ import * as functions from "firebase-functions/v1";
 import * as logger from "firebase-functions/logger";
 import {
     FieldValue,
+    getFirestore,
     Timestamp
 } from "firebase-admin/firestore";
-import { firebaseDBs, firestoreFor } from "../common/firestore";
 import { FirestorePath } from "../common/firestorePath";
 import {
     githubOAuthConfigurationSecret,
@@ -34,56 +34,49 @@ export const cleanupDeletedUserFirestoreData = functions
     .onDelete(async (user) => {
         const uid = user.uid;
         const errors: unknown[] = [];
+        const db = getFirestore();
 
-        for (const firebaseDB of firebaseDBs()) {
-            const db = firestoreFor(firebaseDB);
-            try {
-                await markAuthCredentialDeletion(db, uid);
-            } catch (error) {
-                logger.error("Auth 사용자 삭제 표식 기록 실패", {
-                    firebaseDB,
-                    uid,
-                    error
-                });
-                errors.push(error);
-                continue;
-            }
+        try {
+            await markAuthCredentialDeletion(db, uid);
+        } catch (error) {
+            logger.error("Auth 사용자 삭제 표식 기록 실패", {
+                uid,
+                error
+            });
+            errors.push(error);
+        }
 
+        if (errors.length === 0) {
             const providerErrors = await revokeProviderCredentials(
                 db,
-                firebaseDB,
                 uid
             );
             errors.push(...providerErrors);
-            if (providerErrors.length !== 0) {
-                continue;
-            }
 
-            await deleteCredentialProviders(
-                db,
-                firebaseDB,
-                uid,
-                errors
-            );
-            await deleteRoot(
-                db,
-                firebaseDB,
-                uid,
-                FirestorePath.user(uid),
-                errors
-            );
+            if (providerErrors.length === 0) {
+                await deleteCredentialProviders(
+                    db,
+                    uid,
+                    errors
+                );
+                await deleteRoot(
+                    db,
+                    uid,
+                    FirestorePath.user(uid),
+                    errors
+                );
+            }
         }
 
         if (errors.length !== 0) {
-            throw new Error("일부 Firestore 데이터베이스에서 사용자 데이터 삭제에 실패했습니다.");
+            throw new Error("사용자 Firestore 데이터 삭제에 실패했습니다.");
         }
     }
 );
 
-// 지정한 database의 provider credential을 각각 폐기하고 발생한 오류를 반환합니다.
+// 현재 Firebase project의 provider credential을 각각 폐기하고 발생한 오류를 반환합니다.
 async function revokeProviderCredentials(
     db: FirebaseFirestore.Firestore,
-    firebaseDB: string,
     uid: string
 ): Promise<unknown[]> {
     const errors: unknown[] = [];
@@ -95,22 +88,17 @@ async function revokeProviderCredentials(
         if (credential) {
             await revokePendingGithubCredentials(
                 db,
-                uid,
-                firebaseDB
+                uid
             );
             await revokeGithubCredential(
                 db,
                 uid,
-                githubRevocationConfiguration(
-                    firebaseDB,
-                    credential.clientId
-                ),
+                githubRevocationConfiguration(credential.clientId),
                 credential
             );
         }
     } catch (error) {
         logger.error("Auth 사용자 삭제 후 GitHub credential 정리 실패", {
-            firebaseDB,
             uid,
             error
         });
@@ -131,7 +119,6 @@ async function revokeProviderCredentials(
         }
     } catch (error) {
         logger.error("Auth 사용자 삭제 후 Google credential 정리 실패", {
-            firebaseDB,
             uid,
             error
         });
@@ -156,7 +143,6 @@ async function markAuthCredentialDeletion(
 // 삭제 표식은 유지하고 사용자의 모든 provider credential 문서를 제거합니다.
 async function deleteCredentialProviders(
     db: FirebaseFirestore.Firestore,
-    firebaseDB: string,
     uid: string,
     errors: unknown[]
 ): Promise<void> {
@@ -164,13 +150,11 @@ async function deleteCredentialProviders(
     try {
         await db.recursiveDelete(db.collection(path));
         logger.info("Auth 사용자 삭제 후 provider credential 삭제 완료", {
-            firebaseDB,
             uid,
             path
         });
     } catch (error) {
         logger.error("Auth 사용자 삭제 후 provider credential 삭제 실패", {
-            firebaseDB,
             uid,
             path,
             error
@@ -179,10 +163,9 @@ async function deleteCredentialProviders(
     }
 }
 
-// 지정한 사용자 Firestore 루트를 삭제하고 실패를 다음 재호출에 전달합니다.
+// 현재 Firebase project의 사용자 Firestore 루트를 삭제하고 실패를 다음 재호출에 전달합니다.
 async function deleteRoot(
     db: FirebaseFirestore.Firestore,
-    firebaseDB: string,
     uid: string,
     path: string,
     errors: unknown[]
@@ -190,13 +173,11 @@ async function deleteRoot(
     try {
         await db.recursiveDelete(db.doc(path));
         logger.info("Auth 사용자 삭제 후 Firestore 데이터 삭제 완료", {
-            firebaseDB,
             uid,
             path
         });
     } catch (error) {
         logger.error("Auth 사용자 삭제 후 Firestore 데이터 삭제 실패", {
-            firebaseDB,
             uid,
             path,
             error

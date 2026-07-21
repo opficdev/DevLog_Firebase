@@ -23,11 +23,11 @@ require.cache[require.resolve("firebase-admin")] = {
     }
 };
 
-require.cache[require.resolve("../lib/common/firestore")] = {
+const firestore = require("firebase-admin/firestore");
+require.cache[require.resolve("firebase-admin/firestore")] = {
     exports: {
-        firebaseDBs: () => ["prod"],
-        firestoreFor: () => fakeFirestore(),
-        isFirebaseDB: (value) => value === "prod"
+        ...firestore,
+        getFirestore: () => fakeFirestore()
     }
 };
 
@@ -68,7 +68,6 @@ const { sendPushNotification } = require("../lib/fcm/notification");
 
     await sendPushNotification.run({
         data: {
-            firebaseDB: "prod",
             userId: "user-1",
             todoId: "todo-1",
             dueDateKey: "2026-07-10",
@@ -119,7 +118,6 @@ const { sendPushNotification } = require("../lib/fcm/notification");
 
     await sendPushNotification.run({
         data: {
-            firebaseDB: "prod",
             userId: "user-1",
             todoId: "todo-1",
             dueDateKey: "2026-07-10",
@@ -172,7 +170,6 @@ const { sendPushNotification } = require("../lib/fcm/notification");
 
     await sendPushNotification.run({
         data: {
-            firebaseDB: "prod",
             userId: "user-1",
             todoId: "todo-1",
             dueDateKey: "2026-07-10",

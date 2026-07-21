@@ -2,15 +2,11 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import {
     FieldPath,
     FieldValue,
+    getFirestore,
     Timestamp
 } from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 import { toError } from "../common/error";
-import {
-    FirestoreDatabase,
-    firebaseDBs,
-    firestoreFor
-} from "../common/firestore";
 
 const LOCATION = "asia-northeast3";
 const CLEANUP_BATCH_SIZE = 200;
@@ -27,23 +23,7 @@ export const compactSoftDeletedTodos = onSchedule({
         const cutoff = new Date(Date.now() - (TOMBSTONE_GRACE_PERIOD_HOURS * 60 * 60 * 1000));
 
         try {
-            for (const firebaseDB of firebaseDBs()) {
-                try {
-                    await compactSoftDeletedTodosIn(firebaseDB, cutoff);
-                } catch (error) {
-                    logger.error(
-                        "soft deleted todo 축약 문서 압축 실패",
-                        toError(error),
-                        {
-                            firebaseDB,
-                            collectionGroup: "todoLists",
-                            filter: `deletedAt <= now - ${TOMBSTONE_GRACE_PERIOD_HOURS}h`,
-                            orderBy: ["deletedAt", "documentId"],
-                            cleanupBatchSize: CLEANUP_BATCH_SIZE
-                        }
-                    );
-                }
-            }
+            await compactSoftDeletedTodosIn(cutoff);
         } catch (error) {
             logger.error(
                 "soft deleted todo 축약 문서 압축 실패",
@@ -59,12 +39,9 @@ export const compactSoftDeletedTodos = onSchedule({
     }
 );
 
-// 하나의 Firestore 데이터베이스에서 삭제 유예 기간이 지난 Todo를 압축합니다.
-async function compactSoftDeletedTodosIn(
-    firebaseDB: FirestoreDatabase,
-    cutoff: Date
-): Promise<void> {
-    const db = firestoreFor(firebaseDB);
+// 현재 Firebase project의 기본 Firestore에서 삭제 유예 기간이 지난 Todo를 압축합니다.
+async function compactSoftDeletedTodosIn(cutoff: Date): Promise<void> {
+    const db = getFirestore();
     let lastDocument:
         FirebaseFirestore.QueryDocumentSnapshot<FirebaseFirestore.DocumentData> | undefined;
 

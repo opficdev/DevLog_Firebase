@@ -212,7 +212,6 @@ async function assertSignInSessionKeepsPKCEVerifierOnServer() {
 
     const result = await requestGithubCustomToken(
         db,
-        "staging",
         ticket,
         appVerifier
     );
@@ -249,7 +248,6 @@ async function assertLinkTicketKeepsFirebaseUIDBinding() {
 
     await linkGithubAccount(
         db,
-        "staging",
         "current-uid",
         ticket,
         appVerifier
@@ -275,7 +273,7 @@ async function assertLastProviderUnlinkIsBlockedBeforeRevocation() {
     currentUser = githubUser([githubProvider()]);
 
     await assert.rejects(
-        () => unlinkGithubAccount(db, "current-uid", "staging"),
+        () => unlinkGithubAccount(db, "current-uid"),
         (error) => error.details?.reason === "last_provider"
     );
     assert.deepStrictEqual(credentialRevokeCalls, []);
@@ -288,7 +286,7 @@ async function assertGithubUnlinkRevokesCredentialBeforeProviderRemoval() {
     const db = fakeFirestore();
     currentUser = githubUser([githubProvider(), googleProvider()]);
 
-    await unlinkGithubAccount(db, "current-uid", "staging");
+    await unlinkGithubAccount(db, "current-uid");
 
     assert.strictEqual(credentialRevokeCalls.length, 1);
     assert.deepStrictEqual(credentialRevokeCalls[0].slice(0, 2), [

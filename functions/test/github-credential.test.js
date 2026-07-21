@@ -151,7 +151,7 @@ async function assertSameAppReplacementRevokesOnlyPreviousToken() {
             accessToken: "new-token",
             clientId: "staging-client-id"
         });
-        await revokePendingGithubCredentials(db, "user-1", "staging");
+        await revokePendingGithubCredentials(db, "user-1");
     } finally {
         process.env = originalEnvironment;
     }
@@ -188,7 +188,7 @@ async function assertReplacingCredentialRevokesTrackedPreviousGrants() {
             accessToken: "new-token",
             clientId: "staging-client-id"
         });
-        await revokePendingGithubCredentials(db, "user-1", "staging");
+        await revokePendingGithubCredentials(db, "user-1");
     } finally {
         process.env = originalEnvironment;
     }

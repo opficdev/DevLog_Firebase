@@ -5,7 +5,6 @@ import {
 } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 import { FirestorePath } from "../common/firestorePath";
-import type { FirestoreDatabase } from "../common/firestore";
 import {
     revokeGitHubOAuthGrant,
     revokeGitHubOAuthToken
@@ -127,18 +126,14 @@ export async function githubCredentialForUser(
 // credential 문서에 추적된 이전 App grant를 폐기하고 성공한 항목만 제거합니다.
 export async function revokePendingGithubCredentials(
     db: FirebaseFirestore.Firestore,
-    uid: string,
-    firebaseDB: FirestoreDatabase
+    uid: string
 ): Promise<void> {
     const credentialRef = db.doc(FirestorePath.githubCredential(uid));
     const snapshot = await credentialRef.get();
     const pendingRevocations = pendingCredentialsFrom(snapshot.data());
     const currentCredential = credentialFromData(snapshot.data());
     for (const credential of pendingRevocations) {
-        const configuration = githubRevocationConfiguration(
-            firebaseDB,
-            credential.clientId
-        );
+        const configuration = githubRevocationConfiguration(credential.clientId);
         if (credential.clientId === currentCredential?.clientId) {
             await revokeGitHubOAuthToken(
                 uid,

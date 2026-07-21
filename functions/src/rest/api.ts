@@ -1,10 +1,10 @@
 import * as admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
 import { onRequest, HttpsError } from "firebase-functions/v2/https";
 import type { Request } from "firebase-functions/v2/https";
 import type { Response } from "express";
 import * as logger from "firebase-functions/logger";
 import { toError } from "../common/error";
-import { FirestoreDatabase, firestoreFor } from "../common/firestore";
 import { requestTodoDeletionInFirestore, undoTodoDeletionInFirestore } from "./todoDeletion";
 import {
     requestPushNotificationDeletionInFirestore,
@@ -62,11 +62,8 @@ import { matchRestRoute, parseRestRouteSegments, RestRoute } from "./router";
 
 const LOCATION = "asia-northeast3";
 
-export const stagingApi = restApiFor("staging");
-export const prodApi = restApiFor("prod");
-
-function restApiFor(firebaseDB: FirestoreDatabase) {
-    return onRequest({
+// 현재 Firebase project의 REST 요청을 처리합니다.
+export const api = onRequest({
         cors: true,
         maxInstances: 3,
         region: LOCATION,
@@ -89,15 +86,14 @@ function restApiFor(firebaseDB: FirestoreDatabase) {
                 throw new RestError(404, "not-found", "Endpoint를 찾을 수 없습니다.");
             }
 
-            const db = firestoreFor(firebaseDB);
+            const db = getFirestore();
             const uid = route.requiresAuth ? await authenticatedUID(request) : undefined;
             if (route.action === "githubCallback") {
                 let configuration;
                 try {
-                    configuration = githubConfiguration(firebaseDB);
+                    configuration = githubConfiguration();
                 } catch (error) {
                     logger.error("GitHub OAuth callback 환경 설정 확인 실패", {
-                        firebaseDB,
                         error: toError(error).message
                     });
                     response.redirect(302, githubCallbackFailureURL());
@@ -115,10 +111,9 @@ function restApiFor(firebaseDB: FirestoreDatabase) {
             if (route.action === "googleCallback") {
                 let configuration;
                 try {
-                    configuration = googleConfiguration(firebaseDB);
+                    configuration = googleConfiguration();
                 } catch (error) {
                     logger.error("Google OAuth callback 환경 설정 확인 실패", {
-                        firebaseDB,
                         error: toError(error).message
                     });
                     response.redirect(302, googleCallbackFailureURL());
@@ -137,7 +132,6 @@ function restApiFor(firebaseDB: FirestoreDatabase) {
             const result = await handleRoute(
                 route,
                 db,
-                firebaseDB,
                 body,
                 uid
             );
@@ -152,12 +146,11 @@ function restApiFor(firebaseDB: FirestoreDatabase) {
         }
     }
     );
-}
 
+// 일치한 REST route의 요청을 처리합니다.
 async function handleRoute(
     route: RestRoute,
     db: FirebaseFirestore.Firestore,
-    firebaseDB: FirestoreDatabase,
     body: Record<string, unknown>,
     uid?: string
 ): Promise<unknown> {
@@ -229,27 +222,25 @@ async function handleRoute(
     case "createGithubSignInSession":
         return createGithubSignInSession(
             db,
-            githubConfiguration(firebaseDB),
+            githubConfiguration(),
             requiredBodyString(body, "appChallenge")
         );
     case "requestGithubCustomToken":
         return requestGithubCustomToken(
             db,
-            firebaseDB,
             requiredBodyString(body, "ticket"),
             requiredBodyString(body, "appVerifier")
         );
     case "createGithubAccountLinkSession":
         return createGithubAccountLinkSession(
             db,
-            githubConfiguration(firebaseDB),
+            githubConfiguration(),
             requiredUID(uid),
             requiredBodyString(body, "appChallenge")
         );
     case "linkGithubAccount":
         return linkGithubAccount(
             db,
-            firebaseDB,
             requiredUID(uid),
             requiredBodyString(body, "ticket"),
             requiredBodyString(body, "appVerifier")
@@ -257,19 +248,17 @@ async function handleRoute(
     case "unlinkGithubAccount":
         return unlinkGithubAccount(
             db,
-            requiredUID(uid),
-            firebaseDB
+            requiredUID(uid)
         );
     case "revokeGithubAccessToken":
         return revokeGithubAccessToken(
             db,
-            requiredUID(uid),
-            firebaseDB
+            requiredUID(uid)
         );
     case "createGoogleSignInSession":
         return createGoogleSignInSession(
             db,
-            googleConfiguration(firebaseDB),
+            googleConfiguration(),
             requiredBodyString(body, "appChallenge")
         );
     case "requestGoogleCustomToken":
@@ -281,7 +270,7 @@ async function handleRoute(
     case "createGoogleAccountLinkSession":
         return createGoogleAccountLinkSession(
             db,
-            googleConfiguration(firebaseDB),
+            googleConfiguration(),
             requiredUID(uid),
             requiredBodyString(body, "appChallenge")
         );

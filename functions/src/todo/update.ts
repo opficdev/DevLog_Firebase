@@ -1,18 +1,15 @@
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
-import { FieldPath } from "firebase-admin/firestore";
+import { FieldPath, getFirestore } from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 import { toError } from "../common/error";
-import { FirestoreDatabase, firestoreFor } from "../common/firestore";
 import { FirestorePath } from "../common/firestorePath";
 
 const LOCATION = "asia-northeast3";
 const BATCH_SIZE = 200;
 
-// 지정한 Firestore 데이터베이스에서 Todo 카테고리 변경 시 알림 문서 카테고리를 동기화하는 함수를 반환합니다.
-export function syncTodoNotificationCategory(firebaseDB: FirestoreDatabase) {
-    return onDocumentUpdated({
+// 현재 Firebase project에서 Todo 카테고리 변경 시 알림 문서 카테고리를 동기화합니다.
+export const syncTodoNotificationCategory = onDocumentUpdated({
         maxInstances: 1,
-        database: firebaseDB,
         document: "users/{userId}/todoLists/{todoId}",
         region: LOCATION
     },
@@ -30,10 +27,9 @@ export function syncTodoNotificationCategory(firebaseDB: FirestoreDatabase) {
         }
 
         try {
-            await updateNotifications(firestoreFor(firebaseDB), userId, todoId, afterCategory);
+            await updateNotifications(getFirestore(), userId, todoId, afterCategory);
         } catch (error) {
             logger.error("todo 카테고리 변경 후 알림 데이터 동기화 실패", toError(error), {
-                firebaseDB,
                 userId,
                 todoId,
                 beforeCategory,
@@ -43,7 +39,6 @@ export function syncTodoNotificationCategory(firebaseDB: FirestoreDatabase) {
         }
     }
     );
-}
 
 // 변경된 카테고리 값의 해당 Todo 알림 문서 반영
 async function updateNotifications(

@@ -8,7 +8,6 @@ DevLog의 Firebase Cloud Functions와 Firestore index 설정을 관리하는 저
 - `firebase.test.json`: 테스트용 Firebase emulator 설정
 - `firestore.index.json`: Firestore composite index 설정
 - `functions`: Cloud Functions TypeScript 소스
-- `functions/.env.example`: 로컬 환경 변수 key 목록
 
 ## AI 역할 분리
 
@@ -68,13 +67,11 @@ flowchart LR
 
 ## 환경 변수
 
-실제 값이 들어간 `functions/.env`는 로컬 전용 파일입니다. Git에는 포함하지 않습니다.
+Firebase CLI의 `--project`로 staging 또는 prod Firebase project를 선택합니다. 각 project에 배포된 함수는 인자 없는 `getFirestore()`로 해당 project의 `(default)` database를 사용합니다.
 
-새 환경을 구성할 때는 `functions/.env.example`의 key를 기준으로 `functions/.env`를 만듭니다.
+일반 환경 변수를 추가하면 Firebase CLI가 `functions/.env`와 선택한 project 또는 alias에 대응하는 `functions/.env.<project or alias>`를 자동으로 읽습니다.
 
-```text
-FIRESTORE_DBS
-```
+일반 환경 변수 파일은 로컬 전용으로 관리하며 Git에 포함하지 않습니다.
 
 GitHub, Google, Apple 인증 설정은 일반 환경 변수나 `.env`에 저장하지 않고 Firebase project별 Secret Manager의 `GITHUB_OAUTH_CONFIG`, `GOOGLE_OAUTH_CONFIG`, `APPLE_AUTH_CONFIG` JSON Secret에서 각각 관리합니다.
 
@@ -110,6 +107,17 @@ GitHub Actions의 action 런타임은 Node 24 대응 버전을 사용하고, Fun
 현재 CD workflow는 없습니다. 배포는 필요한 시점에 수동으로 진행합니다.
 
 이 저장소에는 `.firebaserc`를 커밋하지 않습니다.
+
+배포할 Firebase project는 명령에서 명시합니다.
+
+```bash
+firebase deploy --project <staging-project-id> --only functions:<functionName>
+firebase deploy --project <prod-project-id> --only functions:<functionName>
+```
+
+양쪽 project에는 같은 함수 이름을 배포하며, 각 함수는 해당 project의 `(default)` database만 사용합니다.
+
+기존 prod named database의 데이터를 prod project의 `(default)`로 이전하기 전에는 이 변경을 prod project에 배포하지 않습니다.
 
 여러 함수를 배포해야 할 때도 전체 일괄 배포보다 필요한 함수 단위로 나누어 배포합니다.
 
