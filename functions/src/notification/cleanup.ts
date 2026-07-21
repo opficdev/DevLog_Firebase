@@ -8,11 +8,6 @@ import {
 import * as logger from "firebase-functions/logger";
 import { toDate } from "../common/date";
 import { toError } from "../common/error";
-import {
-    FirestoreDatabase,
-    firebaseDBs,
-    firestoreFor
-} from "../common/firestore";
 import { FirestorePath } from "../common/firestorePath";
 
 const LOCATION = "asia-northeast3";
@@ -91,23 +86,7 @@ export const cleanupSoftDeletedNotifications = onSchedule({
     },
     async () => {
         try {
-            for (const firebaseDB of firebaseDBs()) {
-                try {
-                    await cleanupSoftDeletedNotificationsIn(firebaseDB);
-                } catch (error) {
-                    logger.error(
-                        "soft delete Notification cleanup 실패",
-                        toError(error),
-                        {
-                            firebaseDB,
-                            collectionGroup: "notifications",
-                            filter: "isDeleted == true",
-                            orderBy: "documentId",
-                            cleanupBatchSize: CLEANUP_BATCH_SIZE
-                        }
-                    );
-                }
-            }
+            await cleanupSoftDeletedNotificationsIn();
         } catch (error) {
             logger.error(
                 "soft delete Notification cleanup 실패",
@@ -123,9 +102,9 @@ export const cleanupSoftDeletedNotifications = onSchedule({
     }
 );
 
-// 하나의 Firestore 데이터베이스에서 삭제 표시된 알림 문서를 제거합니다.
-async function cleanupSoftDeletedNotificationsIn(firebaseDB: FirestoreDatabase): Promise<void> {
-    const db = firestoreFor(firebaseDB);
+// 현재 Firebase project의 기본 Firestore에서 삭제 표시된 알림 문서를 제거합니다.
+async function cleanupSoftDeletedNotificationsIn(): Promise<void> {
+    const db = getFirestore();
     let lastDocument:
         FirebaseFirestore.QueryDocumentSnapshot<FirebaseFirestore.DocumentData> | undefined;
 
@@ -162,21 +141,17 @@ export const cleanupNotificationDispatches = onSchedule({
         timeZone: "UTC"
     },
     async () => {
-        for (const firebaseDB of firebaseDBs()) {
-            try {
-                await cleanupNotificationDispatchesIn(firebaseDB);
-            } catch (error) {
-                logger.error("알림 발송 기록 정리 실패", toError(error), {
-                    firebaseDB
-                });
-            }
+        try {
+            await cleanupNotificationDispatchesIn();
+        } catch (error) {
+            logger.error("알림 발송 기록 정리 실패", toError(error));
         }
     }
 );
 
-// 하나의 Firestore 데이터베이스에서 불필요한 알림 발송 기록을 정리합니다.
-async function cleanupNotificationDispatchesIn(firebaseDB: FirestoreDatabase): Promise<void> {
-    const db = firestoreFor(firebaseDB);
+// 현재 Firebase project의 기본 Firestore에서 불필요한 알림 발송 기록을 정리합니다.
+async function cleanupNotificationDispatchesIn(): Promise<void> {
+    const db = getFirestore();
 
     try {
         await cleanupDispatchesByTodoQuery(db, (lastDocument) => {
@@ -199,7 +174,6 @@ async function cleanupNotificationDispatchesIn(firebaseDB: FirestoreDatabase): P
             "지난 마감일의 완료된 todo notification record 정리 실패",
             toError(error),
             {
-                firebaseDB,
                 collectionGroup: "todoLists",
                 filter: "isCompleted == true && dueDate < now",
                 orderBy: ["dueDate", "documentId"],
@@ -227,7 +201,6 @@ async function cleanupNotificationDispatchesIn(firebaseDB: FirestoreDatabase): P
             "마감일이 없는 todo notification record 정리 실패",
             toError(error),
             {
-                firebaseDB,
                 collectionGroup: "todoLists",
                 filter: "dueDate == null",
                 orderBy: "__name__",
