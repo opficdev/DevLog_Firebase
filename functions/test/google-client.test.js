@@ -29,12 +29,18 @@ require.cache[require.resolve("axios")] = {
 
 const {
     requestGoogleOAuthToken,
+    requestGoogleOAuthTokenWithServerAuthCode,
     revokeGoogleOAuthToken
 } = require("../lib/rest/googleClient");
 
 (async () => {
     await assertCodeExchangeReturnsServerTokens();
     await assertProviderFailureIsDistinguished();
+    await assertServerAuthCodeExchangeReturnsServerTokens();
+    await assertInvalidServerAuthCodeIsDistinguished();
+    await assertServerAuthCodeProviderFailureIsDistinguished();
+    await assertServerAuthCodeNetworkFailureIsDistinguished();
+    await assertServerAuthCodeRequiresTokens();
     await assertGrantRevocationUsesRefreshToken();
     await assertAlreadyInvalidTokenIsAccepted();
     await assertGrantRevocationFailureIsDistinguished();
@@ -91,6 +97,106 @@ async function assertProviderFailureIsDistinguished() {
             "client-secret",
             "https://example.com/auth/google/callback",
             "provider-verifier"
+        ),
+        (error) => error.details?.reason === "google_provider_failed"
+    );
+}
+
+// serverAuthCode 교환 요청이 callback과 PKCE 값 없이 서버 token을 반환하는지 검증합니다.
+async function assertServerAuthCodeExchangeReturnsServerTokens() {
+    resetState();
+
+    const token = await requestGoogleOAuthTokenWithServerAuthCode(
+        "server-auth-code",
+        "client-id",
+        "client-secret"
+    );
+
+    assert.deepStrictEqual(token, {
+        accessToken: "access-token",
+        idToken: "id-token",
+        refreshToken: "refresh-token"
+    });
+    assert.strictEqual(axiosCalls.length, 1);
+    assert.strictEqual(axiosCalls[0].url, "https://oauth2.googleapis.com/token");
+    assert.deepStrictEqual(
+        Object.fromEntries(new URLSearchParams(axiosCalls[0].data)),
+        {
+            client_id: "client-id",
+            client_secret: "client-secret",
+            code: "server-auth-code",
+            redirect_uri: "",
+            grant_type: "authorization_code"
+        }
+    );
+    assert.strictEqual(
+        axiosCalls[0].headers["Content-Type"],
+        "application/x-www-form-urlencoded"
+    );
+}
+
+// 유효하지 않은 serverAuthCode를 Google 인증 증명 오류로 구분하는지 검증합니다.
+async function assertInvalidServerAuthCodeIsDistinguished() {
+    resetState();
+    requestError = axiosError(400, { error: "invalid_grant" });
+
+    await assert.rejects(
+        () => requestGoogleOAuthTokenWithServerAuthCode(
+            "invalid-server-auth-code",
+            "client-id",
+            "client-secret"
+        ),
+        (error) =>
+            error.code === "unauthenticated" &&
+            error.details?.reason === "invalid_google_proof"
+    );
+}
+
+// Google token endpoint 장애를 provider 오류로 구분하는지 검증합니다.
+async function assertServerAuthCodeProviderFailureIsDistinguished() {
+    resetState();
+    requestError = axiosError(503, { error: "temporarily_unavailable" });
+
+    await assert.rejects(
+        () => requestGoogleOAuthTokenWithServerAuthCode(
+            "server-auth-code",
+            "client-id",
+            "client-secret"
+        ),
+        (error) => error.details?.reason === "google_provider_failed"
+    );
+}
+
+// Google token endpoint 통신 실패를 provider 오류로 구분하는지 검증합니다.
+async function assertServerAuthCodeNetworkFailureIsDistinguished() {
+    resetState();
+    requestError = new Error("Google token endpoint에 연결할 수 없습니다.");
+
+    await assert.rejects(
+        () => requestGoogleOAuthTokenWithServerAuthCode(
+            "server-auth-code",
+            "client-id",
+            "client-secret"
+        ),
+        (error) => error.details?.reason === "google_provider_failed"
+    );
+}
+
+// Google token endpoint 응답에 필수 token이 없으면 provider 오류로 처리하는지 검증합니다.
+async function assertServerAuthCodeRequiresTokens() {
+    resetState();
+    tokenResponse = {
+        refresh_token: "refresh-token",
+        expires_in: 3600,
+        scope: "openid email profile",
+        token_type: "Bearer"
+    };
+
+    await assert.rejects(
+        () => requestGoogleOAuthTokenWithServerAuthCode(
+            "server-auth-code",
+            "client-id",
+            "client-secret"
         ),
         (error) => error.details?.reason === "google_provider_failed"
     );
