@@ -154,20 +154,15 @@ const googleOAuthRoutes = [
     [
         "POST",
         ["auth", "google", "authorization-code", "custom-token"],
-        "requestGoogleCustomTokenByCode",
+        "requestGoogleCustomToken",
         false
     ],
     [
         "PUT",
         ["auth", "google", "authorization-code", "account-link"],
-        "linkGoogleAccountByCode",
+        "linkGoogleAccount",
         true
     ],
-    ["POST", ["auth", "google", "sign-in-sessions"], "createGoogleSignInSession", false],
-    ["GET", ["auth", "google", "callback"], "googleCallback", false],
-    ["POST", ["auth", "google", "custom-token"], "requestGoogleCustomToken", false],
-    ["POST", ["auth", "google", "account-link-sessions"], "createGoogleAccountLinkSession", true],
-    ["PUT", ["auth", "google", "account-link"], "linkGoogleAccount", true],
     ["DELETE", ["auth", "google", "account-link"], "unlinkGoogleAccount", true],
     ["DELETE", ["auth", "google", "access-token"], "revokeGoogleAccessToken", true]
 ];
@@ -187,6 +182,15 @@ assert.strictEqual(
     matchRestRoute("POST", ["auth", "google", "authorization-code", "account-link"]),
     undefined
 );
+for (const [method, segments] of [
+    ["POST", ["auth", "google", "sign-in-sessions"]],
+    ["GET", ["auth", "google", "callback"]],
+    ["POST", ["auth", "google", "custom-token"]],
+    ["POST", ["auth", "google", "account-link-sessions"]],
+    ["PUT", ["auth", "google", "account-link"]]
+]) {
+    assert.strictEqual(matchRestRoute(method, segments), undefined);
+}
 
 assert.strictEqual(matchRestRoute("GET", ["todos", "todo-1", "deletion-request"]), undefined);
 assert.strictEqual(matchRestRoute("POST", ["todos", "", "deletion-request"]), undefined);

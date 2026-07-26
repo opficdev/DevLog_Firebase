@@ -30,48 +30,8 @@ export interface GoogleOAuthToken {
     refreshToken?: string;
 }
 
-// Google authorization code를 서버 전용 token 묶음으로 교환합니다.
-export async function requestGoogleOAuthToken(
-    code: string,
-    clientId: string,
-    clientSecret: string,
-    callbackURL: string,
-    codeVerifier: string
-): Promise<GoogleOAuthToken> {
-    const requestBody = new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        code,
-        redirect_uri: callbackURL,
-        grant_type: "authorization_code",
-        code_verifier: codeVerifier
-    });
-    const response = await requestGoogleAPI(() =>
-        axios.post<GoogleOAuthResponse>(
-            GOOGLE_TOKEN_URL,
-            requestBody,
-            {
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded"
-                }
-            }
-        )
-    );
-    const accessToken = response.data.access_token;
-    const idToken = response.data.id_token;
-    if (!accessToken || !idToken) {
-        throw googleProviderError();
-    }
-
-    return {
-        accessToken,
-        idToken,
-        refreshToken: response.data.refresh_token
-    };
-}
-
 // iOS serverAuthCode를 callback과 PKCE 값 없이 서버 전용 token 묶음으로 교환합니다.
-export async function requestGoogleOAuthTokenWithServerAuthCode(
+export async function requestGoogleOAuthToken(
     serverAuthCode: string,
     clientId: string,
     clientSecret: string
@@ -83,7 +43,7 @@ export async function requestGoogleOAuthTokenWithServerAuthCode(
         redirect_uri: "",
         grant_type: "authorization_code"
     });
-    const response = await requestGoogleServerAuthCodeAPI(() =>
+    const response = await requestGoogleAPI(() =>
         axios.post<GoogleOAuthResponse>(
             GOOGLE_TOKEN_URL,
             requestBody,
@@ -151,7 +111,7 @@ function alreadyInvalidToken(error: unknown): boolean {
 }
 
 // iOS serverAuthCode 교환 실패를 인증 증명 오류와 provider 오류로 구분합니다.
-async function requestGoogleServerAuthCodeAPI<T>(
+async function requestGoogleAPI<T>(
     request: () => Promise<T>
 ): Promise<T> {
     try {
@@ -174,16 +134,6 @@ function invalidGoogleGrant(error: unknown): boolean {
     return data &&
         typeof data === "object" &&
         (data as Record<string, unknown>).error === "invalid_grant";
-}
-
-// 외부 Google 인증 요청 실패를 안전한 provider 오류로 변환합니다.
-async function requestGoogleAPI<T>(request: () => Promise<T>): Promise<T> {
-    try {
-        return await request();
-    } catch (error) {
-        console.error("Google 인증 서버 요청에 실패했습니다.", errorMetadata(error));
-        throw googleProviderError();
-    }
 }
 
 // Google 인증 서버 실패를 REST 계층에서 구분할 수 있는 오류로 구성합니다.

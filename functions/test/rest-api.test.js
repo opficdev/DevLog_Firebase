@@ -6,8 +6,7 @@ const https = require("firebase-functions/v2/https");
 const db = { name: "firestore" };
 const configuration = {
     clientId: "client-id",
-    clientSecret: "client-secret",
-    callbackURL: "https://example.com/api/auth/google/callback"
+    clientSecret: "client-secret"
 };
 const customTokenCalls = [];
 const accountLinkCalls = [];
@@ -50,7 +49,7 @@ require.cache[require.resolve("../lib/rest/googleConfiguration")] = {
         googleOAuthConfigurationSecret: { name: "GOOGLE_OAUTH_CONFIG" }
     }
 };
-require.cache[require.resolve("../lib/rest/googleAuthorizationCodeAuth")] = {
+require.cache[require.resolve("../lib/rest/googleAuth")] = {
     exports: {
         requestGoogleCustomToken: async (...values) => {
             customTokenCalls.push(values);

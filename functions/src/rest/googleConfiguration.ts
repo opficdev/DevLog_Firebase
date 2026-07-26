@@ -7,8 +7,6 @@ export interface GoogleConfiguration {
     clientId: string;
     // OAuth client 비밀값을 저장합니다.
     clientSecret: string;
-    // Google이 호출할 Functions callback 주소를 저장합니다.
-    callbackURL: string;
 }
 
 // Google OAuth client 설정 전체를 project별 JSON Secret에서 제공합니다.
@@ -28,15 +26,8 @@ export function googleConfiguration(): GoogleConfiguration {
         "clientSecret",
         provider
     );
-    const callbackURL = requiredAuthenticationConfigurationValue(
-        configuration,
-        "callbackURL",
-        provider
-    );
-
     return {
         clientId,
-        clientSecret,
-        callbackURL
+        clientSecret
     };
 }

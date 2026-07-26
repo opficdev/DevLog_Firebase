@@ -29,13 +29,10 @@ require.cache[require.resolve("axios")] = {
 
 const {
     requestGoogleOAuthToken,
-    requestGoogleOAuthTokenWithServerAuthCode,
     revokeGoogleOAuthToken
 } = require("../lib/rest/googleClient");
 
 (async () => {
-    await assertCodeExchangeReturnsServerTokens();
-    await assertProviderFailureIsDistinguished();
     await assertServerAuthCodeExchangeReturnsServerTokens();
     await assertInvalidServerAuthCodeIsDistinguished();
     await assertServerAuthCodeProviderFailureIsDistinguished();
@@ -49,64 +46,11 @@ const {
     process.exitCode = 1;
 });
 
-// authorization code 교환 결과에서 서버가 사용할 token만 반환하는지 검증합니다.
-async function assertCodeExchangeReturnsServerTokens() {
-    resetState();
-
-    const token = await requestGoogleOAuthToken(
-        "google-code",
-        "client-id",
-        "client-secret",
-        "https://example.com/auth/google/callback",
-        "provider-verifier"
-    );
-
-    assert.deepStrictEqual(token, {
-        accessToken: "access-token",
-        idToken: "id-token",
-        refreshToken: "refresh-token"
-    });
-    assert.strictEqual(axiosCalls.length, 1);
-    assert.strictEqual(axiosCalls[0].url, "https://oauth2.googleapis.com/token");
-    assert.deepStrictEqual(
-        Object.fromEntries(new URLSearchParams(axiosCalls[0].data)),
-        {
-            client_id: "client-id",
-            client_secret: "client-secret",
-            code: "google-code",
-            redirect_uri: "https://example.com/auth/google/callback",
-            grant_type: "authorization_code",
-            code_verifier: "provider-verifier"
-        }
-    );
-    assert.strictEqual(
-        axiosCalls[0].headers["Content-Type"],
-        "application/x-www-form-urlencoded"
-    );
-}
-
-// Google token endpoint 실패를 provider 오류로 구분하는지 검증합니다.
-async function assertProviderFailureIsDistinguished() {
-    resetState();
-    requestError = axiosError(503, { error: "temporarily_unavailable" });
-
-    await assert.rejects(
-        () => requestGoogleOAuthToken(
-            "google-code",
-            "client-id",
-            "client-secret",
-            "https://example.com/auth/google/callback",
-            "provider-verifier"
-        ),
-        (error) => error.details?.reason === "google_provider_failed"
-    );
-}
-
 // serverAuthCode 교환 요청이 callback과 PKCE 값 없이 서버 token을 반환하는지 검증합니다.
 async function assertServerAuthCodeExchangeReturnsServerTokens() {
     resetState();
 
-    const token = await requestGoogleOAuthTokenWithServerAuthCode(
+    const token = await requestGoogleOAuthToken(
         "server-auth-code",
         "client-id",
         "client-secret"
@@ -141,7 +85,7 @@ async function assertInvalidServerAuthCodeIsDistinguished() {
     requestError = axiosError(400, { error: "invalid_grant" });
 
     await assert.rejects(
-        () => requestGoogleOAuthTokenWithServerAuthCode(
+        () => requestGoogleOAuthToken(
             "invalid-server-auth-code",
             "client-id",
             "client-secret"
@@ -158,7 +102,7 @@ async function assertServerAuthCodeProviderFailureIsDistinguished() {
     requestError = axiosError(503, { error: "temporarily_unavailable" });
 
     await assert.rejects(
-        () => requestGoogleOAuthTokenWithServerAuthCode(
+        () => requestGoogleOAuthToken(
             "server-auth-code",
             "client-id",
             "client-secret"
@@ -173,7 +117,7 @@ async function assertServerAuthCodeNetworkFailureIsDistinguished() {
     requestError = new Error("Google token endpoint에 연결할 수 없습니다.");
 
     await assert.rejects(
-        () => requestGoogleOAuthTokenWithServerAuthCode(
+        () => requestGoogleOAuthToken(
             "server-auth-code",
             "client-id",
             "client-secret"
@@ -193,7 +137,7 @@ async function assertServerAuthCodeRequiresTokens() {
     };
 
     await assert.rejects(
-        () => requestGoogleOAuthTokenWithServerAuthCode(
+        () => requestGoogleOAuthToken(
             "server-auth-code",
             "client-id",
             "client-secret"

@@ -20,12 +20,7 @@ export type RestAction =
     "linkGithubAccount" |
     "unlinkGithubAccount" |
     "revokeGithubAccessToken" |
-    "requestGoogleCustomTokenByCode" |
-    "linkGoogleAccountByCode" |
-    "createGoogleSignInSession" |
-    "googleCallback" |
     "requestGoogleCustomToken" |
-    "createGoogleAccountLinkSession" |
     "linkGoogleAccount" |
     "unlinkGoogleAccount" |
     "revokeGoogleAccessToken";
@@ -193,7 +188,7 @@ export function matchRestRoute(method: string, routeSegments: string[]): RestRou
         normalizedMethod === "POST"
     ) {
         return {
-            action: "requestGoogleCustomTokenByCode",
+            action: "requestGoogleCustomToken",
             requiresAuth: false
         };
     }
@@ -202,44 +197,6 @@ export function matchRestRoute(method: string, routeSegments: string[]): RestRou
         routeSegments.join("/") === "auth/google/authorization-code/account-link" &&
         normalizedMethod === "PUT"
     ) {
-        return {
-            action: "linkGoogleAccountByCode",
-            requiresAuth: true
-        };
-    }
-
-    if (routeSegments.join("/") === "auth/google/sign-in-sessions" && normalizedMethod === "POST") {
-        return {
-            action: "createGoogleSignInSession",
-            requiresAuth: false
-        };
-    }
-
-    if (routeSegments.join("/") === "auth/google/callback" && normalizedMethod === "GET") {
-        return {
-            action: "googleCallback",
-            requiresAuth: false
-        };
-    }
-
-    if (routeSegments.join("/") === "auth/google/custom-token" && normalizedMethod === "POST") {
-        return {
-            action: "requestGoogleCustomToken",
-            requiresAuth: false
-        };
-    }
-
-    if (
-        routeSegments.join("/") === "auth/google/account-link-sessions" &&
-        normalizedMethod === "POST"
-    ) {
-        return {
-            action: "createGoogleAccountLinkSession",
-            requiresAuth: true
-        };
-    }
-
-    if (routeSegments.join("/") === "auth/google/account-link" && normalizedMethod === "PUT") {
         return {
             action: "linkGoogleAccount",
             requiresAuth: true

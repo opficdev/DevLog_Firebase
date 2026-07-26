@@ -2,14 +2,18 @@ const assert = require("assert");
 const { googleConfiguration } = require("../lib/rest/googleConfiguration");
 
 const secretName = "GOOGLE_OAUTH_CONFIG";
-const configuration = {
+const secretValue = {
     clientId: "client-id",
     clientSecret: "client-secret",
     callbackURL: "https://example.com/callback"
 };
+const configuration = {
+    clientId: "client-id",
+    clientSecret: "client-secret"
+};
 const originalEnvironment = { ...process.env };
 try {
-    process.env[secretName] = JSON.stringify(configuration);
+    process.env[secretName] = JSON.stringify(secretValue);
 
     assert.deepStrictEqual(googleConfiguration(), configuration);
 
@@ -17,15 +21,11 @@ try {
     assertRejectedConfiguration("{", /could not be parsed as JSON/);
     assertRejectedConfiguration(JSON.stringify([]), /Google OAuth client 설정 형식/);
     assertRejectedConfiguration(JSON.stringify({
-        clientId: "client-id",
-        clientSecret: "client-secret"
-    }), /callbackURL/);
-    assertRejectedConfiguration(JSON.stringify({
-        ...configuration,
+        ...secretValue,
         clientId: " "
     }), /clientId/);
     assertRejectedConfiguration(JSON.stringify({
-        ...configuration,
+        ...secretValue,
         clientSecret: 1
     }), /clientSecret/);
 } finally {

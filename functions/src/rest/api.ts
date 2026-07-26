@@ -43,17 +43,7 @@ import {
     revokeGithubAccessToken,
     unlinkGithubAccount
 } from "./githubOAuth";
-import {
-    createGoogleAccountLinkSession,
-    createGoogleSignInSession,
-    googleCallbackFailureURL,
-    googleCallbackURL,
-    linkGoogleAccount,
-    requestGoogleCustomToken,
-    revokeGoogleAccessToken,
-    unlinkGoogleAccount
-} from "./googleAuth";
-import * as googleAuthorizationCodeAuth from "./googleAuthorizationCodeAuth";
+import * as googleAuth from "./googleAuth";
 import {
     RestError,
     restErrorBodyFrom,
@@ -109,27 +99,6 @@ export const api = onRequest({
                 response.redirect(302, redirectURL);
                 return;
             }
-            if (route.action === "googleCallback") {
-                let configuration;
-                try {
-                    configuration = googleConfiguration();
-                } catch (error) {
-                    logger.error("Google OAuth callback 환경 설정 확인 실패", {
-                        error: toError(error).message
-                    });
-                    response.redirect(302, googleCallbackFailureURL());
-                    return;
-                }
-                const redirectURL = await googleCallbackURL(
-                    db,
-                    configuration,
-                    optionalQueryString(request.query.state),
-                    optionalQueryString(request.query.code)
-                );
-                response.redirect(302, redirectURL);
-                return;
-            }
-
             const result = await handleRoute(
                 route,
                 db,
@@ -157,7 +126,6 @@ async function handleRoute(
 ): Promise<unknown> {
     switch (route.action) {
     case "githubCallback":
-    case "googleCallback":
         return undefined;
     case "requestTodoDeletion":
         await requestTodoDeletionInFirestore(db, requiredUID(uid), requiredID(route));
@@ -256,52 +224,26 @@ async function handleRoute(
             db,
             requiredUID(uid)
         );
-    case "requestGoogleCustomTokenByCode":
-        return googleAuthorizationCodeAuth.requestGoogleCustomToken(
-            db,
-            googleConfiguration(),
-            requiredBodyString(body, "serverAuthCode")
-        );
-    case "linkGoogleAccountByCode":
-        return googleAuthorizationCodeAuth.linkGoogleAccount(
-            db,
-            googleConfiguration(),
-            requiredUID(uid),
-            requiredBodyString(body, "serverAuthCode")
-        );
-    case "createGoogleSignInSession":
-        return createGoogleSignInSession(
-            db,
-            googleConfiguration(),
-            requiredBodyString(body, "appChallenge")
-        );
     case "requestGoogleCustomToken":
-        return requestGoogleCustomToken(
-            db,
-            requiredBodyString(body, "ticket"),
-            requiredBodyString(body, "appVerifier")
-        );
-    case "createGoogleAccountLinkSession":
-        return createGoogleAccountLinkSession(
+        return googleAuth.requestGoogleCustomToken(
             db,
             googleConfiguration(),
-            requiredUID(uid),
-            requiredBodyString(body, "appChallenge")
+            requiredBodyString(body, "serverAuthCode")
         );
     case "linkGoogleAccount":
-        return linkGoogleAccount(
+        return googleAuth.linkGoogleAccount(
             db,
+            googleConfiguration(),
             requiredUID(uid),
-            requiredBodyString(body, "ticket"),
-            requiredBodyString(body, "appVerifier")
+            requiredBodyString(body, "serverAuthCode")
         );
     case "unlinkGoogleAccount":
-        return unlinkGoogleAccount(
+        return googleAuth.unlinkGoogleAccount(
             db,
             requiredUID(uid)
         );
     case "revokeGoogleAccessToken":
-        return revokeGoogleAccessToken(
+        return googleAuth.revokeGoogleAccessToken(
             db,
             requiredUID(uid)
         );

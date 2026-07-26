@@ -8,7 +8,10 @@ const credentialSaveCalls = [];
 const credentialRevokeCalls = [];
 const grantRevokeCalls = [];
 const customTokenCalls = [];
+const authUpdateCalls = [];
 const oauthStateCalls = [];
+let currentUser = firebaseUser([googleProvider(), githubProvider()]);
+let storedCredential = googleCredential();
 let tokenExchangeError;
 let tokenVerificationError;
 let providerResolveError;
@@ -23,6 +26,13 @@ const fakeAuth = {
             throw customTokenError;
         }
         return `custom-token:${uid}`;
+    },
+    async getUser() {
+        return currentUser;
+    },
+    async updateUser(uid, properties) {
+        authUpdateCalls.push({ uid, properties });
+        return { uid };
     }
 };
 
@@ -33,7 +43,7 @@ require.cache[require.resolve("firebase-admin")] = {
 };
 require.cache[require.resolve("../lib/rest/googleClient")] = {
     exports: {
-        requestGoogleOAuthTokenWithServerAuthCode: async (...values) => {
+        requestGoogleOAuthToken: async (...values) => {
             tokenExchangeCalls.push(values);
             if (tokenExchangeError) {
                 throw tokenExchangeError;
@@ -75,6 +85,7 @@ require.cache[require.resolve("../lib/rest/googleProvider")] = {
 };
 require.cache[require.resolve("../lib/rest/googleCredential")] = {
     exports: {
+        googleCredentialForUser: async () => storedCredential,
         saveGoogleCredential: async (...values) => {
             credentialSaveCalls.push(values);
             if (credentialSaveError) {
@@ -96,14 +107,15 @@ require.cache[require.resolve("../lib/rest/oauth/session")] = {
 
 const {
     linkGoogleAccount,
-    requestGoogleCustomToken
-} = require("../lib/rest/googleAuthorizationCodeAuth");
+    requestGoogleCustomToken,
+    revokeGoogleAccessToken,
+    unlinkGoogleAccount
+} = require("../lib/rest/googleAuth");
 
 const db = { name: "firestore" };
 const configuration = {
     clientId: "client-id",
-    clientSecret: "client-secret",
-    callbackURL: "https://example.com/api/auth/google/callback"
+    clientSecret: "client-secret"
 };
 
 (async () => {
@@ -115,6 +127,9 @@ const configuration = {
     await assertProviderLinkFailureDoesNotRevoke();
     await assertCredentialSaveFailureDoesNotRevoke();
     await assertCustomTokenFailureDoesNotRevoke();
+    await assertLastProviderUnlinkIsBlockedBeforeRevocation();
+    await assertGoogleUnlinkRevokesCredentialBeforeProviderRemoval();
+    await assertExplicitAccessTokenRevokesCredential();
 })().catch((error) => {
     console.error(error);
     process.exitCode = 1;
@@ -321,6 +336,54 @@ async function assertCustomTokenFailureDoesNotRevoke() {
     assertNoOAuthStateOrRevocation();
 }
 
+// 마지막 Google provider 해제가 grant를 변경하기 전에 차단되는지 검증합니다.
+async function assertLastProviderUnlinkIsBlockedBeforeRevocation() {
+    resetState();
+    currentUser = firebaseUser([googleProvider()]);
+
+    await assert.rejects(
+        () => unlinkGoogleAccount(db, "current-uid"),
+        (error) => error.details?.reason === "last_provider"
+    );
+    assert.deepStrictEqual(credentialRevokeCalls, []);
+    assert.deepStrictEqual(authUpdateCalls, []);
+}
+
+// Google 계정 해제가 grant와 credential을 정리한 뒤 provider를 제거하는지 검증합니다.
+async function assertGoogleUnlinkRevokesCredentialBeforeProviderRemoval() {
+    resetState();
+
+    await unlinkGoogleAccount(db, "current-uid");
+
+    assert.deepStrictEqual(credentialRevokeCalls, [[
+        db,
+        "current-uid",
+        googleCredential()
+    ]]);
+    assert.deepStrictEqual(authUpdateCalls, [{
+        uid: "current-uid",
+        properties: { providersToUnlink: ["google.com"] }
+    }]);
+}
+
+// access-token 삭제 요청이 provider 연결은 유지하고 grant credential만 폐기하는지 검증합니다.
+async function assertExplicitAccessTokenRevokesCredential() {
+    resetState();
+    storedCredential = {
+        ...googleCredential(),
+        clientId: "retired-client-id"
+    };
+
+    await revokeGoogleAccessToken(db, "current-uid");
+
+    assert.deepStrictEqual(credentialRevokeCalls, [[
+        db,
+        "current-uid",
+        storedCredential
+    ]]);
+    assert.deepStrictEqual(authUpdateCalls, []);
+}
+
 // OAuth session·ticket 처리와 Google grant·credential 자동 폐기가 없는지 검증합니다.
 function assertNoOAuthStateOrRevocation() {
     assert.deepStrictEqual(oauthStateCalls, []);
@@ -338,7 +401,10 @@ function resetState() {
     credentialRevokeCalls.length = 0;
     grantRevokeCalls.length = 0;
     customTokenCalls.length = 0;
+    authUpdateCalls.length = 0;
     oauthStateCalls.length = 0;
+    currentUser = firebaseUser([googleProvider(), githubProvider()]);
+    storedCredential = googleCredential();
     tokenExchangeError = undefined;
     tokenVerificationError = undefined;
     providerResolveError = undefined;
@@ -363,6 +429,21 @@ function googleCredential() {
         clientId: "client-id",
         refreshToken: "google-refresh-token"
     };
+}
+
+// Firebase Auth 사용자 대역을 구성합니다.
+function firebaseUser(providerData) {
+    return { uid: "current-uid", providerData };
+}
+
+// Firebase Auth Google provider 대역을 구성합니다.
+function googleProvider() {
+    return { providerId: "google.com" };
+}
+
+// Firebase Auth의 다른 로그인 수단 대역을 구성합니다.
+function githubProvider() {
+    return { providerId: "github.com" };
 }
 
 // 검증된 Google ID token payload를 구성합니다.
