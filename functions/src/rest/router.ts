@@ -1,3 +1,4 @@
+// REST route가 실행할 처리 종류를 나타냅니다.
 export type RestAction =
     "requestTodoDeletion" |
     "undoTodoDeletion" |
@@ -19,6 +20,8 @@ export type RestAction =
     "linkGithubAccount" |
     "unlinkGithubAccount" |
     "revokeGithubAccessToken" |
+    "requestGoogleCustomTokenByCode" |
+    "linkGoogleAccountByCode" |
     "createGoogleSignInSession" |
     "googleCallback" |
     "requestGoogleCustomToken" |
@@ -181,6 +184,26 @@ export function matchRestRoute(method: string, routeSegments: string[]): RestRou
     if (routeSegments.join("/") === "auth/github/access-token" && normalizedMethod === "DELETE") {
         return {
             action: "revokeGithubAccessToken",
+            requiresAuth: true
+        };
+    }
+
+    if (
+        routeSegments.join("/") === "auth/google/authorization-code/custom-token" &&
+        normalizedMethod === "POST"
+    ) {
+        return {
+            action: "requestGoogleCustomTokenByCode",
+            requiresAuth: false
+        };
+    }
+
+    if (
+        routeSegments.join("/") === "auth/google/authorization-code/account-link" &&
+        normalizedMethod === "PUT"
+    ) {
+        return {
+            action: "linkGoogleAccountByCode",
             requiresAuth: true
         };
     }

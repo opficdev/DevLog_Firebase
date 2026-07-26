@@ -53,6 +53,7 @@ import {
     revokeGoogleAccessToken,
     unlinkGoogleAccount
 } from "./googleAuth";
+import * as googleAuthorizationCodeAuth from "./googleAuthorizationCodeAuth";
 import {
     RestError,
     restErrorBodyFrom,
@@ -254,6 +255,19 @@ async function handleRoute(
         return revokeGithubAccessToken(
             db,
             requiredUID(uid)
+        );
+    case "requestGoogleCustomTokenByCode":
+        return googleAuthorizationCodeAuth.requestGoogleCustomToken(
+            db,
+            googleConfiguration(),
+            requiredBodyString(body, "serverAuthCode")
+        );
+    case "linkGoogleAccountByCode":
+        return googleAuthorizationCodeAuth.linkGoogleAccount(
+            db,
+            googleConfiguration(),
+            requiredUID(uid),
+            requiredBodyString(body, "serverAuthCode")
         );
     case "createGoogleSignInSession":
         return createGoogleSignInSession(

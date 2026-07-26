@@ -151,6 +151,18 @@ for (const [method, segments, action, requiresAuth] of githubOAuthRoutes) {
 }
 
 const googleOAuthRoutes = [
+    [
+        "POST",
+        ["auth", "google", "authorization-code", "custom-token"],
+        "requestGoogleCustomTokenByCode",
+        false
+    ],
+    [
+        "PUT",
+        ["auth", "google", "authorization-code", "account-link"],
+        "linkGoogleAccountByCode",
+        true
+    ],
     ["POST", ["auth", "google", "sign-in-sessions"], "createGoogleSignInSession", false],
     ["GET", ["auth", "google", "callback"], "googleCallback", false],
     ["POST", ["auth", "google", "custom-token"], "requestGoogleCustomToken", false],
@@ -166,6 +178,15 @@ for (const [method, segments, action, requiresAuth] of googleOAuthRoutes) {
         { action, requiresAuth }
     );
 }
+
+assert.strictEqual(
+    matchRestRoute("GET", ["auth", "google", "authorization-code", "custom-token"]),
+    undefined
+);
+assert.strictEqual(
+    matchRestRoute("POST", ["auth", "google", "authorization-code", "account-link"]),
+    undefined
+);
 
 assert.strictEqual(matchRestRoute("GET", ["todos", "todo-1", "deletion-request"]), undefined);
 assert.strictEqual(matchRestRoute("POST", ["todos", "", "deletion-request"]), undefined);
@@ -247,6 +268,7 @@ const githubErrors = [
 ];
 
 const googleErrors = [
+    ["invalid_google_proof", 401, "invalid-google-proof"],
     ["google_provider_link_conflict", 409, "google-provider-link-conflict"],
     ["google_provider_failed", 502, "google-provider-failed"],
     ["google_revoke_failed", 502, "google-revoke-failed"]
