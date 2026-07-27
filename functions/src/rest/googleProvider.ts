@@ -16,12 +16,13 @@ export async function resolveGoogleFirebaseUID(
         firebaseUIDForUnlinkedGoogleProvider(payload);
 }
 
-// 검증된 Google provider를 현재 Firebase 사용자에 연결합니다.
+// 검증된 Google provider를 현재 Firebase 사용자에 연결하고 신규 연결 여부를 반환합니다.
 export async function linkGoogleProvider(
     uid: string,
     payload: GoogleTokenPayload
-): Promise<void> {
+): Promise<boolean> {
     const currentUser = await admin.auth().getUser(uid);
+    let didLink = true;
     try {
         const providerUser = await admin.auth().getUserByProviderUid(
             PROVIDER_ID,
@@ -30,6 +31,7 @@ export async function linkGoogleProvider(
         if (providerUser.uid !== uid) {
             throw googleProviderLinkConflictError();
         }
+        didLink = false;
     } catch (error) {
         if (firebaseAuthErrorCode(error) !== "auth/user-not-found") {
             throw error;
@@ -47,6 +49,7 @@ export async function linkGoogleProvider(
 
     const providerToLink = googleProviderForPayload(payload, email);
     await admin.auth().updateUser(uid, { providerToLink });
+    return didLink;
 }
 
 // 기존 Google provider가 소유한 Firebase uid와 최신 프로필을 반환합니다.

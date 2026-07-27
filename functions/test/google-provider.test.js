@@ -58,6 +58,8 @@ const {
     await assertUnlinkedProviderConnectsByVerifiedEmail();
     await assertUnlinkedProviderCreatesUser();
     await assertUnverifiedEmailIsRejected();
+    await assertNewProviderLinkIsReported();
+    await assertExistingProviderLinkIsReported();
     await assertLinkRejectsMismatchedEmail();
     await assertLinkRejectsProviderOwnedByAnotherUser();
     await assertProviderConflictTakesPriorityOverEmailMismatch();
@@ -139,6 +141,49 @@ async function assertUnverifiedEmailIsRejected() {
     );
     assert.deepStrictEqual(emailLookupCalls, []);
     assert.deepStrictEqual(createdUsers, []);
+}
+
+// 이번 요청에서 Google provider를 새로 연결했는지 반환하는지 검증합니다.
+async function assertNewProviderLinkIsReported() {
+    resetState();
+    currentUser = userRecord("current-uid", [], "user@example.com");
+
+    const didLink = await linkGoogleProvider(
+        "current-uid",
+        googlePayload()
+    );
+
+    assert.strictEqual(didLink, true);
+    assert.deepStrictEqual(updatedUsers, [{
+        uid: "current-uid",
+        properties: {
+            providerToLink: googleProvider("user@example.com")
+        }
+    }]);
+}
+
+// 같은 사용자의 기존 Google provider 갱신을 신규 연결로 반환하지 않는지 검증합니다.
+async function assertExistingProviderLinkIsReported() {
+    resetState();
+    currentUser = userRecord(
+        "current-uid",
+        [googleProvider("user@example.com")],
+        "user@example.com"
+    );
+    providerUIDUser = currentUser;
+
+    const didLink = await linkGoogleProvider(
+        "current-uid",
+        googlePayload()
+    );
+
+    assert.strictEqual(didLink, false);
+    assert.deepStrictEqual(updatedUsers, [{
+        uid: "current-uid",
+        properties: {
+            providerToLink: googleProvider("user@example.com")
+        }
+    }]);
 }
 
 // 현재 Firebase 사용자와 Google verified email이 다르면 계정 연결을 거부하는지 검증합니다.

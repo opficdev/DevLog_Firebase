@@ -1,5 +1,7 @@
 import * as admin from "firebase-admin";
+import * as logger from "firebase-functions/logger";
 import { HttpsError } from "firebase-functions/v2/https";
+import { toError } from "../common/error";
 import {
     GoogleJwksLookupError,
     verifyGoogleIdToken
@@ -55,15 +57,32 @@ export async function linkGoogleAccount(
         configuration,
         serverAuthCode
     );
-    await linkGoogleProvider(
+    const didLink = await linkGoogleProvider(
         uid,
         authentication.payload
     );
-    await saveGoogleCredential(
-        db,
-        uid,
-        authentication.credential
-    );
+    try {
+        await saveGoogleCredential(
+            db,
+            uid,
+            authentication.credential
+        );
+    } catch (error) {
+        if (didLink) {
+            try {
+                await admin.auth().updateUser(uid, {
+                    providersToUnlink: [PROVIDER_ID]
+                });
+            } catch (compensationError) {
+                logger.error(
+                    "Google provider 연결 보상 실패",
+                    toError(compensationError),
+                    { uid }
+                );
+            }
+        }
+        throw error;
+    }
 }
 
 // Google grant와 credential을 정리한 뒤 현재 사용자의 provider 연결을 해제합니다.

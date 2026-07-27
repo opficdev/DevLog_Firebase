@@ -13,14 +13,17 @@ const grantRevokeCalls = [];
 const customTokenCalls = [];
 const authUpdateCalls = [];
 const oauthStateCalls = [];
+const loggerCalls = [];
 let currentUser = firebaseUser([googleProvider(), githubProvider()]);
 let storedCredential = googleCredential();
+let providerLinked = true;
 let tokenExchangeError;
 let tokenVerificationError;
 let providerResolveError;
 let providerLinkError;
 let credentialSaveError;
 let customTokenError;
+let authUpdateError;
 
 const fakeAuth = {
     async createCustomToken(uid) {
@@ -35,6 +38,9 @@ const fakeAuth = {
     },
     async updateUser(uid, properties) {
         authUpdateCalls.push({ uid, properties });
+        if (authUpdateError) {
+            throw authUpdateError;
+        }
         return { uid };
     }
 };
@@ -42,6 +48,11 @@ const fakeAuth = {
 require.cache[require.resolve("firebase-admin")] = {
     exports: {
         auth: () => fakeAuth
+    }
+};
+require.cache[require.resolve("firebase-functions/logger")] = {
+    exports: {
+        error: (...values) => loggerCalls.push(values)
     }
 };
 require.cache[require.resolve("../lib/rest/googleClient")] = {
@@ -88,6 +99,7 @@ require.cache[require.resolve("../lib/rest/googleProvider")] = {
             if (providerLinkError) {
                 throw providerLinkError;
             }
+            return providerLinked;
         }
     }
 };
@@ -135,6 +147,9 @@ const configuration = {
     await assertProviderResolutionFailureDoesNotRevoke();
     await assertProviderLinkFailureDoesNotRevoke();
     await assertCredentialSaveFailureDoesNotRevoke();
+    await assertNewProviderLinkIsRevertedAfterCredentialSaveFailure();
+    await assertExistingProviderLinkIsPreservedAfterCredentialSaveFailure();
+    await assertCompensationFailurePreservesCredentialSaveError();
     await assertCustomTokenFailureDoesNotRevoke();
     await assertLastProviderUnlinkIsBlockedBeforeRevocation();
     await assertGoogleUnlinkRevokesCredentialBeforeProviderRemoval();
@@ -331,6 +346,7 @@ async function assertProviderLinkFailureDoesNotRevoke() {
         (error) => error === failure
     );
     assert.deepStrictEqual(credentialSaveCalls, []);
+    assert.deepStrictEqual(authUpdateCalls, []);
     assertNoOAuthStateOrRevocation();
 }
 
@@ -359,6 +375,73 @@ async function assertCredentialSaveFailureDoesNotRevoke() {
         );
         assertNoOAuthStateOrRevocation();
     }
+}
+
+// 신규 provider 연결 뒤 credential 저장 실패 시 provider 연결을 되돌리는지 검증합니다.
+async function assertNewProviderLinkIsRevertedAfterCredentialSaveFailure() {
+    resetState();
+    const failure = new Error("credential save failed");
+    credentialSaveError = failure;
+
+    await assert.rejects(
+        () => linkGoogleAccount(
+            db,
+            configuration,
+            "current-uid",
+            "server-auth-code"
+        ),
+        (error) => error === failure
+    );
+    assert.deepStrictEqual(authUpdateCalls, [{
+        uid: "current-uid",
+        properties: { providersToUnlink: ["google.com"] }
+    }]);
+    assertNoOAuthStateOrRevocation();
+}
+
+// 기존 provider 갱신 뒤 credential 저장 실패 시 provider 연결을 유지하는지 검증합니다.
+async function assertExistingProviderLinkIsPreservedAfterCredentialSaveFailure() {
+    resetState();
+    providerLinked = false;
+    const failure = new Error("credential save failed");
+    credentialSaveError = failure;
+
+    await assert.rejects(
+        () => linkGoogleAccount(
+            db,
+            configuration,
+            "current-uid",
+            "server-auth-code"
+        ),
+        (error) => error === failure
+    );
+    assert.deepStrictEqual(authUpdateCalls, []);
+    assertNoOAuthStateOrRevocation();
+}
+
+// provider 보상 해제 실패를 기록하고 원래 credential 저장 오류를 유지하는지 검증합니다.
+async function assertCompensationFailurePreservesCredentialSaveError() {
+    resetState();
+    const saveFailure = new Error("credential save failed");
+    const compensationFailure = new Error("provider unlink failed");
+    credentialSaveError = saveFailure;
+    authUpdateError = compensationFailure;
+
+    await assert.rejects(
+        () => linkGoogleAccount(
+            db,
+            configuration,
+            "current-uid",
+            "server-auth-code"
+        ),
+        (error) => error === saveFailure
+    );
+    assert.deepStrictEqual(loggerCalls, [[
+        "Google provider 연결 보상 실패",
+        compensationFailure,
+        { uid: "current-uid" }
+    ]]);
+    assertNoOAuthStateOrRevocation();
 }
 
 // custom token 발급 실패 뒤 저장된 Google credential을 자동 폐기하지 않는지 검증합니다.
@@ -446,14 +529,17 @@ function resetState() {
     customTokenCalls.length = 0;
     authUpdateCalls.length = 0;
     oauthStateCalls.length = 0;
+    loggerCalls.length = 0;
     currentUser = firebaseUser([googleProvider(), githubProvider()]);
     storedCredential = googleCredential();
+    providerLinked = true;
     tokenExchangeError = undefined;
     tokenVerificationError = undefined;
     providerResolveError = undefined;
     providerLinkError = undefined;
     credentialSaveError = undefined;
     customTokenError = undefined;
+    authUpdateError = undefined;
 }
 
 // Google token endpoint 교환 결과를 구성합니다.
