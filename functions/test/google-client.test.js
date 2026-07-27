@@ -33,8 +33,11 @@ const {
 } = require("../lib/rest/googleClient");
 
 (async () => {
-    await assertCodeExchangeReturnsServerTokens();
-    await assertProviderFailureIsDistinguished();
+    await assertServerAuthCodeExchangeReturnsServerTokens();
+    await assertInvalidServerAuthCodeIsDistinguished();
+    await assertServerAuthCodeProviderFailureIsDistinguished();
+    await assertServerAuthCodeNetworkFailureIsDistinguished();
+    await assertServerAuthCodeRequiresTokens();
     await assertGrantRevocationUsesRefreshToken();
     await assertAlreadyInvalidTokenIsAccepted();
     await assertGrantRevocationFailureIsDistinguished();
@@ -43,16 +46,14 @@ const {
     process.exitCode = 1;
 });
 
-// authorization code 교환 결과에서 서버가 사용할 token만 반환하는지 검증합니다.
-async function assertCodeExchangeReturnsServerTokens() {
+// serverAuthCode 교환 요청이 callback과 PKCE 값 없이 서버 token을 반환하는지 검증합니다.
+async function assertServerAuthCodeExchangeReturnsServerTokens() {
     resetState();
 
     const token = await requestGoogleOAuthToken(
-        "google-code",
+        "server-auth-code",
         "client-id",
-        "client-secret",
-        "https://example.com/auth/google/callback",
-        "provider-verifier"
+        "client-secret"
     );
 
     assert.deepStrictEqual(token, {
@@ -67,10 +68,9 @@ async function assertCodeExchangeReturnsServerTokens() {
         {
             client_id: "client-id",
             client_secret: "client-secret",
-            code: "google-code",
-            redirect_uri: "https://example.com/auth/google/callback",
-            grant_type: "authorization_code",
-            code_verifier: "provider-verifier"
+            code: "server-auth-code",
+            redirect_uri: "",
+            grant_type: "authorization_code"
         }
     );
     assert.strictEqual(
@@ -79,18 +79,68 @@ async function assertCodeExchangeReturnsServerTokens() {
     );
 }
 
-// Google token endpoint 실패를 provider 오류로 구분하는지 검증합니다.
-async function assertProviderFailureIsDistinguished() {
+// 유효하지 않은 serverAuthCode를 Google 인증 증명 오류로 구분하는지 검증합니다.
+async function assertInvalidServerAuthCodeIsDistinguished() {
+    resetState();
+    requestError = axiosError(400, { error: "invalid_grant" });
+
+    await assert.rejects(
+        () => requestGoogleOAuthToken(
+            "invalid-server-auth-code",
+            "client-id",
+            "client-secret"
+        ),
+        (error) =>
+            error.code === "unauthenticated" &&
+            error.details?.reason === "invalid_google_proof"
+    );
+}
+
+// Google token endpoint 장애를 provider 오류로 구분하는지 검증합니다.
+async function assertServerAuthCodeProviderFailureIsDistinguished() {
     resetState();
     requestError = axiosError(503, { error: "temporarily_unavailable" });
 
     await assert.rejects(
         () => requestGoogleOAuthToken(
-            "google-code",
+            "server-auth-code",
             "client-id",
-            "client-secret",
-            "https://example.com/auth/google/callback",
-            "provider-verifier"
+            "client-secret"
+        ),
+        (error) => error.details?.reason === "google_provider_failed"
+    );
+}
+
+// Google token endpoint 통신 실패를 provider 오류로 구분하는지 검증합니다.
+async function assertServerAuthCodeNetworkFailureIsDistinguished() {
+    resetState();
+    requestError = new Error("Google token endpoint에 연결할 수 없습니다.");
+
+    await assert.rejects(
+        () => requestGoogleOAuthToken(
+            "server-auth-code",
+            "client-id",
+            "client-secret"
+        ),
+        (error) => error.details?.reason === "google_provider_failed"
+    );
+}
+
+// Google token endpoint 응답에 필수 token이 없으면 provider 오류로 처리하는지 검증합니다.
+async function assertServerAuthCodeRequiresTokens() {
+    resetState();
+    tokenResponse = {
+        refresh_token: "refresh-token",
+        expires_in: 3600,
+        scope: "openid email profile",
+        token_type: "Bearer"
+    };
+
+    await assert.rejects(
+        () => requestGoogleOAuthToken(
+            "server-auth-code",
+            "client-id",
+            "client-secret"
         ),
         (error) => error.details?.reason === "google_provider_failed"
     );

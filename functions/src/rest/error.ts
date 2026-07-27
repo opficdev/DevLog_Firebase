@@ -42,6 +42,16 @@ const restErrorByReason: Record<string, RestErrorDefinition> = {
         code: "google-provider-link-conflict",
         message: "Google provider가 다른 계정에 연결되어 있습니다."
     },
+    google_account_link_in_progress: {
+        status: 409,
+        code: "google-account-link-in-progress",
+        message: "Google 계정 연결 처리가 진행 중입니다."
+    },
+    invalid_google_proof: {
+        status: 401,
+        code: "invalid-google-proof",
+        message: "Google 인증 증명이 유효하지 않습니다."
+    },
     google_revoke_failed: {
         status: 502,
         code: "google-revoke-failed",

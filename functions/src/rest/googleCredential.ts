@@ -8,6 +8,7 @@ import { FirestorePath } from "../common/firestorePath";
 import { revokeGoogleOAuthToken } from "./googleClient";
 
 const REVOCATION_LEASE_MILLISECONDS = 5 * 60 * 1000;
+const ACCOUNT_LINK_LEASE_MILLISECONDS = 5 * 60 * 1000;
 
 // 서버에서 보관하는 Google OAuth credential을 나타냅니다.
 export interface GoogleCredential {
@@ -19,11 +20,44 @@ export interface GoogleCredential {
     refreshToken?: string;
 }
 
-// Google credential을 저장하고 같은 client의 기존 refresh token을 보존합니다.
+// 현재 사용자의 Google 계정 연결 처리 권한을 획득하고 claim을 반환합니다.
+export async function claimGoogleAccountLink(
+    db: FirebaseFirestore.Firestore,
+    uid: string
+): Promise<string> {
+    const credentialRef = db.doc(FirestorePath.googleCredential(uid));
+    const claim = randomBytes(32).toString("base64url");
+    await db.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(credentialRef);
+        if (revocationLeaseActive(snapshot.data())) {
+            throw new HttpsError(
+                "aborted",
+                "Google credential 폐기 처리가 진행 중입니다."
+            );
+        }
+        if (accountLinkLeaseActive(snapshot.data())) {
+            throw new HttpsError(
+                "aborted",
+                "Google 계정 연결 처리가 진행 중입니다.",
+                { reason: "google_account_link_in_progress" }
+            );
+        }
+        transaction.set(credentialRef, {
+            accountLinkClaim: claim,
+            accountLinkExpiresAt: Timestamp.fromMillis(
+                Date.now() + ACCOUNT_LINK_LEASE_MILLISECONDS
+            )
+        }, { merge: true });
+    });
+    return claim;
+}
+
+// Google credential을 저장하며 같은 client의 refresh token 보존과 계정 연결 claim 해제를 함께 처리합니다.
 export async function saveGoogleCredential(
     db: FirebaseFirestore.Firestore,
     uid: string,
-    credential: GoogleCredential
+    credential: GoogleCredential,
+    accountLinkClaim?: string
 ): Promise<void> {
     const credentialRootRef = db.doc(FirestorePath.authCredential(uid));
     const credentialRef = db.doc(FirestorePath.googleCredential(uid));
@@ -42,6 +76,25 @@ export async function saveGoogleCredential(
                 "Google credential 폐기 처리가 진행 중입니다."
             );
         }
+        if (
+            accountLinkLeaseActive(credentialSnapshot.data()) &&
+            credentialSnapshot.data()?.accountLinkClaim !== accountLinkClaim
+        ) {
+            throw new HttpsError(
+                "aborted",
+                "Google 계정 연결 처리가 진행 중입니다.",
+                { reason: "google_account_link_in_progress" }
+            );
+        }
+        if (
+            accountLinkClaim &&
+            credentialSnapshot.data()?.accountLinkClaim !== accountLinkClaim
+        ) {
+            throw new HttpsError(
+                "aborted",
+                "Google 계정 연결 처리 권한이 만료되었습니다."
+            );
+        }
 
         const stored = credentialFromData(credentialSnapshot.data());
         const refreshToken = credential.refreshToken ??
@@ -56,7 +109,50 @@ export async function saveGoogleCredential(
         } else if (credentialSnapshot.exists) {
             value.refreshToken = FieldValue.delete();
         }
+        if (accountLinkClaim) {
+            value.accountLinkClaim = FieldValue.delete();
+            value.accountLinkExpiresAt = FieldValue.delete();
+        }
         transaction.set(credentialRef, value, { merge: true });
+    });
+}
+
+// 실패한 Google 계정 연결 요청이 소유한 lease를 해제합니다.
+export async function releaseGoogleAccountLink(
+    db: FirebaseFirestore.Firestore,
+    uid: string,
+    claim: string
+): Promise<void> {
+    const credentialRef = db.doc(FirestorePath.googleCredential(uid));
+    await db.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(credentialRef);
+        if (snapshot.data()?.accountLinkClaim === claim) {
+            transaction.update(credentialRef, {
+                accountLinkClaim: FieldValue.delete(),
+                accountLinkExpiresAt: FieldValue.delete()
+            });
+        }
+    });
+}
+
+// Google 계정 연결 보상 전에 현재 claim의 lease를 연장하고 소유 여부를 반환합니다.
+export async function renewGoogleAccountLink(
+    db: FirebaseFirestore.Firestore,
+    uid: string,
+    claim: string
+): Promise<boolean> {
+    const credentialRef = db.doc(FirestorePath.googleCredential(uid));
+    return db.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(credentialRef);
+        if (snapshot.data()?.accountLinkClaim !== claim) {
+            return false;
+        }
+        transaction.update(credentialRef, {
+            accountLinkExpiresAt: Timestamp.fromMillis(
+                Date.now() + ACCOUNT_LINK_LEASE_MILLISECONDS
+            )
+        });
+        return true;
     });
 }
 
@@ -118,7 +214,8 @@ async function claimGoogleCredentialRevocation(
         const stored = credentialFromData(snapshot.data());
         if (
             !credentialsEqual(stored, credential) ||
-            revocationLeaseActive(snapshot.data())
+            revocationLeaseActive(snapshot.data()) ||
+            accountLinkLeaseActive(snapshot.data())
         ) {
             throw new HttpsError(
                 "aborted",
@@ -188,7 +285,8 @@ async function deleteGoogleCredential(
         const snapshot = await transaction.get(credentialRef);
         if (
             credentialFromData(snapshot.data()) ||
-            typeof snapshot.data()?.revocationClaim === "string"
+            typeof snapshot.data()?.revocationClaim === "string" ||
+            accountLinkLeaseActive(snapshot.data())
         ) {
             throw new HttpsError(
                 "aborted",
@@ -232,6 +330,18 @@ function revocationLeaseActive(
 ): boolean {
     const claim = data?.revocationClaim;
     const expiresAt = data?.revocationExpiresAt;
+    return typeof claim === "string" &&
+        expiresAt &&
+        typeof expiresAt.toMillis === "function" &&
+        Date.now() < expiresAt.toMillis();
+}
+
+// credential 문서에 유효한 계정 연결 lease가 남아 있는지 확인합니다.
+function accountLinkLeaseActive(
+    data: FirebaseFirestore.DocumentData | undefined
+): boolean {
+    const claim = data?.accountLinkClaim;
+    const expiresAt = data?.accountLinkExpiresAt;
     return typeof claim === "string" &&
         expiresAt &&
         typeof expiresAt.toMillis === "function" &&

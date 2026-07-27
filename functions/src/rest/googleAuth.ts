@@ -1,12 +1,23 @@
 import * as admin from "firebase-admin";
+import * as logger from "firebase-functions/logger";
 import { HttpsError } from "firebase-functions/v2/https";
-import { verifyGoogleIdToken } from "../auth/googleIdToken";
+import { toError } from "../common/error";
+import {
+    GoogleJwksLookupError,
+    verifyGoogleIdToken
+} from "../auth/googleIdToken";
 import type { GoogleTokenPayload } from "../auth/googleIdToken";
-import { requestGoogleOAuthToken } from "./googleClient";
+import {
+    googleProviderError,
+    requestGoogleOAuthToken
+} from "./googleClient";
 import type { GoogleOAuthToken } from "./googleClient";
 import type { GoogleConfiguration } from "./googleConfiguration";
 import {
+    claimGoogleAccountLink,
     googleCredentialForUser,
+    releaseGoogleAccountLink,
+    renewGoogleAccountLink,
     revokeGoogleCredential,
     saveGoogleCredential
 } from "./googleCredential";
@@ -15,175 +26,88 @@ import {
     linkGoogleProvider,
     resolveGoogleFirebaseUID
 } from "./googleProvider";
-import {
-    claimOAuthSession,
-    claimOAuthTicket,
-    completeOAuthSession,
-    consumeOAuthTicket,
-    createOAuthSession,
-    createOAuthVerifier,
-    releaseOAuthSession,
-    releaseOAuthTicket
-} from "./oauth/session";
-import type {
-    ClaimedOAuthTicket,
-    OAuthPurpose
-} from "./oauth/session";
 
-const PROVIDER = "google";
 const PROVIDER_ID = "google.com";
-const APP_CALLBACK_URL = "DevLog://oauth-callback";
-const GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 
-// Google OAuth session 생성 응답을 나타냅니다.
-export interface GoogleOAuthSessionResponse {
-    // 앱이 열 Google authorization 주소를 저장합니다.
-    authorizationURL: string;
-}
-
-// Google ticket에 저장된 credential과 검증된 사용자 payload를 나타냅니다.
-interface GoogleTicketData {
-    // 서버에 저장할 Google credential을 저장합니다.
-    credential: GoogleCredential;
-    // Firebase Auth 라우팅에 사용할 검증된 사용자 payload를 저장합니다.
-    payload: GoogleTokenPayload;
-}
-
-// Google callback 실패를 앱이 종료할 수 있는 안전한 redirect 주소로 반환합니다.
-export function googleCallbackFailureURL() {
-    return callbackURL({ error: "oauth-failed" });
-}
-
-// Google 로그인 OAuth session을 생성합니다.
-export async function createGoogleSignInSession(
-    db: FirebaseFirestore.Firestore,
-    configuration: GoogleConfiguration,
-    appChallenge: string
-): Promise<GoogleOAuthSessionResponse> {
-    return createGoogleSession(
-        db,
-        configuration,
-        "signIn",
-        appChallenge
-    );
-}
-
-// 현재 Firebase uid에 결합된 Google 계정 연결 session을 생성합니다.
-export async function createGoogleAccountLinkSession(
-    db: FirebaseFirestore.Firestore,
-    configuration: GoogleConfiguration,
-    uid: string,
-    appChallenge: string
-): Promise<GoogleOAuthSessionResponse> {
-    return createGoogleSession(
-        db,
-        configuration,
-        "link",
-        appChallenge,
-        uid
-    );
-}
-
-// Google callback code와 ID token을 검증하고 앱에 ticket만 포함한 redirect 주소를 반환합니다.
-export async function googleCallbackURL(
-    db: FirebaseFirestore.Firestore,
-    configuration: GoogleConfiguration,
-    state?: string,
-    code?: string
-): Promise<string> {
-    let session;
-    try {
-        if (!state || !code) {
-            throw new HttpsError(
-                "invalid-argument",
-                "Google callback state와 code가 필요합니다."
-            );
-        }
-        session = await claimOAuthSession(db, state, PROVIDER);
-        const token = await requestGoogleOAuthToken(
-            code,
-            configuration.clientId,
-            configuration.clientSecret,
-            configuration.callbackURL,
-            session.providerPKCEVerifier
-        );
-        const payload = await verifyGoogleIdToken(
-            token.idToken,
-            configuration.clientId
-        );
-        const ticket = await completeOAuthSession(db, {
-            session,
-            payload: ticketPayload(
-                token,
-                payload,
-                configuration.clientId
-            )
-        });
-        return callbackURL({ ticket });
-    } catch (error) {
-        if (session) {
-            try {
-                await releaseOAuthSession(db, session);
-            } catch (releaseError) {
-                console.error(
-                    "Google OAuth callback session 해제 실패",
-                    callbackErrorMetadata(releaseError)
-                );
-            }
-        }
-        console.error("Google OAuth callback 처리 실패", callbackErrorMetadata(error));
-        return googleCallbackFailureURL();
-    }
-}
-
-// Google 로그인 ticket을 검증하고 Firebase custom token만 반환합니다.
+// iOS serverAuthCode를 검증해 Firebase custom token을 반환합니다.
 export async function requestGoogleCustomToken(
     db: FirebaseFirestore.Firestore,
-    ticket: string,
-    appVerifier: string
+    configuration: GoogleConfiguration,
+    serverAuthCode: string
 ): Promise<{ customToken: string }> {
-    const claimed = await claimOAuthTicket(
-        db,
-        ticket,
-        appVerifier,
-        PROVIDER,
-        "signIn"
+    const authentication = await authenticateGoogleAuthorizationCode(
+        configuration,
+        serverAuthCode
     );
-    try {
-        const data = ticketDataFrom(claimed);
-        const uid = await resolveGoogleFirebaseUID(data.payload);
-        await saveGoogleCredential(db, uid, data.credential);
-        const customToken = await admin.auth().createCustomToken(uid);
-        await consumeOAuthTicket(db, claimed);
-        return { customToken };
-    } catch (error) {
-        await releaseOAuthTicket(db, claimed);
-        throw error;
-    }
+    const uid = await resolveGoogleFirebaseUID(authentication.payload);
+    await saveGoogleCredential(
+        db,
+        uid,
+        authentication.credential
+    );
+    const customToken = await admin.auth().createCustomToken(uid);
+    return { customToken };
 }
 
-// Google 계정 연결 ticket을 검증하고 provider와 credential을 현재 사용자에 연결합니다.
+// iOS serverAuthCode를 검증해 현재 Firebase 사용자에게 Google 계정을 연결합니다.
 export async function linkGoogleAccount(
     db: FirebaseFirestore.Firestore,
+    configuration: GoogleConfiguration,
     uid: string,
-    ticket: string,
-    appVerifier: string
+    serverAuthCode: string
 ): Promise<void> {
-    const claimed = await claimOAuthTicket(
-        db,
-        ticket,
-        appVerifier,
-        PROVIDER,
-        "link",
-        uid
-    );
+    const claim = await claimGoogleAccountLink(db, uid);
+    let didLink = false;
     try {
-        const data = ticketDataFrom(claimed);
-        await linkGoogleProvider(uid, data.payload);
-        await saveGoogleCredential(db, uid, data.credential);
-        await consumeOAuthTicket(db, claimed);
+        const authentication = await authenticateGoogleAuthorizationCode(
+            configuration,
+            serverAuthCode
+        );
+        didLink = await linkGoogleProvider(
+            uid,
+            authentication.payload
+        );
+        await saveGoogleCredential(
+            db,
+            uid,
+            authentication.credential,
+            claim
+        );
     } catch (error) {
-        await releaseOAuthTicket(db, claimed);
+        if (didLink) {
+            let canCompensate = false;
+            try {
+                canCompensate = await renewGoogleAccountLink(db, uid, claim);
+            } catch (renewError) {
+                logger.error(
+                    "Google 계정 연결 lease 갱신 실패",
+                    toError(renewError),
+                    { uid }
+                );
+            }
+            if (canCompensate) {
+                try {
+                    await admin.auth().updateUser(uid, {
+                        providersToUnlink: [PROVIDER_ID]
+                    });
+                } catch (compensationError) {
+                    logger.error(
+                        "Google provider 연결 보상 실패",
+                        toError(compensationError),
+                        { uid }
+                    );
+                }
+            }
+        }
+        try {
+            await releaseGoogleAccountLink(db, uid, claim);
+        } catch (releaseError) {
+            logger.error(
+                "Google 계정 연결 lease 해제 실패",
+                toError(releaseError),
+                { uid }
+            );
+        }
         throw error;
     }
 }
@@ -225,174 +149,64 @@ export async function revokeGoogleAccessToken(
     await revokeGoogleCredential(db, uid, credential);
 }
 
-// 목적과 uid에 결합된 Google OAuth session과 authorization 주소를 생성합니다.
-async function createGoogleSession(
-    db: FirebaseFirestore.Firestore,
+// iOS serverAuthCode를 교환하고 ID token을 검증해 인증 자료를 반환합니다.
+async function authenticateGoogleAuthorizationCode(
     configuration: GoogleConfiguration,
-    purpose: OAuthPurpose,
-    appChallenge: string,
-    uid?: string
-): Promise<GoogleOAuthSessionResponse> {
-    const providerPKCEVerifier = createOAuthVerifier();
-    const session = await createOAuthSession(db, {
-        provider: PROVIDER,
-        purpose,
-        appChallenge,
-        providerPKCEVerifier,
-        uid
-    });
-    const authorizationURL = new URL(GOOGLE_AUTHORIZE_URL);
-    authorizationURL.searchParams.set("client_id", configuration.clientId);
-    authorizationURL.searchParams.set("redirect_uri", configuration.callbackURL);
-    authorizationURL.searchParams.set("response_type", "code");
-    authorizationURL.searchParams.set("scope", "openid email profile");
-    authorizationURL.searchParams.set("access_type", "offline");
-    authorizationURL.searchParams.set("prompt", "select_account");
-    authorizationURL.searchParams.set("state", session.state);
-    authorizationURL.searchParams.set("code_challenge", session.providerPKCEChallenge);
-    authorizationURL.searchParams.set("code_challenge_method", "S256");
-    return { authorizationURL: authorizationURL.toString() };
+    serverAuthCode: string
+) {
+    const token = await requestGoogleOAuthToken(
+        serverAuthCode,
+        configuration.clientId,
+        configuration.clientSecret
+    );
+    const payload = await verifiedGooglePayload(
+        token.idToken,
+        configuration.clientId
+    );
+    return {
+        payload,
+        credential: googleCredential(
+            token,
+            configuration.clientId
+        )
+    };
 }
 
-// 검증된 Google token과 사용자 claim을 Firestore ticket payload로 구성합니다.
-function ticketPayload(
-    token: GoogleOAuthToken,
-    payload: GoogleTokenPayload,
+// Google ID token 검증 실패를 인증 증명 오류로 변환합니다.
+async function verifiedGooglePayload(
+    idToken: string,
     clientId: string
-): Record<string, unknown> {
-    const value: Record<string, unknown> = {
+): Promise<GoogleTokenPayload> {
+    try {
+        return await verifyGoogleIdToken(
+            idToken,
+            clientId
+        );
+    } catch (error) {
+        if (error instanceof GoogleJwksLookupError) {
+            throw googleProviderError();
+        }
+        throw invalidGoogleProofError();
+    }
+}
+
+// Google OAuth token을 서버에 저장할 credential로 구성합니다.
+function googleCredential(
+    token: GoogleOAuthToken,
+    clientId: string
+): GoogleCredential {
+    return {
         accessToken: token.accessToken,
         clientId,
-        issuer: payload.iss,
-        subject: payload.sub,
-        audience: payload.aud,
-        issuedAt: payload.iat,
-        expiresAt: payload.exp
-    };
-    addOptionalTicketValue(value, "refreshToken", token.refreshToken);
-    addOptionalTicketValue(value, "email", payload.email);
-    if (typeof payload.email_verified === "boolean") {
-        value.emailVerified = payload.email_verified;
-    }
-    addOptionalTicketValue(value, "name", payload.name);
-    addOptionalTicketValue(value, "picture", payload.picture);
-    return value;
-}
-
-// 선택적인 문자열 claim이 있을 때만 ticket payload에 추가합니다.
-function addOptionalTicketValue(
-    payload: Record<string, unknown>,
-    key: string,
-    value: string | undefined
-): void {
-    if (value) {
-        payload[key] = value;
-    }
-}
-
-// OAuth ticket의 서버 전용 payload를 Google credential과 사용자 claim으로 변환합니다.
-function ticketDataFrom(
-    ticket: ClaimedOAuthTicket
-): GoogleTicketData {
-    const value = ticket.payload;
-    const accessToken = requiredTicketString(value, "accessToken");
-    const clientId = requiredTicketString(value, "clientId");
-    const payload: GoogleTokenPayload = {
-        iss: requiredTicketString(value, "issuer"),
-        sub: requiredTicketString(value, "subject"),
-        aud: requiredTicketString(value, "audience"),
-        iat: requiredTicketNumber(value, "issuedAt"),
-        exp: requiredTicketNumber(value, "expiresAt"),
-        email: optionalTicketString(value, "email"),
-        email_verified: optionalTicketBoolean(value, "emailVerified"),
-        name: optionalTicketString(value, "name"),
-        picture: optionalTicketString(value, "picture")
-    };
-    if (payload.aud !== clientId) {
-        throw invalidGoogleTicketError();
-    }
-    return {
-        credential: {
-            accessToken,
-            clientId,
-            refreshToken: optionalTicketString(value, "refreshToken")
-        },
-        payload
+        refreshToken: token.refreshToken
     };
 }
 
-// Google ticket에서 필수 문자열을 반환합니다.
-function requiredTicketString(
-    payload: Record<string, unknown>,
-    key: string
-): string {
-    const value = payload[key];
-    if (typeof value !== "string" || !value) {
-        throw invalidGoogleTicketError();
-    }
-    return value;
-}
-
-// Google ticket에서 선택적인 문자열을 반환합니다.
-function optionalTicketString(
-    payload: Record<string, unknown>,
-    key: string
-): string | undefined {
-    const value = payload[key];
-    return typeof value === "string" && value ? value : undefined;
-}
-
-// Google ticket에서 필수 숫자를 반환합니다.
-function requiredTicketNumber(
-    payload: Record<string, unknown>,
-    key: string
-): number {
-    const value = payload[key];
-    if (typeof value !== "number") {
-        throw invalidGoogleTicketError();
-    }
-    return value;
-}
-
-// Google ticket에서 선택적인 boolean을 반환합니다.
-function optionalTicketBoolean(
-    payload: Record<string, unknown>,
-    key: string
-): boolean | undefined {
-    const value = payload[key];
-    return typeof value === "boolean" ? value : undefined;
-}
-
-// 잘못된 Google ticket payload 오류를 구성합니다.
-function invalidGoogleTicketError() {
+// 유효하지 않은 Google 인증 증명을 인증 실패 오류로 구성합니다.
+function invalidGoogleProofError(): HttpsError {
     return new HttpsError(
-        "invalid-argument",
-        "OAuth ticket의 Google 인증 정보가 올바르지 않습니다.",
-        { reason: "invalid_oauth_ticket" }
+        "unauthenticated",
+        "Google 인증 증명이 유효하지 않습니다.",
+        { reason: "invalid_google_proof" }
     );
-}
-
-// 비밀값 없이 callback 오류의 종류와 문구만 로그 데이터로 구성합니다.
-function callbackErrorMetadata(error: unknown) {
-    if (error instanceof Error) {
-        return {
-            name: error.name,
-            message: error.message
-        };
-    }
-    return {
-        name: "UnknownError",
-        message: "알 수 없는 Google OAuth callback 오류"
-    };
-}
-
-// 앱 callback 주소에 ticket 또는 안전한 오류 값만 추가합니다.
-function callbackURL(query: { ticket?: string; error?: string }) {
-    const url = new URL(APP_CALLBACK_URL);
-    if (query.ticket) {
-        url.searchParams.set("ticket", query.ticket);
-    } else if (query.error) {
-        url.searchParams.set("error", query.error);
-    }
-    return url.toString();
 }

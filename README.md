@@ -75,7 +75,18 @@ Firebase CLI의 `--project`로 staging 또는 prod Firebase project를 선택합
 
 GitHub, Google, Apple 인증 설정은 일반 환경 변수나 `.env`에 저장하지 않고 Firebase project별 Secret Manager의 `GITHUB_OAUTH_CONFIG`, `GOOGLE_OAUTH_CONFIG`, `APPLE_AUTH_CONFIG` JSON Secret에서 각각 관리합니다.
 
-GitHub과 Google의 각 JSON에는 `clientId`, `clientSecret`, `callbackURL` 필드를 모두 포함합니다.
+GitHub JSON에는 `clientId`, `clientSecret`, `callbackURL` 필드를 모두 포함합니다.
+
+Google JSON에는 `clientId`, `clientSecret` 필드를 필수로 포함합니다. `callbackURL`은 사용하지 않습니다.
+
+Google `clientSecret`은 같은 환경의 `GOOGLE_OAUTH_CONFIG.clientId`에 대응하는 Web OAuth client에서 발급된 값이어야 합니다.
+
+iOS Google Sign-In 설정은 환경별 Firebase Secret과 다음과 같이 일치해야 합니다.
+
+- staging `GIDServerClientID` = staging `GOOGLE_OAUTH_CONFIG.clientId`
+- production `GIDServerClientID` = production `GOOGLE_OAUTH_CONFIG.clientId`
+
+Google 인증은 서버 callback route와 Firebase Hosting rewrite를 사용하지 않습니다. GitHub 인증은 기존 `callbackURL`과 Hosting rewrite를 계속 사용합니다.
 
 Apple JSON에는 `teamId`, `clientId`, `keyId`, `privateKey` 필드를 모두 포함합니다.
 

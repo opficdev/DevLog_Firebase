@@ -1,5 +1,5 @@
 import * as jwt from "jsonwebtoken";
-import jwksClient from "jwks-rsa";
+import jwksClient, { SigningKeyNotFoundError } from "jwks-rsa";
 
 const GOOGLE_IDENTITY_ISSUERS = [
     "https://accounts.google.com",
@@ -15,6 +15,9 @@ const googleJwksClient = jwksClient({
     rateLimit: true,
     jwksRequestsPerMinute: 10
 });
+
+// Google JWKS 통신·응답 실패를 token 검증 실패와 구분합니다.
+export class GoogleJwksLookupError extends Error {}
 
 // 검증된 Google ID token의 인증·프로필 claim을 나타냅니다.
 export interface GoogleTokenPayload {
@@ -50,7 +53,11 @@ function getGooglePublicKey(
 
     googleJwksClient.getSigningKey(header.kid)
         .then((key) => callback(null, key.getPublicKey()))
-        .catch((error) => callback(error));
+        .catch((error) => callback(
+            error instanceof SigningKeyNotFoundError ?
+                error :
+                new GoogleJwksLookupError("Google JWKS lookup failed")
+        ));
 }
 
 // 검증된 JWT payload가 필요한 Google ID token claim을 포함하는지 확인합니다.
@@ -72,9 +79,16 @@ export function verifyGoogleIdToken(
     clientId: string
 ) {
     return new Promise<GoogleTokenPayload>((resolve, reject) => {
+        let publicKeyError: Error | null = null;
         jwt.verify(
             idToken,
-            getGooglePublicKey,
+            (header, callback) => getGooglePublicKey(
+                header,
+                (error, publicKey) => {
+                    publicKeyError = error;
+                    callback(error, publicKey);
+                }
+            ),
             {
                 algorithms: ["RS256"],
                 audience: clientId,
@@ -82,7 +96,7 @@ export function verifyGoogleIdToken(
             },
             (error, decoded) => {
                 if (error) {
-                    reject(error);
+                    reject(publicKeyError ?? error);
                     return;
                 }
 

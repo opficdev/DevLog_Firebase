@@ -151,11 +151,18 @@ for (const [method, segments, action, requiresAuth] of githubOAuthRoutes) {
 }
 
 const googleOAuthRoutes = [
-    ["POST", ["auth", "google", "sign-in-sessions"], "createGoogleSignInSession", false],
-    ["GET", ["auth", "google", "callback"], "googleCallback", false],
-    ["POST", ["auth", "google", "custom-token"], "requestGoogleCustomToken", false],
-    ["POST", ["auth", "google", "account-link-sessions"], "createGoogleAccountLinkSession", true],
-    ["PUT", ["auth", "google", "account-link"], "linkGoogleAccount", true],
+    [
+        "POST",
+        ["auth", "google", "authorization-code", "custom-token"],
+        "requestGoogleCustomToken",
+        false
+    ],
+    [
+        "PUT",
+        ["auth", "google", "authorization-code", "account-link"],
+        "linkGoogleAccount",
+        true
+    ],
     ["DELETE", ["auth", "google", "account-link"], "unlinkGoogleAccount", true],
     ["DELETE", ["auth", "google", "access-token"], "revokeGoogleAccessToken", true]
 ];
@@ -165,6 +172,24 @@ for (const [method, segments, action, requiresAuth] of googleOAuthRoutes) {
         matchRestRoute(method, segments),
         { action, requiresAuth }
     );
+}
+
+assert.strictEqual(
+    matchRestRoute("GET", ["auth", "google", "authorization-code", "custom-token"]),
+    undefined
+);
+assert.strictEqual(
+    matchRestRoute("POST", ["auth", "google", "authorization-code", "account-link"]),
+    undefined
+);
+for (const [method, segments] of [
+    ["POST", ["auth", "google", "sign-in-sessions"]],
+    ["GET", ["auth", "google", "callback"]],
+    ["POST", ["auth", "google", "custom-token"]],
+    ["POST", ["auth", "google", "account-link-sessions"]],
+    ["PUT", ["auth", "google", "account-link"]]
+]) {
+    assert.strictEqual(matchRestRoute(method, segments), undefined);
 }
 
 assert.strictEqual(matchRestRoute("GET", ["todos", "todo-1", "deletion-request"]), undefined);
@@ -247,6 +272,8 @@ const githubErrors = [
 ];
 
 const googleErrors = [
+    ["invalid_google_proof", 401, "invalid-google-proof"],
+    ["google_account_link_in_progress", 409, "google-account-link-in-progress"],
     ["google_provider_link_conflict", 409, "google-provider-link-conflict"],
     ["google_provider_failed", 502, "google-provider-failed"],
     ["google_revoke_failed", 502, "google-revoke-failed"]

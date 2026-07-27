@@ -36,13 +36,6 @@
             "functionId": "api",
             "region": "asia-northeast3"
           }
-        },
-        {
-          "source": "/api/auth/google/callback",
-          "function": {
-            "functionId": "api",
-            "region": "asia-northeast3"
-          }
         }
       ]
     },
@@ -57,13 +50,6 @@
       "rewrites": [
         {
           "source": "/api/auth/github/callback",
-          "function": {
-            "functionId": "api",
-            "region": "asia-northeast3"
-          }
-        },
-        {
-          "source": "/api/auth/google/callback",
           "function": {
             "functionId": "api",
             "region": "asia-northeast3"

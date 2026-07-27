@@ -30,21 +30,18 @@ export interface GoogleOAuthToken {
     refreshToken?: string;
 }
 
-// Google authorization code를 서버 전용 token 묶음으로 교환합니다.
+// iOS serverAuthCode를 callback과 PKCE 값 없이 서버 전용 token 묶음으로 교환합니다.
 export async function requestGoogleOAuthToken(
-    code: string,
+    serverAuthCode: string,
     clientId: string,
-    clientSecret: string,
-    callbackURL: string,
-    codeVerifier: string
+    clientSecret: string
 ): Promise<GoogleOAuthToken> {
     const requestBody = new URLSearchParams({
         client_id: clientId,
         client_secret: clientSecret,
-        code,
-        redirect_uri: callbackURL,
-        grant_type: "authorization_code",
-        code_verifier: codeVerifier
+        code: serverAuthCode,
+        redirect_uri: "",
+        grant_type: "authorization_code"
     });
     const response = await requestGoogleAPI(() =>
         axios.post<GoogleOAuthResponse>(
@@ -113,22 +110,47 @@ function alreadyInvalidToken(error: unknown): boolean {
         (data as Record<string, unknown>).error === "invalid_token";
 }
 
-// 외부 Google 인증 요청 실패를 안전한 provider 오류로 변환합니다.
-async function requestGoogleAPI<T>(request: () => Promise<T>): Promise<T> {
+// iOS serverAuthCode 교환 실패를 인증 증명 오류와 provider 오류로 구분합니다.
+async function requestGoogleAPI<T>(
+    request: () => Promise<T>
+): Promise<T> {
     try {
         return await request();
     } catch (error) {
+        if (invalidGoogleGrant(error)) {
+            throw googleInvalidProofError();
+        }
         console.error("Google 인증 서버 요청에 실패했습니다.", errorMetadata(error));
         throw googleProviderError();
     }
 }
 
+// Google token endpoint 오류가 유효하지 않은 authorization code를 의미하는지 확인합니다.
+function invalidGoogleGrant(error: unknown): boolean {
+    if (!axios.isAxiosError(error)) {
+        return false;
+    }
+    const data = error.response?.data;
+    return data &&
+        typeof data === "object" &&
+        (data as Record<string, unknown>).error === "invalid_grant";
+}
+
 // Google 인증 서버 실패를 REST 계층에서 구분할 수 있는 오류로 구성합니다.
-function googleProviderError(): HttpsError {
+export function googleProviderError(): HttpsError {
     return new HttpsError(
         "internal",
         "Google 인증 서버 요청에 실패했습니다.",
         { reason: "google_provider_failed" }
+    );
+}
+
+// 유효하지 않은 Google 인증 증명을 인증 실패 오류로 구성합니다.
+function googleInvalidProofError(): HttpsError {
+    return new HttpsError(
+        "unauthenticated",
+        "Google 인증 증명이 유효하지 않습니다.",
+        { reason: "invalid_google_proof" }
     );
 }
 

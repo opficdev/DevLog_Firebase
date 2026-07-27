@@ -114,6 +114,7 @@ await saveNotification(
 
 ## Pull Requests
 
+- Write DevLog PR and review text in Korean.
 - Before drafting or creating a pull request, read `.github/pull_request_template.md` and follow that template exactly.
 - Do not invent pull request sections when a repository template exists.
 
