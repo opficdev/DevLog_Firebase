@@ -71,6 +71,16 @@ export async function saveGoogleCredential(
             );
         }
         if (
+            accountLinkLeaseActive(credentialSnapshot.data()) &&
+            credentialSnapshot.data()?.accountLinkClaim !== accountLinkClaim
+        ) {
+            throw new HttpsError(
+                "aborted",
+                "Google 계정 연결 처리가 진행 중입니다.",
+                { reason: "google_account_link_in_progress" }
+            );
+        }
+        if (
             accountLinkClaim &&
             credentialSnapshot.data()?.accountLinkClaim !== accountLinkClaim
         ) {
