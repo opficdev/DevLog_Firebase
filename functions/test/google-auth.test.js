@@ -1,5 +1,8 @@
 const assert = require("assert");
 
+// Google JWKS 조회 실패를 나타내는 시험 오류를 구성합니다.
+class GoogleJwksLookupError extends Error {}
+
 const tokenExchangeCalls = [];
 const tokenVerificationCalls = [];
 const providerResolveCalls = [];
@@ -52,11 +55,16 @@ require.cache[require.resolve("../lib/rest/googleClient")] = {
         },
         revokeGoogleOAuthToken: async (...values) => {
             grantRevokeCalls.push(values);
-        }
+        },
+        googleProviderError: () => authenticationError(
+            "internal",
+            "google_provider_failed"
+        )
     }
 };
 require.cache[require.resolve("../lib/auth/googleIdToken")] = {
     exports: {
+        GoogleJwksLookupError,
         verifyGoogleIdToken: async (...values) => {
             tokenVerificationCalls.push(values);
             if (tokenVerificationError) {
@@ -122,6 +130,7 @@ const configuration = {
     await assertCustomTokenAuthentication();
     await assertAccountLinkAuthentication();
     await assertInvalidIDTokenIsDistinguished();
+    await assertJwksLookupFailureIsPreserved();
     await assertTokenExchangeErrorIsPreserved();
     await assertProviderResolutionFailureDoesNotRevoke();
     await assertProviderLinkFailureDoesNotRevoke();
@@ -223,6 +232,40 @@ async function assertInvalidIDTokenIsDistinguished() {
             (error) =>
                 error.code === "unauthenticated" &&
                 error.details?.reason === "invalid_google_proof"
+        );
+        assert.deepStrictEqual(providerResolveCalls, []);
+        assert.deepStrictEqual(providerLinkCalls, []);
+        assert.deepStrictEqual(credentialSaveCalls, []);
+        assert.deepStrictEqual(customTokenCalls, []);
+        assertNoOAuthStateOrRevocation();
+    }
+}
+
+// Google JWKS 조회 실패를 두 인증 흐름에서 provider 오류로 보존하는지 검증합니다.
+async function assertJwksLookupFailureIsPreserved() {
+    for (const authenticate of [
+        () => requestGoogleCustomToken(
+            db,
+            configuration,
+            "server-auth-code"
+        ),
+        () => linkGoogleAccount(
+            db,
+            configuration,
+            "current-uid",
+            "server-auth-code"
+        )
+    ]) {
+        resetState();
+        tokenVerificationError = new GoogleJwksLookupError(
+            "jwks lookup failed"
+        );
+
+        await assert.rejects(
+            authenticate,
+            (error) =>
+                error.code === "internal" &&
+                error.details?.reason === "google_provider_failed"
         );
         assert.deepStrictEqual(providerResolveCalls, []);
         assert.deepStrictEqual(providerLinkCalls, []);

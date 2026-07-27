@@ -137,7 +137,7 @@ function invalidGoogleGrant(error: unknown): boolean {
 }
 
 // Google 인증 서버 실패를 REST 계층에서 구분할 수 있는 오류로 구성합니다.
-function googleProviderError(): HttpsError {
+export function googleProviderError(): HttpsError {
     return new HttpsError(
         "internal",
         "Google 인증 서버 요청에 실패했습니다.",

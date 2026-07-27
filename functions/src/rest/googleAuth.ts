@@ -1,8 +1,14 @@
 import * as admin from "firebase-admin";
 import { HttpsError } from "firebase-functions/v2/https";
-import { verifyGoogleIdToken } from "../auth/googleIdToken";
+import {
+    GoogleJwksLookupError,
+    verifyGoogleIdToken
+} from "../auth/googleIdToken";
 import type { GoogleTokenPayload } from "../auth/googleIdToken";
-import { requestGoogleOAuthToken } from "./googleClient";
+import {
+    googleProviderError,
+    requestGoogleOAuthToken
+} from "./googleClient";
 import type { GoogleOAuthToken } from "./googleClient";
 import type { GoogleConfiguration } from "./googleConfiguration";
 import {
@@ -130,7 +136,10 @@ async function verifiedGooglePayload(
             idToken,
             clientId
         );
-    } catch {
+    } catch (error) {
+        if (error instanceof GoogleJwksLookupError) {
+            throw googleProviderError();
+        }
         throw invalidGoogleProofError();
     }
 }
