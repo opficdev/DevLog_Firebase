@@ -14,12 +14,21 @@ require.cache[require.resolve("../lib/rest/googleClient")] = {
 };
 
 const {
+    claimGoogleAccountLink,
     googleCredentialForUser,
+    releaseGoogleAccountLink,
+    renewGoogleAccountLink,
     revokeGoogleCredential,
     saveGoogleCredential
 } = require("../lib/rest/googleCredential");
 
 (async () => {
+    await assertAccountLinkLeaseScopesRequestsByUser();
+    await assertAccountLinkLeaseExpires();
+    await assertOnlyCurrentLeaseCanBeRenewed();
+    await assertClaimedCredentialSaveReleasesLease();
+    await assertOnlyLeaseOwnerCanSaveAndRelease();
+    await assertRegularCredentialSaveDoesNotWaitForAccountLink();
     await assertRefreshTokenIsStored();
     await assertMissingRefreshTokenPreservesStoredValue();
     await assertGrantRevocationPrefersRefreshToken();
@@ -30,6 +39,117 @@ const {
     console.error(error);
     process.exitCode = 1;
 });
+
+// 동일 사용자의 Google 계정 연결만 차단하고 다른 사용자는 계속 처리하는지 검증합니다.
+async function assertAccountLinkLeaseScopesRequestsByUser() {
+    const db = fakeFirestore();
+
+    await claimGoogleAccountLink(db, "user-1");
+    await claimGoogleAccountLink(db, "user-2");
+
+    await assert.rejects(
+        () => claimGoogleAccountLink(db, "user-1"),
+        (error) =>
+            error.code === "aborted" &&
+            error.details?.reason === "google_account_link_in_progress"
+    );
+}
+
+// 만료된 Google 계정 연결 lease는 다음 요청이 다시 획득하는지 검증합니다.
+async function assertAccountLinkLeaseExpires() {
+    const db = fakeFirestore({
+        "authCredentials/user-1/providers/google": {
+            accountLinkClaim: "expired-claim",
+            accountLinkExpiresAt: {
+                toMillis: () => Date.now() - 1
+            }
+        }
+    });
+
+    const claim = await claimGoogleAccountLink(db, "user-1");
+
+    assert.notStrictEqual(claim, "expired-claim");
+}
+
+// 만료 뒤 교체된 claim은 이전 요청이 다시 연장할 수 없는지 검증합니다.
+async function assertOnlyCurrentLeaseCanBeRenewed() {
+    const db = fakeFirestore({
+        "authCredentials/user-1/providers/google": {
+            accountLinkClaim: "expired-claim",
+            accountLinkExpiresAt: {
+                toMillis: () => Date.now() - 1
+            }
+        }
+    });
+    const claim = await claimGoogleAccountLink(db, "user-1");
+
+    assert.strictEqual(
+        await renewGoogleAccountLink(db, "user-1", "expired-claim"),
+        false
+    );
+    assert.strictEqual(
+        await renewGoogleAccountLink(db, "user-1", claim),
+        true
+    );
+    await assert.rejects(
+        () => claimGoogleAccountLink(db, "user-1"),
+        (error) => error.details?.reason === "google_account_link_in_progress"
+    );
+}
+
+// lease 소유자의 credential 저장이 같은 transaction에서 lease를 해제하는지 검증합니다.
+async function assertClaimedCredentialSaveReleasesLease() {
+    const db = fakeFirestore();
+    const claim = await claimGoogleAccountLink(db, "user-1");
+
+    await saveGoogleCredential(
+        db,
+        "user-1",
+        googleCredential(),
+        claim
+    );
+
+    assert.deepStrictEqual(await googleCredentialForUser(db, "user-1"), googleCredential());
+    await claimGoogleAccountLink(db, "user-1");
+}
+
+// 다른 요청은 lease 소유자의 credential 저장과 실패 후 해제를 대신할 수 없는지 검증합니다.
+async function assertOnlyLeaseOwnerCanSaveAndRelease() {
+    const db = fakeFirestore();
+    const claim = await claimGoogleAccountLink(db, "user-1");
+
+    await assert.rejects(
+        () => saveGoogleCredential(
+            db,
+            "user-1",
+            googleCredential(),
+            "other-claim"
+        ),
+        (error) => error.code === "aborted"
+    );
+    await releaseGoogleAccountLink(db, "user-1", "other-claim");
+    await assert.rejects(
+        () => claimGoogleAccountLink(db, "user-1"),
+        (error) => error.details?.reason === "google_account_link_in_progress"
+    );
+
+    await releaseGoogleAccountLink(db, "user-1", claim);
+    await claimGoogleAccountLink(db, "user-1");
+}
+
+// 일반 로그인 credential 저장은 진행 중인 계정 연결 lease를 기다리지 않는지 검증합니다.
+async function assertRegularCredentialSaveDoesNotWaitForAccountLink() {
+    const db = fakeFirestore();
+    await claimGoogleAccountLink(db, "user-1");
+
+    await saveGoogleCredential(db, "user-1", googleCredential());
+
+    assert.deepStrictEqual(await googleCredentialForUser(db, "user-1"), googleCredential());
+    await assert.rejects(
+        () => claimGoogleAccountLink(db, "user-1"),
+        (error) => error.details?.reason === "google_account_link_in_progress"
+    );
+}
 
 // 새 Google credential이 access token, refresh token, client id를 저장하는지 검증합니다.
 async function assertRefreshTokenIsStored() {

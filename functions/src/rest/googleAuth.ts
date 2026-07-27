@@ -14,7 +14,10 @@ import {
 import type { GoogleOAuthToken } from "./googleClient";
 import type { GoogleConfiguration } from "./googleConfiguration";
 import {
+    claimGoogleAccountLink,
     googleCredentialForUser,
+    releaseGoogleAccountLink,
+    renewGoogleAccountLink,
     revokeGoogleCredential,
     saveGoogleCredential
 } from "./googleCredential";
@@ -53,33 +56,57 @@ export async function linkGoogleAccount(
     uid: string,
     serverAuthCode: string
 ): Promise<void> {
-    const authentication = await authenticateGoogleAuthorizationCode(
-        configuration,
-        serverAuthCode
-    );
-    const didLink = await linkGoogleProvider(
-        uid,
-        authentication.payload
-    );
+    const claim = await claimGoogleAccountLink(db, uid);
+    let didLink = false;
     try {
+        const authentication = await authenticateGoogleAuthorizationCode(
+            configuration,
+            serverAuthCode
+        );
+        didLink = await linkGoogleProvider(
+            uid,
+            authentication.payload
+        );
         await saveGoogleCredential(
             db,
             uid,
-            authentication.credential
+            authentication.credential,
+            claim
         );
     } catch (error) {
         if (didLink) {
+            let canCompensate = false;
             try {
-                await admin.auth().updateUser(uid, {
-                    providersToUnlink: [PROVIDER_ID]
-                });
-            } catch (compensationError) {
+                canCompensate = await renewGoogleAccountLink(db, uid, claim);
+            } catch (renewError) {
                 logger.error(
-                    "Google provider 연결 보상 실패",
-                    toError(compensationError),
+                    "Google 계정 연결 lease 갱신 실패",
+                    toError(renewError),
                     { uid }
                 );
             }
+            if (canCompensate) {
+                try {
+                    await admin.auth().updateUser(uid, {
+                        providersToUnlink: [PROVIDER_ID]
+                    });
+                } catch (compensationError) {
+                    logger.error(
+                        "Google provider 연결 보상 실패",
+                        toError(compensationError),
+                        { uid }
+                    );
+                }
+            }
+        }
+        try {
+            await releaseGoogleAccountLink(db, uid, claim);
+        } catch (releaseError) {
+            logger.error(
+                "Google 계정 연결 lease 해제 실패",
+                toError(releaseError),
+                { uid }
+            );
         }
         throw error;
     }

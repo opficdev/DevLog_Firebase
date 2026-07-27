@@ -273,6 +273,7 @@ const githubErrors = [
 
 const googleErrors = [
     ["invalid_google_proof", 401, "invalid-google-proof"],
+    ["google_account_link_in_progress", 409, "google-account-link-in-progress"],
     ["google_provider_link_conflict", 409, "google-provider-link-conflict"],
     ["google_provider_failed", 502, "google-provider-failed"],
     ["google_revoke_failed", 502, "google-revoke-failed"]

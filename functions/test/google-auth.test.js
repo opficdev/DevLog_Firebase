@@ -7,6 +7,9 @@ const tokenExchangeCalls = [];
 const tokenVerificationCalls = [];
 const providerResolveCalls = [];
 const providerLinkCalls = [];
+const accountLinkClaimCalls = [];
+const accountLinkReleaseCalls = [];
+const accountLinkRenewCalls = [];
 const credentialSaveCalls = [];
 const credentialRevokeCalls = [];
 const grantRevokeCalls = [];
@@ -21,6 +24,10 @@ let tokenExchangeError;
 let tokenVerificationError;
 let providerResolveError;
 let providerLinkError;
+let accountLinkClaimError;
+let accountLinkReleaseError;
+let accountLinkRenewError;
+let accountLinkRenewed = true;
 let credentialSaveError;
 let customTokenError;
 let authUpdateError;
@@ -105,7 +112,27 @@ require.cache[require.resolve("../lib/rest/googleProvider")] = {
 };
 require.cache[require.resolve("../lib/rest/googleCredential")] = {
     exports: {
+        claimGoogleAccountLink: async (...values) => {
+            accountLinkClaimCalls.push(values);
+            if (accountLinkClaimError) {
+                throw accountLinkClaimError;
+            }
+            return "account-link-claim";
+        },
         googleCredentialForUser: async () => storedCredential,
+        releaseGoogleAccountLink: async (...values) => {
+            accountLinkReleaseCalls.push(values);
+            if (accountLinkReleaseError) {
+                throw accountLinkReleaseError;
+            }
+        },
+        renewGoogleAccountLink: async (...values) => {
+            accountLinkRenewCalls.push(values);
+            if (accountLinkRenewError) {
+                throw accountLinkRenewError;
+            }
+            return accountLinkRenewed;
+        },
         saveGoogleCredential: async (...values) => {
             credentialSaveCalls.push(values);
             if (credentialSaveError) {
@@ -141,6 +168,7 @@ const configuration = {
 (async () => {
     await assertCustomTokenAuthentication();
     await assertAccountLinkAuthentication();
+    await assertConcurrentAccountLinkIsRejectedBeforeAuthentication();
     await assertInvalidIDTokenIsDistinguished();
     await assertJwksLookupFailureIsPreserved();
     await assertTokenExchangeErrorIsPreserved();
@@ -148,8 +176,11 @@ const configuration = {
     await assertProviderLinkFailureDoesNotRevoke();
     await assertCredentialSaveFailureDoesNotRevoke();
     await assertNewProviderLinkIsRevertedAfterCredentialSaveFailure();
+    await assertLostLeaseSkipsProviderCompensation();
+    await assertLeaseRenewFailureSkipsProviderCompensation();
     await assertExistingProviderLinkIsPreservedAfterCredentialSaveFailure();
     await assertCompensationFailurePreservesCredentialSaveError();
+    await assertLeaseReleaseFailurePreservesCredentialSaveError();
     await assertCustomTokenFailureDoesNotRevoke();
     await assertLastProviderUnlinkIsBlockedBeforeRevocation();
     await assertGoogleUnlinkRevokesCredentialBeforeProviderRemoval();
@@ -215,12 +246,43 @@ async function assertAccountLinkAuthentication() {
         "current-uid",
         googlePayload()
     ]]);
+    assert.deepStrictEqual(accountLinkClaimCalls, [[
+        db,
+        "current-uid"
+    ]]);
     assert.deepStrictEqual(credentialSaveCalls, [[
         db,
         "current-uid",
-        googleCredential()
+        googleCredential(),
+        "account-link-claim"
     ]]);
+    assert.deepStrictEqual(accountLinkReleaseCalls, []);
     assert.deepStrictEqual(customTokenCalls, []);
+    assertNoOAuthStateOrRevocation();
+}
+
+// 진행 중인 동일 사용자 계정 연결은 serverAuthCode 교환 전에 거부하는지 검증합니다.
+async function assertConcurrentAccountLinkIsRejectedBeforeAuthentication() {
+    resetState();
+    const failure = authenticationError(
+        "aborted",
+        "google_account_link_in_progress"
+    );
+    accountLinkClaimError = failure;
+
+    await assert.rejects(
+        () => linkGoogleAccount(
+            db,
+            configuration,
+            "current-uid",
+            "server-auth-code"
+        ),
+        (error) => error === failure
+    );
+    assert.deepStrictEqual(tokenExchangeCalls, []);
+    assert.deepStrictEqual(providerLinkCalls, []);
+    assert.deepStrictEqual(credentialSaveCalls, []);
+    assert.deepStrictEqual(accountLinkReleaseCalls, []);
     assertNoOAuthStateOrRevocation();
 }
 
@@ -252,6 +314,14 @@ async function assertInvalidIDTokenIsDistinguished() {
         assert.deepStrictEqual(providerLinkCalls, []);
         assert.deepStrictEqual(credentialSaveCalls, []);
         assert.deepStrictEqual(customTokenCalls, []);
+        assert.deepStrictEqual(
+            accountLinkReleaseCalls,
+            accountLinkClaimCalls.length === 0 ? [] : [[
+                db,
+                "current-uid",
+                "account-link-claim"
+            ]]
+        );
         assertNoOAuthStateOrRevocation();
     }
 }
@@ -347,6 +417,11 @@ async function assertProviderLinkFailureDoesNotRevoke() {
     );
     assert.deepStrictEqual(credentialSaveCalls, []);
     assert.deepStrictEqual(authUpdateCalls, []);
+    assert.deepStrictEqual(accountLinkReleaseCalls, [[
+        db,
+        "current-uid",
+        "account-link-claim"
+    ]]);
     assertNoOAuthStateOrRevocation();
 }
 
@@ -396,6 +471,77 @@ async function assertNewProviderLinkIsRevertedAfterCredentialSaveFailure() {
         uid: "current-uid",
         properties: { providersToUnlink: ["google.com"] }
     }]);
+    assert.deepStrictEqual(accountLinkRenewCalls, [[
+        db,
+        "current-uid",
+        "account-link-claim"
+    ]]);
+    assert.deepStrictEqual(accountLinkReleaseCalls, [[
+        db,
+        "current-uid",
+        "account-link-claim"
+    ]]);
+    assertNoOAuthStateOrRevocation();
+}
+
+// 새 요청이 lease를 획득했으면 이전 요청이 provider 연결을 되돌리지 않는지 검증합니다.
+async function assertLostLeaseSkipsProviderCompensation() {
+    resetState();
+    const failure = new Error("credential save failed");
+    credentialSaveError = failure;
+    accountLinkRenewed = false;
+
+    await assert.rejects(
+        () => linkGoogleAccount(
+            db,
+            configuration,
+            "current-uid",
+            "server-auth-code"
+        ),
+        (error) => error === failure
+    );
+    assert.deepStrictEqual(accountLinkRenewCalls, [[
+        db,
+        "current-uid",
+        "account-link-claim"
+    ]]);
+    assert.deepStrictEqual(authUpdateCalls, []);
+    assert.deepStrictEqual(accountLinkReleaseCalls, [[
+        db,
+        "current-uid",
+        "account-link-claim"
+    ]]);
+    assertNoOAuthStateOrRevocation();
+}
+
+// lease 소유권 갱신에 실패하면 provider 연결을 유지하고 원래 오류를 반환하는지 검증합니다.
+async function assertLeaseRenewFailureSkipsProviderCompensation() {
+    resetState();
+    const saveFailure = new Error("credential save failed");
+    const renewFailure = new Error("lease renew failed");
+    credentialSaveError = saveFailure;
+    accountLinkRenewError = renewFailure;
+
+    await assert.rejects(
+        () => linkGoogleAccount(
+            db,
+            configuration,
+            "current-uid",
+            "server-auth-code"
+        ),
+        (error) => error === saveFailure
+    );
+    assert.deepStrictEqual(authUpdateCalls, []);
+    assert.deepStrictEqual(loggerCalls, [[
+        "Google 계정 연결 lease 갱신 실패",
+        renewFailure,
+        { uid: "current-uid" }
+    ]]);
+    assert.deepStrictEqual(accountLinkReleaseCalls, [[
+        db,
+        "current-uid",
+        "account-link-claim"
+    ]]);
     assertNoOAuthStateOrRevocation();
 }
 
@@ -416,6 +562,32 @@ async function assertExistingProviderLinkIsPreservedAfterCredentialSaveFailure()
         (error) => error === failure
     );
     assert.deepStrictEqual(authUpdateCalls, []);
+    assertNoOAuthStateOrRevocation();
+}
+
+// lease 해제 실패를 기록하고 원래 credential 저장 오류를 유지하는지 검증합니다.
+async function assertLeaseReleaseFailurePreservesCredentialSaveError() {
+    resetState();
+    providerLinked = false;
+    const saveFailure = new Error("credential save failed");
+    const releaseFailure = new Error("lease release failed");
+    credentialSaveError = saveFailure;
+    accountLinkReleaseError = releaseFailure;
+
+    await assert.rejects(
+        () => linkGoogleAccount(
+            db,
+            configuration,
+            "current-uid",
+            "server-auth-code"
+        ),
+        (error) => error === saveFailure
+    );
+    assert.deepStrictEqual(loggerCalls, [[
+        "Google 계정 연결 lease 해제 실패",
+        releaseFailure,
+        { uid: "current-uid" }
+    ]]);
     assertNoOAuthStateOrRevocation();
 }
 
@@ -523,6 +695,9 @@ function resetState() {
     tokenVerificationCalls.length = 0;
     providerResolveCalls.length = 0;
     providerLinkCalls.length = 0;
+    accountLinkClaimCalls.length = 0;
+    accountLinkReleaseCalls.length = 0;
+    accountLinkRenewCalls.length = 0;
     credentialSaveCalls.length = 0;
     credentialRevokeCalls.length = 0;
     grantRevokeCalls.length = 0;
@@ -537,6 +712,10 @@ function resetState() {
     tokenVerificationError = undefined;
     providerResolveError = undefined;
     providerLinkError = undefined;
+    accountLinkClaimError = undefined;
+    accountLinkReleaseError = undefined;
+    accountLinkRenewError = undefined;
+    accountLinkRenewed = true;
     credentialSaveError = undefined;
     customTokenError = undefined;
     authUpdateError = undefined;
