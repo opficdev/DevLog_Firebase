@@ -29,6 +29,12 @@ export async function claimGoogleAccountLink(
     const claim = randomBytes(32).toString("base64url");
     await db.runTransaction(async (transaction) => {
         const snapshot = await transaction.get(credentialRef);
+        if (revocationLeaseActive(snapshot.data())) {
+            throw new HttpsError(
+                "aborted",
+                "Google credential 폐기 처리가 진행 중입니다."
+            );
+        }
         if (accountLinkLeaseActive(snapshot.data())) {
             throw new HttpsError(
                 "aborted",
@@ -208,7 +214,8 @@ async function claimGoogleCredentialRevocation(
         const stored = credentialFromData(snapshot.data());
         if (
             !credentialsEqual(stored, credential) ||
-            revocationLeaseActive(snapshot.data())
+            revocationLeaseActive(snapshot.data()) ||
+            accountLinkLeaseActive(snapshot.data())
         ) {
             throw new HttpsError(
                 "aborted",
@@ -278,7 +285,8 @@ async function deleteGoogleCredential(
         const snapshot = await transaction.get(credentialRef);
         if (
             credentialFromData(snapshot.data()) ||
-            typeof snapshot.data()?.revocationClaim === "string"
+            typeof snapshot.data()?.revocationClaim === "string" ||
+            accountLinkLeaseActive(snapshot.data())
         ) {
             throw new HttpsError(
                 "aborted",

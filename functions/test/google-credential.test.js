@@ -33,6 +33,9 @@ const {
     await assertMissingRefreshTokenPreservesStoredValue();
     await assertGrantRevocationPrefersRefreshToken();
     await assertGrantRevocationFallsBackToAccessToken();
+    await assertAccountLinkLeaseBlocksCredentialRevocation();
+    await assertAccountLinkLeaseBlocksEmptyCredentialDeletion();
+    await assertRevocationLeaseBlocksAccountLink();
     await assertRevocationLeaseBlocksReplacement();
     await assertDeletionMarkerBlocksLateSave();
 })().catch((error) => {
@@ -205,6 +208,54 @@ async function assertGrantRevocationFallsBackToAccessToken() {
 
     assert.deepStrictEqual(revokeCalls, [["user-1", "access-token"]]);
     assert.strictEqual(db.data.has("authCredentials/user-1/providers/google"), false);
+}
+
+// 진행 중인 계정 연결이 같은 credential의 grant 폐기를 차단하는지 검증합니다.
+async function assertAccountLinkLeaseBlocksCredentialRevocation() {
+    revokeCalls.length = 0;
+    const db = fakeFirestore({
+        "authCredentials/user-1/providers/google": googleCredential()
+    });
+    await claimGoogleAccountLink(db, "user-1");
+
+    await assert.rejects(
+        () => revokeGoogleCredential(db, "user-1"),
+        (error) => error.code === "aborted"
+    );
+    assert.deepStrictEqual(revokeCalls, []);
+}
+
+// credential이 없더라도 진행 중인 계정 연결 claim 문서를 삭제하지 않는지 검증합니다.
+async function assertAccountLinkLeaseBlocksEmptyCredentialDeletion() {
+    const db = fakeFirestore();
+    await claimGoogleAccountLink(db, "user-1");
+
+    await assert.rejects(
+        () => revokeGoogleCredential(db, "user-1"),
+        (error) => error.code === "aborted"
+    );
+    assert.strictEqual(
+        db.data.has("authCredentials/user-1/providers/google"),
+        true
+    );
+}
+
+// 진행 중인 grant 폐기가 같은 사용자의 계정 연결 lease 획득을 차단하는지 검증합니다.
+async function assertRevocationLeaseBlocksAccountLink() {
+    const db = fakeFirestore({
+        "authCredentials/user-1/providers/google": {
+            ...googleCredential(),
+            revocationClaim: "revocation-claim",
+            revocationExpiresAt: {
+                toMillis: () => Date.now() + 60_000
+            }
+        }
+    });
+
+    await assert.rejects(
+        () => claimGoogleAccountLink(db, "user-1"),
+        (error) => error.code === "aborted"
+    );
 }
 
 // grant 폐기 중에는 새 로그인 credential이 기존 값을 덮어쓰지 못하는지 검증합니다.
