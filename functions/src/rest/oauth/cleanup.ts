@@ -1,11 +1,11 @@
 import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import * as logger from "firebase-functions/logger";
 import { toError } from "../../common/error";
-import { revokeGitHubOAuthToken } from "../githubClient";
+import { revokeGitHubOAuthToken } from "../github/githubClient";
 import {
     githubOAuthConfigurationSecret,
     githubRevocationConfiguration
-} from "../githubConfiguration";
+} from "../github/githubConfiguration";
 
 const LOCATION = "asia-northeast3";
 

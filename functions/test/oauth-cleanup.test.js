@@ -9,7 +9,7 @@ require.cache[require.resolve("firebase-functions/logger")] = {
         error() {}
     }
 };
-require.cache[require.resolve("../lib/rest/githubClient")] = {
+require.cache[require.resolve("../lib/rest/github/githubClient")] = {
     exports: {
         revokeGitHubOAuthToken: async (...values) => {
             revokeCalls.push(values);
@@ -19,7 +19,7 @@ require.cache[require.resolve("../lib/rest/githubClient")] = {
         }
     }
 };
-require.cache[require.resolve("../lib/rest/githubConfiguration")] = {
+require.cache[require.resolve("../lib/rest/github/githubConfiguration")] = {
     exports: {
         githubOAuthConfigurationSecret: "GITHUB_OAUTH_CONFIG",
         githubRevocationConfiguration: (clientId) => ({

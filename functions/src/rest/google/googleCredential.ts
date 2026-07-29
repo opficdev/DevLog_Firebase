@@ -4,7 +4,7 @@ import {
     Timestamp
 } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
-import { FirestorePath } from "../common/firestorePath";
+import { FirestorePath } from "../../common/firestorePath";
 import { revokeGoogleOAuthToken } from "./googleClient";
 
 const REVOCATION_LEASE_MILLISECONDS = 5 * 60 * 1000;

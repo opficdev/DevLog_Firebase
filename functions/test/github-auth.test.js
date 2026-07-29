@@ -157,11 +157,11 @@ console.warn = (...args) => {
 const {
     requestGitHubAccessToken,
     revokeGitHubOAuthGrant
-} = require("../lib/rest/githubClient");
+} = require("../lib/rest/github/githubClient");
 const {
     linkGithubProviderWithAccessToken,
     resolveGithubFirebaseUID
-} = require("../lib/rest/githubProvider");
+} = require("../lib/rest/github/githubProvider");
 
 (async () => {
     try {

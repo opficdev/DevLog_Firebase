@@ -62,7 +62,7 @@ require.cache[require.resolve("firebase-functions/logger")] = {
         error: (...values) => loggerCalls.push(values)
     }
 };
-require.cache[require.resolve("../lib/rest/googleClient")] = {
+require.cache[require.resolve("../lib/rest/google/googleClient")] = {
     exports: {
         requestGoogleOAuthToken: async (...values) => {
             tokenExchangeCalls.push(values);
@@ -92,7 +92,7 @@ require.cache[require.resolve("../lib/auth/googleIdToken")] = {
         }
     }
 };
-require.cache[require.resolve("../lib/rest/googleProvider")] = {
+require.cache[require.resolve("../lib/rest/google/googleProvider")] = {
     exports: {
         resolveGoogleFirebaseUID: async (...values) => {
             providerResolveCalls.push(values);
@@ -110,7 +110,7 @@ require.cache[require.resolve("../lib/rest/googleProvider")] = {
         }
     }
 };
-require.cache[require.resolve("../lib/rest/googleCredential")] = {
+require.cache[require.resolve("../lib/rest/google/googleCredential")] = {
     exports: {
         claimGoogleAccountLink: async (...values) => {
             accountLinkClaimCalls.push(values);
@@ -157,7 +157,7 @@ const {
     requestGoogleCustomToken,
     revokeGoogleAccessToken,
     unlinkGoogleAccount
-} = require("../lib/rest/googleAuth");
+} = require("../lib/rest/google/googleAuth");
 
 const db = { name: "firestore" };
 const configuration = {

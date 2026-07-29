@@ -34,7 +34,7 @@ require.cache[require.resolve("firebase-admin/firestore")] = {
     }
 };
 
-require.cache[require.resolve("../lib/rest/githubConfiguration")] = {
+require.cache[require.resolve("../lib/rest/github/githubConfiguration")] = {
     exports: {
         githubOAuthConfigurationSecret: "GITHUB_OAUTH_CONFIG",
         githubRevocationConfiguration: (clientId) => ({
@@ -45,7 +45,7 @@ require.cache[require.resolve("../lib/rest/githubConfiguration")] = {
     }
 };
 
-require.cache[require.resolve("../lib/rest/githubCredential")] = {
+require.cache[require.resolve("../lib/rest/github/githubCredential")] = {
     exports: {
         githubCredentialForUser: async (_db, uid) => {
             lifecycleEvents.push("github-credential-read");
@@ -62,7 +62,7 @@ require.cache[require.resolve("../lib/rest/githubCredential")] = {
     }
 };
 
-require.cache[require.resolve("../lib/rest/googleCredential")] = {
+require.cache[require.resolve("../lib/rest/google/googleCredential")] = {
     exports: {
         googleCredentialForUser: async (_db, uid) => {
             lifecycleEvents.push("google-credential-read");

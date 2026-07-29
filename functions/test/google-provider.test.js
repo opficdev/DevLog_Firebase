@@ -51,7 +51,7 @@ require.cache[require.resolve("firebase-admin")] = {
 const {
     linkGoogleProvider,
     resolveGoogleFirebaseUID
-} = require("../lib/rest/googleProvider");
+} = require("../lib/rest/google/googleProvider");
 
 (async () => {
     await assertExistingProviderKeepsUIDAfterEmailChange();

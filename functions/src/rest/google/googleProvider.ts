@@ -4,7 +4,7 @@ import type {
     UserProvider
 } from "firebase-admin/auth";
 import { HttpsError } from "firebase-functions/v2/https";
-import type { GoogleTokenPayload } from "../auth/googleIdToken";
+import type { GoogleTokenPayload } from "../../auth/googleIdToken";
 
 const PROVIDER_ID = "google.com";
 

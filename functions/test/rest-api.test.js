@@ -43,13 +43,13 @@ require.cache[require.resolve("firebase-functions/logger")] = {
         error: () => {}
     }
 };
-require.cache[require.resolve("../lib/rest/googleConfiguration")] = {
+require.cache[require.resolve("../lib/rest/google/googleConfiguration")] = {
     exports: {
         googleConfiguration: () => configuration,
         googleOAuthConfigurationSecret: { name: "GOOGLE_OAUTH_CONFIG" }
     }
 };
-require.cache[require.resolve("../lib/rest/googleAuth")] = {
+require.cache[require.resolve("../lib/rest/google/googleAuth")] = {
     exports: {
         requestGoogleCustomToken: async (...values) => {
             customTokenCalls.push(values);

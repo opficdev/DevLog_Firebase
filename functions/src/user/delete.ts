@@ -9,16 +9,16 @@ import { FirestorePath } from "../common/firestorePath";
 import {
     githubOAuthConfigurationSecret,
     githubRevocationConfiguration
-} from "../rest/githubConfiguration";
+} from "../rest/github/githubConfiguration";
 import {
     githubCredentialForUser,
     revokePendingGithubCredentials,
     revokeGithubCredential
-} from "../rest/githubCredential";
+} from "../rest/github/githubCredential";
 import {
     googleCredentialForUser,
     revokeGoogleCredential
-} from "../rest/googleCredential";
+} from "../rest/google/googleCredential";
 
 const DELETION_MARKER_LIFETIME_MILLISECONDS = 24 * 60 * 60 * 1000;
 

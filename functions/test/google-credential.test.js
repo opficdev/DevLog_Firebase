@@ -2,7 +2,7 @@ const assert = require("assert");
 
 const revokeCalls = [];
 let revokeHook;
-require.cache[require.resolve("../lib/rest/googleClient")] = {
+require.cache[require.resolve("../lib/rest/google/googleClient")] = {
     exports: {
         revokeGoogleOAuthToken: async (...values) => {
             revokeCalls.push(values);
@@ -20,7 +20,7 @@ const {
     renewGoogleAccountLink,
     revokeGoogleCredential,
     saveGoogleCredential
-} = require("../lib/rest/googleCredential");
+} = require("../lib/rest/google/googleCredential");
 
 (async () => {
     await assertAccountLinkLeaseScopesRequestsByUser();
