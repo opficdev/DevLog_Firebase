@@ -49,7 +49,7 @@ const { sendPushNotification } = require("../lib/fcm/notification");
             dueDate: new Date("2026-07-10T09:00:00.000Z"),
             category: "work",
             isCompleted: false,
-            title: " \n\t "
+            title: "기존 필드 정리"
         }
     );
     firestoreDocs.set(
@@ -99,16 +99,16 @@ const { sendPushNotification } = require("../lib/fcm/notification");
     );
 
     assert.ok(notificationWrite, "notification 문서는 todoId id를 사용해야 합니다.");
-    const titlelessNotification = firestoreDocs.get("users/user-1/notifications/todo-1");
+    const notification = firestoreDocs.get("users/user-1/notifications/todo-1");
 
-    assert.strictEqual(titlelessNotification.title, undefined);
-    assert.strictEqual(titlelessNotification.body, undefined);
-    assert.strictEqual(titlelessNotification.todoTitle, undefined);
-    assert.ok(titlelessNotification.receivedAt);
-    assert.strictEqual(titlelessNotification.isRead, false);
-    assert.strictEqual(titlelessNotification.isDeleted, false);
-    assert.strictEqual(titlelessNotification.todoId, "todo-1");
-    assert.strictEqual(titlelessNotification.todoCategory, "work");
+    assert.strictEqual(notification.title, undefined);
+    assert.strictEqual(notification.body, undefined);
+    assert.strictEqual(notification.todoTitle, "기존 필드 정리");
+    assert.ok(notification.receivedAt);
+    assert.strictEqual(notification.isRead, false);
+    assert.strictEqual(notification.isDeleted, false);
+    assert.strictEqual(notification.todoId, "todo-1");
+    assert.strictEqual(notification.todoCategory, "work");
     assert.ok(
         deletedDocs.includes("users/user-1/notifications/todo-1_2026-07-09"),
         "같은 todo의 기존 notification 문서는 삭제되어야 합니다."
@@ -118,7 +118,7 @@ const { sendPushNotification } = require("../lib/fcm/notification");
         sentMessages[0].notification,
         {
             title: "DevLog",
-            body: "제목 없는 Todo의 마감일이 내일입니다."
+            body: "'기존 필드 정리'의 마감일이 내일입니다."
         }
     );
 
@@ -176,7 +176,7 @@ const { sendPushNotification } = require("../lib/fcm/notification");
         sentMessages[0].notification,
         {
             title: "DevLog",
-            body: "  테스트 작성   is due tomorrow."
+            body: "\"  테스트 작성  \" is due tomorrow."
         }
     );
 
@@ -194,7 +194,8 @@ const { sendPushNotification } = require("../lib/fcm/notification");
         {
             dueDate: new Date("2026-07-10T09:00:00.000Z"),
             category: "work",
-            isCompleted: false
+            isCompleted: false,
+            title: "여러 알림 정리"
         }
     );
     firestoreDocs.set(
@@ -236,7 +237,7 @@ const { sendPushNotification } = require("../lib/fcm/notification");
         sentMessages[0].notification,
         {
             title: "DevLog",
-            body: "제목 없는 Todo의 마감일이 내일입니다."
+            body: "'여러 알림 정리'의 마감일이 내일입니다."
         }
     );
 
@@ -261,26 +262,6 @@ const { sendPushNotification } = require("../lib/fcm/notification");
         }
     );
 
-    resetStores();
-    setReminderDocuments(undefined, "en");
-
-    await sendPushNotification.run({
-        data: {
-            firebaseDB: "prod",
-            userId: "user-1",
-            todoId: "todo-1",
-            dueDateKey: "2026-07-10"
-        }
-    });
-
-    assert.strictEqual(sentMessages.length, 1);
-    assert.deepStrictEqual(
-        sentMessages[0].notification,
-        {
-            title: "DevLog",
-            body: "An untitled Todo is due tomorrow."
-        }
-    );
 })().catch((error) => {
     console.error(error);
     process.exitCode = 1;
@@ -307,7 +288,7 @@ function setReminderDocuments(title, pushLanguageCode) {
             dueDate: new Date("2026-07-10T09:00:00.000Z"),
             category: "work",
             isCompleted: false,
-            ...(title === undefined ? {} : { title })
+            title
         }
     );
     firestoreDocs.set(

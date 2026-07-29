@@ -53,11 +53,6 @@ const { scheduleTodoReminder } = require("../lib/fcm/schedule");
             userId: "user-1",
             todoId: "todo-1",
             dueDateKey: "2026-07-10"
-        },
-        {
-            userId: "user-1",
-            todoId: "todo-2",
-            dueDateKey: "2026-07-10"
         }
     ]);
 })().catch((error) => {
@@ -74,10 +69,7 @@ function fakeFirestore() {
         },
         collection(path) {
             assert.strictEqual(path, "users/user-1/todoLists");
-            return fakeQuery([
-                reminderTodoDocument(),
-                untitledReminderTodoDocument()
-            ]);
+            return fakeQuery([reminderTodoDocument()]);
         }
     };
 }
@@ -112,18 +104,6 @@ function reminderTodoDocument() {
         data() {
             return {
                 title: "마감 Todo"
-            };
-        }
-    };
-}
-
-// 제목 없는 다음 날 마감 Todo 문서를 반환합니다.
-function untitledReminderTodoDocument() {
-    return {
-        id: "todo-2",
-        data() {
-            return {
-                title: "   "
             };
         }
     };

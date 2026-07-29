@@ -175,7 +175,7 @@ async function prepareNotification(
     const dispatchId = `${todoId}_${dueDateKey}`;
     const dispatchDocRef = db.doc(FirestorePath.notificationDispatch(userId, dispatchId));
     const notificationDocRef = db.doc(FirestorePath.notification(userId, todoId));
-    let todoTitle: string | undefined;
+    let todoTitle: string;
     let todoCategory = "";
     let notificationData: FirebaseFirestore.DocumentData | null = null;
 
@@ -195,9 +195,7 @@ async function prepareNotification(
         if (!todoDoc.exists || !todoData || todoData.isCompleted === true) { return null; }
         todoCategory = typeof todoData.category === "string" ? todoData.category.trim() : "";
         if (!todoCategory) { return null; }
-        todoTitle = typeof todoData.title === "string" && todoData.title.trim() ?
-            todoData.title :
-            undefined;
+        todoTitle = todoData.title;
 
         const timeZone = resolveTimeZone(settingsData);
 
@@ -208,7 +206,7 @@ async function prepareNotification(
         notificationData = {
             title: FieldValue.delete(),
             body: FieldValue.delete(),
-            todoTitle: todoTitle ?? FieldValue.delete(),
+            todoTitle,
             receivedAt: FieldValue.serverTimestamp(),
             isRead: false,
             isDeleted: false,
@@ -241,17 +239,13 @@ async function prepareNotification(
 // 앱 언어 코드와 Todo 제목을 기준으로 마감 임박 푸시 본문을 생성합니다.
 function makeTodoDueTomorrowBody(
     pushLanguageCode: PushLanguageCode,
-    todoTitle: string | undefined
+    todoTitle: string
 ) {
     if (pushLanguageCode === "en") {
-        return todoTitle ?
-            `${todoTitle} is due tomorrow.` :
-            "An untitled Todo is due tomorrow.";
+        return `"${todoTitle}" is due tomorrow.`;
     }
 
-    return todoTitle ?
-        `'${todoTitle}'의 마감일이 내일입니다.` :
-        "제목 없는 Todo의 마감일이 내일입니다.";
+    return `'${todoTitle}'의 마감일이 내일입니다.`;
 }
 
 // dispatch 문서를 트랜잭션으로 선점하고 이미 완료된 작업은 건너뜁니다.
