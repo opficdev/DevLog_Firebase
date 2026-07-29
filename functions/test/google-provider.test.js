@@ -60,6 +60,7 @@ const {
     await assertUnverifiedEmailIsRejected();
     await assertNewProviderLinkIsReported();
     await assertExistingProviderLinkIsReported();
+    await assertExistingDifferentProviderLinkIsReported();
     await assertLinkRejectsMismatchedEmail();
     await assertLinkRejectsProviderOwnedByAnotherUser();
     await assertProviderConflictTakesPriorityOverEmailMismatch();
@@ -171,6 +172,32 @@ async function assertExistingProviderLinkIsReported() {
         "user@example.com"
     );
     providerUIDUser = currentUser;
+
+    const didLink = await linkGoogleProvider(
+        "current-uid",
+        googlePayload()
+    );
+
+    assert.strictEqual(didLink, false);
+    assert.deepStrictEqual(updatedUsers, [{
+        uid: "current-uid",
+        properties: {
+            providerToLink: googleProvider("user@example.com")
+        }
+    }]);
+}
+
+// 다른 Google uid로 갱신해도 기존 provider를 신규 연결로 반환하지 않는지 검증합니다.
+async function assertExistingDifferentProviderLinkIsReported() {
+    resetState();
+    currentUser = userRecord(
+        "current-uid",
+        [{
+            ...googleProvider("user@example.com"),
+            uid: "previous-google-subject"
+        }],
+        "user@example.com"
+    );
 
     const didLink = await linkGoogleProvider(
         "current-uid",

@@ -22,7 +22,9 @@ export async function linkGoogleProvider(
     payload: GoogleTokenPayload
 ): Promise<boolean> {
     const currentUser = await admin.auth().getUser(uid);
-    let didLink = true;
+    let didLink = !currentUser.providerData.some((provider) =>
+        provider.providerId === PROVIDER_ID
+    );
     try {
         const providerUser = await admin.auth().getUserByProviderUid(
             PROVIDER_ID,
