@@ -112,17 +112,10 @@ async function enqueueTodoReminderTasks(now: Date): Promise<void> {
         }
 
         for (const todoDoc of todosSnapshot.docs) {
-            const todoData = todoDoc.data();
-            const todoTitle = typeof todoData.title === "string" && todoData.title.trim() ?
-                todoData.title :
-                "제목 없음";
-
             const notificationPayload = {
                 userId,
                 todoId: todoDoc.id,
-                dueDateKey,
-                title: "DevLog",
-                body: `'${todoTitle}'의 마감일이 내일입니다.`
+                dueDateKey
             };
 
             try {

@@ -48,13 +48,27 @@ const { sendPushNotification } = require("../lib/fcm/notification");
         {
             dueDate: new Date("2026-07-10T09:00:00.000Z"),
             category: "work",
-            isCompleted: false
+            isCompleted: false,
+            title: "기존 필드 정리"
         }
     );
     firestoreDocs.set(
         "users/user-1/userData/tokens",
         {
             fcmToken: "fcm-token"
+        }
+    );
+    firestoreDocs.set(
+        "users/user-1/notifications/todo-1",
+        {
+            title: "기존 제목",
+            body: "기존 본문",
+            todoTitle: "기존 Todo 제목",
+            receivedAt: new Date("2026-07-09T09:00:00.000Z"),
+            isRead: true,
+            isDeleted: true,
+            todoId: "todo-1",
+            todoCategory: "personal"
         }
     );
     firestoreDocs.set(
@@ -85,12 +99,28 @@ const { sendPushNotification } = require("../lib/fcm/notification");
     );
 
     assert.ok(notificationWrite, "notification 문서는 todoId id를 사용해야 합니다.");
-    assert.strictEqual(notificationWrite.data.isRead, false);
+    const notification = firestoreDocs.get("users/user-1/notifications/todo-1");
+
+    assert.strictEqual(notification.title, undefined);
+    assert.strictEqual(notification.body, undefined);
+    assert.strictEqual(notification.todoTitle, "기존 필드 정리");
+    assert.ok(notification.receivedAt);
+    assert.strictEqual(notification.isRead, false);
+    assert.strictEqual(notification.isDeleted, false);
+    assert.strictEqual(notification.todoId, "todo-1");
+    assert.strictEqual(notification.todoCategory, "work");
     assert.ok(
         deletedDocs.includes("users/user-1/notifications/todo-1_2026-07-09"),
         "같은 todo의 기존 notification 문서는 삭제되어야 합니다."
     );
     assert.strictEqual(sentMessages.length, 1);
+    assert.deepStrictEqual(
+        sentMessages[0].notification,
+        {
+            title: "DevLog",
+            body: "'기존 필드 정리'의 마감일이 내일입니다."
+        }
+    );
 
     resetStores();
 
@@ -106,13 +136,15 @@ const { sendPushNotification } = require("../lib/fcm/notification");
         {
             dueDate: new Date("2026-07-10T09:00:00.000Z"),
             category: "work",
-            isCompleted: false
+            isCompleted: false,
+            title: "  테스트 작성  "
         }
     );
     firestoreDocs.set(
         "users/user-1/userData/tokens",
         {
-            fcmToken: "fcm-token"
+            fcmToken: "fcm-token",
+            pushLanguageCode: "en"
         }
     );
 
@@ -120,9 +152,7 @@ const { sendPushNotification } = require("../lib/fcm/notification");
         data: {
             userId: "user-1",
             todoId: "todo-1",
-            dueDateKey: "2026-07-10",
-            title: "DevLog",
-            body: "Todo reminder"
+            dueDateKey: "2026-07-10"
         }
     });
 
@@ -130,8 +160,25 @@ const { sendPushNotification } = require("../lib/fcm/notification");
         writtenDocs.some((item) => item.path === "users/user-1/notifications/todo-1"),
         "기존 문서가 없어도 notification 문서가 작성되어야 합니다."
     );
+    const titledNotification = firestoreDocs.get("users/user-1/notifications/todo-1");
+
+    assert.strictEqual(titledNotification.title, undefined);
+    assert.strictEqual(titledNotification.body, undefined);
+    assert.strictEqual(titledNotification.todoTitle, "  테스트 작성  ");
+    assert.ok(titledNotification.receivedAt);
+    assert.strictEqual(titledNotification.isRead, false);
+    assert.strictEqual(titledNotification.isDeleted, false);
+    assert.strictEqual(titledNotification.todoId, "todo-1");
+    assert.strictEqual(titledNotification.todoCategory, "work");
     assert.strictEqual(deletedDocs.length, 0);
     assert.strictEqual(sentMessages.length, 1);
+    assert.deepStrictEqual(
+        sentMessages[0].notification,
+        {
+            title: "DevLog",
+            body: "\"  테스트 작성  \" is due tomorrow."
+        }
+    );
 
     resetStores();
 
@@ -147,13 +194,15 @@ const { sendPushNotification } = require("../lib/fcm/notification");
         {
             dueDate: new Date("2026-07-10T09:00:00.000Z"),
             category: "work",
-            isCompleted: false
+            isCompleted: false,
+            title: "여러 알림 정리"
         }
     );
     firestoreDocs.set(
         "users/user-1/userData/tokens",
         {
-            fcmToken: "fcm-token"
+            fcmToken: "fcm-token",
+            pushLanguageCode: "ja"
         }
     );
 
@@ -184,6 +233,35 @@ const { sendPushNotification } = require("../lib/fcm/notification");
     );
     assert.strictEqual(deletedDocs.length, 201);
     assert.strictEqual(sentMessages.length, 1);
+    assert.deepStrictEqual(
+        sentMessages[0].notification,
+        {
+            title: "DevLog",
+            body: "'여러 알림 정리'의 마감일이 내일입니다."
+        }
+    );
+
+    resetStores();
+    setReminderDocuments("영어 공부", "ko");
+
+    await sendPushNotification.run({
+        data: {
+            firebaseDB: "prod",
+            userId: "user-1",
+            todoId: "todo-1",
+            dueDateKey: "2026-07-10"
+        }
+    });
+
+    assert.strictEqual(sentMessages.length, 1);
+    assert.deepStrictEqual(
+        sentMessages[0].notification,
+        {
+            title: "DevLog",
+            body: "'영어 공부'의 마감일이 내일입니다."
+        }
+    );
+
 })().catch((error) => {
     console.error(error);
     process.exitCode = 1;
@@ -194,6 +272,32 @@ function resetStores() {
     writtenDocs.length = 0;
     deletedDocs.length = 0;
     sentMessages.length = 0;
+}
+
+function setReminderDocuments(title, pushLanguageCode) {
+    firestoreDocs.set(
+        "users/user-1/userData/settings",
+        {
+            allowPushNotification: true,
+            timeZone: "UTC"
+        }
+    );
+    firestoreDocs.set(
+        "users/user-1/todoLists/todo-1",
+        {
+            dueDate: new Date("2026-07-10T09:00:00.000Z"),
+            category: "work",
+            isCompleted: false,
+            title
+        }
+    );
+    firestoreDocs.set(
+        "users/user-1/userData/tokens",
+        {
+            fcmToken: "fcm-token",
+            pushLanguageCode
+        }
+    );
 }
 
 function fakeFirestore() {
@@ -221,10 +325,7 @@ function fakeDocumentReference(path) {
         },
         async set(data) {
             writtenDocs.push({ path, data });
-            firestoreDocs.set(path, {
-                ...(firestoreDocs.get(path) ?? {}),
-                ...data
-            });
+            applyDocumentWrite(path, data);
         },
         async delete() {
             deletedDocs.push(path);
@@ -320,10 +421,7 @@ function fakeTransaction() {
         },
         set(documentRef, data) {
             writtenDocs.push({ path: documentRef.path, data });
-            firestoreDocs.set(documentRef.path, {
-                ...(firestoreDocs.get(documentRef.path) ?? {}),
-                ...data
-            });
+            applyDocumentWrite(documentRef.path, data);
         }
     };
 }
@@ -352,10 +450,7 @@ function fakeBatch() {
                         path: update.path,
                         data: update.data
                     });
-                    firestoreDocs.set(update.path, {
-                        ...(firestoreDocs.get(update.path) ?? {}),
-                        ...update.data
-                    });
+                    applyDocumentWrite(update.path, update.data);
                 } else {
                     deletedDocs.push(update.path);
                     firestoreDocs.delete(update.path);
@@ -363,4 +458,19 @@ function fakeBatch() {
             });
         }
     };
+}
+
+function applyDocumentWrite(path, data) {
+    const document = {
+        ...(firestoreDocs.get(path) ?? {})
+    };
+
+    Object.entries(data).forEach(([field, value]) => {
+        if (value?.constructor?.name === "DeleteTransform") {
+            delete document[field];
+        } else {
+            document[field] = value;
+        }
+    });
+    firestoreDocs.set(path, document);
 }

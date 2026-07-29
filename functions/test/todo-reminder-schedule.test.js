@@ -48,13 +48,13 @@ const { scheduleTodoReminder } = require("../lib/fcm/schedule");
         taskQueueName,
         "locations/asia-northeast3/functions/sendPushNotification"
     );
-    assert.deepStrictEqual(enqueuedTasks, [{
-        userId: "user-1",
-        todoId: "todo-1",
-        dueDateKey: "2026-07-10",
-        title: "DevLog",
-        body: "'마감 Todo'의 마감일이 내일입니다."
-    }]);
+    assert.deepStrictEqual(enqueuedTasks, [
+        {
+            userId: "user-1",
+            todoId: "todo-1",
+            dueDateKey: "2026-07-10"
+        }
+    ]);
 })().catch((error) => {
     console.error(error);
     process.exitCode = 1;
