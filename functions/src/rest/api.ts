@@ -28,11 +28,11 @@ import { appleAuthenticationConfigurationSecret } from "./apple/AppleConfigurati
 import {
     githubConfiguration,
     githubOAuthConfigurationSecret
-} from "./githubConfiguration";
+} from "./github/githubConfiguration";
 import {
     googleConfiguration,
     googleOAuthConfigurationSecret
-} from "./googleConfiguration";
+} from "./google/googleConfiguration";
 import {
     createGithubAccountLinkSession,
     createGithubSignInSession,
@@ -42,8 +42,8 @@ import {
     requestGithubCustomToken,
     revokeGithubAccessToken,
     unlinkGithubAccount
-} from "./githubOAuth";
-import * as googleAuth from "./googleAuth";
+} from "./github/githubOAuth";
+import * as googleAuth from "./google/googleAuth";
 import {
     RestError,
     restErrorBodyFrom,

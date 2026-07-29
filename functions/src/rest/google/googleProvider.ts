@@ -4,7 +4,7 @@ import type {
     UserProvider
 } from "firebase-admin/auth";
 import { HttpsError } from "firebase-functions/v2/https";
-import type { GoogleTokenPayload } from "../auth/googleIdToken";
+import type { GoogleTokenPayload } from "../../auth/googleIdToken";
 
 const PROVIDER_ID = "google.com";
 
@@ -22,7 +22,13 @@ export async function linkGoogleProvider(
     payload: GoogleTokenPayload
 ): Promise<boolean> {
     const currentUser = await admin.auth().getUser(uid);
-    let didLink = true;
+    const currentProvider = currentUser.providerData.find((provider) =>
+        provider.providerId === PROVIDER_ID
+    );
+    if (currentProvider && currentProvider.uid !== payload.sub) {
+        throw googleProviderLinkConflictError();
+    }
+    let didLink = !currentProvider;
     try {
         const providerUser = await admin.auth().getUserByProviderUid(
             PROVIDER_ID,

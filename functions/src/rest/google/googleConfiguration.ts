@@ -1,5 +1,5 @@
 import { defineJsonSecret } from "firebase-functions/params";
-import { requiredAuthenticationConfigurationValue } from "./authenticationConfiguration";
+import { requiredAuthenticationConfigurationValue } from "../authenticationConfiguration";
 
 // Google OAuth 요청에 필요한 project별 설정을 나타냅니다.
 export interface GoogleConfiguration {

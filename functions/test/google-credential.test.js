@@ -2,7 +2,7 @@ const assert = require("assert");
 
 const revokeCalls = [];
 let revokeHook;
-require.cache[require.resolve("../lib/rest/googleClient")] = {
+require.cache[require.resolve("../lib/rest/google/googleClient")] = {
     exports: {
         revokeGoogleOAuthToken: async (...values) => {
             revokeCalls.push(values);
@@ -20,7 +20,7 @@ const {
     renewGoogleAccountLink,
     revokeGoogleCredential,
     saveGoogleCredential
-} = require("../lib/rest/googleCredential");
+} = require("../lib/rest/google/googleCredential");
 
 (async () => {
     await assertAccountLinkLeaseScopesRequestsByUser();
@@ -37,6 +37,7 @@ const {
     await assertAccountLinkLeaseBlocksEmptyCredentialDeletion();
     await assertRevocationLeaseBlocksAccountLink();
     await assertRevocationLeaseBlocksReplacement();
+    await assertDeletionMarkerBlocksAccountLinkClaim();
     await assertDeletionMarkerBlocksLateSave();
 })().catch((error) => {
     console.error(error);
@@ -278,6 +279,21 @@ async function assertRevocationLeaseBlocksReplacement() {
     } finally {
         revokeHook = undefined;
     }
+}
+
+// 회원탈퇴 표식이 기록된 uid에는 계정 연결 claim 문서를 생성하지 않는지 검증합니다.
+async function assertDeletionMarkerBlocksAccountLinkClaim() {
+    const db = fakeFirestore({
+        "authCredentials/user-1": {
+            deletionStartedAt: new Date()
+        }
+    });
+
+    await assert.rejects(
+        () => claimGoogleAccountLink(db, "user-1"),
+        (error) => error.code === "failed-precondition"
+    );
+    assert.strictEqual(db.data.has("authCredentials/user-1/providers/google"), false);
 }
 
 // 회원탈퇴 표식이 기록된 uid에는 늦게 도착한 credential을 저장하지 않는지 검증합니다.

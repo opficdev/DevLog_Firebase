@@ -64,6 +64,18 @@ export async function linkAppleProviderWithDatabase(
         );
     }
 
+    const currentProvider = user.providerData?.find((provider) =>
+        provider.providerId === APPLE_PROVIDER_ID
+    );
+    if (currentProvider && currentProvider.uid !== proof.payload.sub) {
+        await revokeExchangedTokens(proof.tokens);
+        throw appleAuthError(
+            "failed-precondition",
+            "apple_provider_link_conflict",
+            "Apple provider가 다른 계정에 연결되어 있습니다."
+        );
+    }
+
     if (ownerUID && ownerUID !== uid) {
         await revokeExchangedTokens(proof.tokens);
         throw appleAuthError(
@@ -131,7 +143,7 @@ export async function unlinkAppleProviderWithDatabase(
     return { success: true };
 }
 
-// 기존 Apple provider, 검증된 이메일, Apple subject uid 순서로 Firebase uid를 결정합니다.
+// 검증된 Apple 이메일로 기존 provider 또는 Firebase uid를 결정합니다.
 export async function resolveAppleFirebaseUID(
     auth: FirebaseAuthClient,
     payload: AppleTokenPayload
@@ -145,31 +157,16 @@ export async function resolveAppleFirebaseUID(
     }
 
     const appleEmail = verifiedAppleEmail(payload);
-    if (appleEmail) {
-        try {
-            return (await auth.getUserByEmail(appleEmail)).uid;
-        } catch (error) {
-            if (firebaseAuthErrorCode(error) !== "auth/user-not-found") {
-                throw error;
-            }
-        }
-
-        try {
-            return (await auth.createUser({
-                email: appleEmail,
-                emailVerified: true
-            })).uid;
-        } catch (error) {
-            if (firebaseAuthErrorCode(error) === "auth/email-already-exists") {
-                return (await auth.getUserByEmail(appleEmail)).uid;
-            }
-            throw error;
-        }
+    if (!appleEmail) {
+        throw appleAuthError(
+            "invalid-argument",
+            "email_not_found",
+            "이메일을 찾을 수 없습니다."
+        );
     }
 
-    const uid = `apple:${payload.sub}`;
     try {
-        return (await auth.getUser(uid)).uid;
+        return (await auth.getUserByEmail(appleEmail)).uid;
     } catch (error) {
         if (firebaseAuthErrorCode(error) !== "auth/user-not-found") {
             throw error;
@@ -178,11 +175,12 @@ export async function resolveAppleFirebaseUID(
 
     try {
         return (await auth.createUser({
-            uid
+            email: appleEmail,
+            emailVerified: true
         })).uid;
     } catch (error) {
-        if (firebaseAuthErrorCode(error) === "auth/uid-already-exists") {
-            return (await auth.getUser(uid)).uid;
+        if (firebaseAuthErrorCode(error) === "auth/email-already-exists") {
+            return (await auth.getUserByEmail(appleEmail)).uid;
         }
         throw error;
     }

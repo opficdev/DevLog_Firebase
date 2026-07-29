@@ -2,7 +2,7 @@ const assert = require("assert");
 const {
     githubConfiguration,
     githubRevocationConfiguration
-} = require("../lib/rest/githubConfiguration");
+} = require("../lib/rest/github/githubConfiguration");
 
 const secretName = "GITHUB_OAUTH_CONFIG";
 const configuration = {

@@ -30,7 +30,7 @@ require.cache[require.resolve("axios")] = {
 const {
     requestGoogleOAuthToken,
     revokeGoogleOAuthToken
-} = require("../lib/rest/googleClient");
+} = require("../lib/rest/google/googleClient");
 
 (async () => {
     await assertServerAuthCodeExchangeReturnsServerTokens();

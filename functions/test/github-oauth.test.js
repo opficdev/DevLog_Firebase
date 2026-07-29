@@ -28,7 +28,7 @@ require.cache[require.resolve("firebase-admin")] = {
         auth: () => fakeAuth
     }
 };
-require.cache[require.resolve("../lib/rest/githubClient")] = {
+require.cache[require.resolve("../lib/rest/github/githubClient")] = {
     exports: {
         requestGitHubAccessToken: async (...values) => {
             tokenExchangeCalls.push(values);
@@ -42,7 +42,7 @@ require.cache[require.resolve("../lib/rest/githubClient")] = {
         }
     }
 };
-require.cache[require.resolve("../lib/rest/githubProvider")] = {
+require.cache[require.resolve("../lib/rest/github/githubProvider")] = {
     exports: {
         resolveGithubFirebaseUID: async () => "github-uid",
         linkGithubProviderWithAccessToken: async (...values) => {
@@ -50,12 +50,12 @@ require.cache[require.resolve("../lib/rest/githubProvider")] = {
         }
     }
 };
-require.cache[require.resolve("../lib/rest/githubConfiguration")] = {
+require.cache[require.resolve("../lib/rest/github/githubConfiguration")] = {
     exports: {
         githubRevocationConfiguration: () => configuration
     }
 };
-require.cache[require.resolve("../lib/rest/githubCredential")] = {
+require.cache[require.resolve("../lib/rest/github/githubCredential")] = {
     exports: {
         githubCredentialForUser: async () => ({
             accessToken: "stored-token",
@@ -79,7 +79,7 @@ const {
     linkGithubAccount,
     requestGithubCustomToken,
     unlinkGithubAccount
-} = require("../lib/rest/githubOAuth");
+} = require("../lib/rest/github/githubOAuth");
 
 const configuration = {
     clientId: "client-id",

@@ -4,7 +4,7 @@ import {
     Timestamp
 } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
-import { FirestorePath } from "../common/firestorePath";
+import { FirestorePath } from "../../common/firestorePath";
 import { revokeGoogleOAuthToken } from "./googleClient";
 
 const REVOCATION_LEASE_MILLISECONDS = 5 * 60 * 1000;
@@ -25,10 +25,18 @@ export async function claimGoogleAccountLink(
     db: FirebaseFirestore.Firestore,
     uid: string
 ): Promise<string> {
+    const credentialRootRef = db.doc(FirestorePath.authCredential(uid));
     const credentialRef = db.doc(FirestorePath.googleCredential(uid));
     const claim = randomBytes(32).toString("base64url");
     await db.runTransaction(async (transaction) => {
+        const rootSnapshot = await transaction.get(credentialRootRef);
         const snapshot = await transaction.get(credentialRef);
+        if (rootSnapshot.data()?.deletionStartedAt) {
+            throw new HttpsError(
+                "failed-precondition",
+                "삭제 중인 사용자의 Google 계정은 연결할 수 없습니다."
+            );
+        }
         if (revocationLeaseActive(snapshot.data())) {
             throw new HttpsError(
                 "aborted",

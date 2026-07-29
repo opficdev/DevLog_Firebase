@@ -1,6 +1,6 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { defineJsonSecret } from "firebase-functions/params";
-import { requiredAuthenticationConfigurationValue } from "./authenticationConfiguration";
+import { requiredAuthenticationConfigurationValue } from "../authenticationConfiguration";
 
 // GitHub OAuth App 요청에 필요한 project별 설정을 나타냅니다.
 export interface GitHubConfiguration {

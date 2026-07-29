@@ -1,7 +1,8 @@
 import * as admin from "firebase-admin";
 import type {
     UpdateRequest,
-    UserProvider
+    UserProvider,
+    UserRecord
 } from "firebase-admin/auth";
 import { HttpsError } from "firebase-functions/v2/https";
 import {
@@ -24,13 +25,20 @@ const EMAIL_UNAVAILABLE_REASON = "email_not_found";
 const EMAIL_MISMATCH_REASON = "email_mismatch";
 const PROVIDER_ID = "github.com";
 
-// 현재 사용자의 이메일과 GitHub verified email의 일치 여부를 반환합니다.
-async function githubEmailMatchesUser(
+// GitHub verified email과 일치하는 현재 Firebase Auth 사용자를 반환합니다.
+async function githubUserWithMatchingEmail(
     uid: string,
     email: string
-): Promise<boolean> {
-    const userRecord = await admin.auth().getUser(uid);
-    return userRecord.email === email;
+): Promise<UserRecord> {
+    const user = await admin.auth().getUser(uid);
+    if (user.email !== email) {
+        throw new HttpsError(
+            "invalid-argument",
+            "이메일이 일치하지 않습니다.",
+            { reason: EMAIL_MISMATCH_REASON }
+        );
+    }
+    return user;
 }
 
 // GitHub user id를 Firebase provider uid 문자열로 변환합니다.
@@ -125,12 +133,12 @@ export async function linkGithubProviderWithAccessToken(
         accessToken,
         userData
     );
-    if (!await githubEmailMatchesUser(uid, email)) {
-        throw new HttpsError(
-            "invalid-argument",
-            "이메일이 일치하지 않습니다.",
-            { reason: EMAIL_MISMATCH_REASON }
-        );
+    const user = await githubUserWithMatchingEmail(uid, email);
+    const currentProvider = user.providerData.find((provider) =>
+        provider.providerId === PROVIDER_ID
+    );
+    if (currentProvider && currentProvider.uid !== providerUID) {
+        throw githubProviderLinkConflictError();
     }
     await linkGitHubProvider(
         uid,

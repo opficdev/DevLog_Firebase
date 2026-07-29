@@ -29,11 +29,11 @@ import {
     releaseOAuthSession,
     releaseOAuthTicket,
     storeOAuthSessionCleanupPayload
-} from "./oauth/session";
+} from "../oauth/session";
 import type {
     ClaimedOAuthTicket,
     OAuthPurpose
-} from "./oauth/session";
+} from "../oauth/session";
 
 const PROVIDER = "github";
 const PROVIDER_ID = "github.com";

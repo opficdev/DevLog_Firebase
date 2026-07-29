@@ -157,11 +157,11 @@ console.warn = (...args) => {
 const {
     requestGitHubAccessToken,
     revokeGitHubOAuthGrant
-} = require("../lib/rest/githubClient");
+} = require("../lib/rest/github/githubClient");
 const {
     linkGithubProviderWithAccessToken,
     resolveGithubFirebaseUID
-} = require("../lib/rest/githubProvider");
+} = require("../lib/rest/github/githubProvider");
 
 (async () => {
     try {
@@ -177,6 +177,7 @@ const {
 
         await assertGithubLinkRejectsMismatchedEmail();
         await assertGithubLinkKeepsCurrentProvider();
+        await assertGithubLinkRejectsDifferentCurrentProvider();
         await assertGithubLinkConnectsUnlinkedProvider();
         await assertGithubLinkBlocksProviderConnectedToOtherUser();
 
@@ -450,6 +451,37 @@ async function assertGithubLinkKeepsCurrentProvider() {
         }
     }]);
     assert.deepStrictEqual(createdUsers, []);
+    assertHeaders("https://api.github.com/user");
+    assertHeaders("https://api.github.com/user/emails");
+}
+
+// 현재 사용자의 다른 GitHub uid를 새 provider로 교체하지 않는지 검증합니다.
+async function assertGithubLinkRejectsDifferentCurrentProvider() {
+    resetGithubLoginState();
+    currentUser = userRecord(
+        "current-uid",
+        [{
+            ...githubProviderData("user@example.com"),
+            uid: "previous-github-uid"
+        }],
+        "user@example.com"
+    );
+
+    await assert.rejects(
+        () => linkGithubProviderWithAccessToken(
+            "current-uid",
+            "access-token"
+        ),
+        (error) =>
+            error.code === "failed-precondition" &&
+            error.details?.reason === "github_email_changed_account_conflict"
+    );
+
+    assert.deepStrictEqual(providerLookupCalls, []);
+    assert.deepStrictEqual(userLookupCalls, ["current-uid"]);
+    assert.deepStrictEqual(updatedUsers, []);
+    assert.deepStrictEqual(createdUsers, []);
+    assert.deepStrictEqual(axiosRequests, []);
     assertHeaders("https://api.github.com/user");
     assertHeaders("https://api.github.com/user/emails");
 }

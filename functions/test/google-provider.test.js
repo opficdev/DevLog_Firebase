@@ -51,7 +51,7 @@ require.cache[require.resolve("firebase-admin")] = {
 const {
     linkGoogleProvider,
     resolveGoogleFirebaseUID
-} = require("../lib/rest/googleProvider");
+} = require("../lib/rest/google/googleProvider");
 
 (async () => {
     await assertExistingProviderKeepsUIDAfterEmailChange();
@@ -60,6 +60,7 @@ const {
     await assertUnverifiedEmailIsRejected();
     await assertNewProviderLinkIsReported();
     await assertExistingProviderLinkIsReported();
+    await assertExistingDifferentProviderLinkIsRejected();
     await assertLinkRejectsMismatchedEmail();
     await assertLinkRejectsProviderOwnedByAnotherUser();
     await assertProviderConflictTakesPriorityOverEmailMismatch();
@@ -184,6 +185,30 @@ async function assertExistingProviderLinkIsReported() {
             providerToLink: googleProvider("user@example.com")
         }
     }]);
+}
+
+// 다른 Google uid로 기존 provider를 교체하는 요청을 거부하는지 검증합니다.
+async function assertExistingDifferentProviderLinkIsRejected() {
+    resetState();
+    currentUser = userRecord(
+        "current-uid",
+        [{
+            ...googleProvider("user@example.com"),
+            uid: "previous-google-subject"
+        }],
+        "user@example.com"
+    );
+
+    await assert.rejects(
+        () => linkGoogleProvider(
+            "current-uid",
+            googlePayload()
+        ),
+        (error) => error.details?.reason === "google_provider_link_conflict"
+    );
+
+    assert.deepStrictEqual(providerLookupCalls, []);
+    assert.deepStrictEqual(updatedUsers, []);
 }
 
 // 현재 Firebase 사용자와 Google verified email이 다르면 계정 연결을 거부하는지 검증합니다.

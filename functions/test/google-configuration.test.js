@@ -1,5 +1,5 @@
 const assert = require("assert");
-const { googleConfiguration } = require("../lib/rest/googleConfiguration");
+const { googleConfiguration } = require("../lib/rest/google/googleConfiguration");
 
 const secretName = "GOOGLE_OAUTH_CONFIG";
 const secretValue = {

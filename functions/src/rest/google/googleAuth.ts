@@ -1,12 +1,12 @@
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { HttpsError } from "firebase-functions/v2/https";
-import { toError } from "../common/error";
+import { toError } from "../../common/error";
 import {
     GoogleJwksLookupError,
     verifyGoogleIdToken
-} from "../auth/googleIdToken";
-import type { GoogleTokenPayload } from "../auth/googleIdToken";
+} from "../../auth/googleIdToken";
+import type { GoogleTokenPayload } from "../../auth/googleIdToken";
 import {
     googleProviderError,
     requestGoogleOAuthToken
