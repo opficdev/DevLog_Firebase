@@ -194,6 +194,10 @@ const {
     revokeAppleAccessTokenWithDatabase,
     unlinkAppleProviderWithDatabase
 } = require("../lib/rest/apple/auth");
+const {
+    appleCredentialForUser,
+    saveAppleCredential
+} = require("../lib/rest/apple/credential");
 
 (async () => {
     setAppleAuthenticationConfiguration();
@@ -230,6 +234,8 @@ const {
     await assertAccountLinkCredentialSaveFailureContinuesOnNextRequest();
     await assertAccountLinkProviderFailureContinuesOnNextRequest();
     await assertAccountLinkProviderOwnershipRaceCleansCredential();
+    await assertDeletionMarkerSkipsCredentialMigration();
+    await assertDeletionMarkerBlocksCredentialSave();
     await assertCredentialMigrationPreservesNewValue();
     await assertInvalidRefreshGrantRequiresReauthentication();
     await assertOtherRefreshFailureRemainsInternal();
@@ -1080,6 +1086,44 @@ async function assertAccountLinkProviderOwnershipRaceCleansCredential() {
         token: "refresh-token",
         tokenTypeHint: "refresh_token"
     }]);
+}
+
+// 회원탈퇴 표식이 기록된 uid에는 기존 Apple credential을 새 경로로 이관하지 않는지 검증합니다.
+async function assertDeletionMarkerSkipsCredentialMigration() {
+    const db = fakeFirestore({
+        "authCredentials/user-1": {
+            deletionStartedAt: new Date()
+        },
+        "users/user-1/userData/tokens": {
+            appleRefreshToken: "legacy-refresh-token"
+        }
+    });
+
+    const refreshToken = await appleCredentialForUser(db, "user-1");
+
+    assert.strictEqual(refreshToken, "legacy-refresh-token");
+    assert.strictEqual(
+        db.data.has("authCredentials/user-1/providers/apple"),
+        false
+    );
+}
+
+// 회원탈퇴 표식이 기록된 uid에는 늦게 도착한 Apple credential을 저장하지 않는지 검증합니다.
+async function assertDeletionMarkerBlocksCredentialSave() {
+    const db = fakeFirestore({
+        "authCredentials/user-1": {
+            deletionStartedAt: new Date()
+        }
+    });
+
+    await assert.rejects(
+        () => saveAppleCredential(db, "user-1", "late-refresh-token"),
+        (error) => error.code === "failed-precondition"
+    );
+    assert.strictEqual(
+        db.data.has("authCredentials/user-1/providers/apple"),
+        false
+    );
 }
 
 // 새 credential 우선 정책과 기존 field 삭제를 검증합니다.
