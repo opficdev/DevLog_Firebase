@@ -12,5 +12,7 @@ export interface FirebaseAuthUser {
     providerData?: Array<{
         // 연결된 provider id를 저장합니다.
         providerId: string;
+        // 연결된 provider 사용자 uid를 저장합니다.
+        uid: string;
     }>;
 }

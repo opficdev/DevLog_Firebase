@@ -230,6 +230,7 @@ const {
     await assertLinkAcceptsEmailWithDifferentLetterCase();
     await assertLinkRejectsMismatchedEmail();
     await assertLinkRejectsOtherProviderOwner();
+    await assertLinkRejectsDifferentCurrentProvider();
     await assertLinkKeepsCurrentProvider();
     await assertAccountLinkCredentialSaveFailureContinuesOnNextRequest();
     await assertAccountLinkProviderFailureContinuesOnNextRequest();
@@ -960,6 +961,40 @@ async function assertLinkRejectsOtherProviderOwner() {
     assert.strictEqual(authUpdates.length, 0);
     assert.strictEqual(authCreates.length, 0);
     assert.strictEqual(db.data.has("authCredentials/current-uid/providers/apple"), false);
+}
+
+// 현재 사용자의 다른 Apple subject를 새 provider로 교체하지 않는지 검증합니다.
+async function assertLinkRejectsDifferentCurrentProvider() {
+    resetState();
+    users.set("current-uid", firebaseUser(
+        "current-uid",
+        "user@example.com",
+        [{
+            ...appleProvider(),
+            uid: "previous-apple-subject"
+        }]
+    ));
+    const db = validChallengeFirestore("different-current-provider");
+
+    await assertAppleReason(
+        () => linkAppleProviderWithDatabase(
+            db,
+            "current-uid",
+            "different-current-provider",
+            "authorization-code"
+        ),
+        "apple_provider_link_conflict"
+    );
+
+    assert.strictEqual(authUpdates.length, 0);
+    assert.strictEqual(
+        db.data.has("authCredentials/current-uid/providers/apple"),
+        false
+    );
+    assert.deepStrictEqual(revokeRequests, [{
+        token: "refresh-token",
+        tokenTypeHint: "refresh_token"
+    }]);
 }
 
 // 현재 uid가 이미 소유한 Apple provider 연결 요청은 성공으로 처리되는지 검증합니다.

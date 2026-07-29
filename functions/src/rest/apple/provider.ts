@@ -64,6 +64,18 @@ export async function linkAppleProviderWithDatabase(
         );
     }
 
+    const currentProvider = user.providerData?.find((provider) =>
+        provider.providerId === APPLE_PROVIDER_ID
+    );
+    if (currentProvider && currentProvider.uid !== proof.payload.sub) {
+        await revokeExchangedTokens(proof.tokens);
+        throw appleAuthError(
+            "failed-precondition",
+            "apple_provider_link_conflict",
+            "Apple provider가 다른 계정에 연결되어 있습니다."
+        );
+    }
+
     if (ownerUID && ownerUID !== uid) {
         await revokeExchangedTokens(proof.tokens);
         throw appleAuthError(
