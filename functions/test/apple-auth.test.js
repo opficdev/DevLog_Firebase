@@ -212,8 +212,9 @@ const {
     await assertAuthFailureRevokesExchangedCredential();
     await assertCredentialSaveFailureContinuesOnNextRequest();
     await assertCustomTokenUsesProofAndExistingEmailUID();
-    await assertUnverifiedEmailUsesAppleSubjectUID();
-    await assertCustomTokenUsesAppleSubjectUIDWithoutEmail();
+    await assertExistingProviderOwnerDoesNotUseEmailFallback();
+    await assertUnverifiedEmailIsRejected();
+    await assertMissingEmailIsRejected();
     await assertProvidedDisplayNameUpdatesProfile();
     await assertStoredAppleNameRestoresProfile();
     await assertBlankDisplayNameUsesStoredAppleName();
@@ -518,45 +519,71 @@ async function assertCustomTokenUsesProofAndExistingEmailUID() {
     );
 }
 
-// 검증되지 않은 Apple email은 기존 Firebase 사용자를 선택하지 않는지 검증합니다.
-async function assertUnverifiedEmailUsesAppleSubjectUID() {
+// 기존 Apple provider 소유자는 신규 uid 생성 없이 그대로 사용하는지 검증합니다.
+async function assertExistingProviderOwnerDoesNotUseEmailFallback() {
     resetState();
-    verifiedPayload = applePayload({ email_verified: false });
-    users.set("email-uid", firebaseUser("email-uid", "user@example.com"));
-    const db = validChallengeFirestore("unverified-email");
+    verifiedPayload = applePayload({ email: undefined, email_verified: undefined });
+    users.set("apple:apple-subject", {
+        ...firebaseUser("apple:apple-subject", undefined, [appleProvider()]),
+        displayName: "Apple User"
+    });
+    providerOwners.set("apple-subject", "apple:apple-subject");
+    const db = validChallengeFirestore("existing-provider");
 
     const result = await requestAppleCustomTokenWithDatabase(
         db,
-        "unverified-email",
-        "authorization-code",
-        "Apple User"
+        "existing-provider",
+        "authorization-code"
     );
 
     assert.deepStrictEqual(result, {
         customToken: "custom-token:apple:apple-subject"
     });
-    assert.strictEqual(authCreates[0].uid, "apple:apple-subject");
-    assert.strictEqual(authCreates[0].email, undefined);
-    assert.strictEqual(providerOwners.get("apple-subject"), "apple:apple-subject");
+    assert.strictEqual(authCreates.length, 0);
+    assert.strictEqual(authUpdates.length, 0);
 }
 
-// 이메일이 없는 Apple 계정은 apple subject uid로 사용자와 provider를 생성하는지 검증합니다.
-async function assertCustomTokenUsesAppleSubjectUIDWithoutEmail() {
+// 검증되지 않은 Apple email로 Firebase 사용자를 생성하지 않는지 검증합니다.
+async function assertUnverifiedEmailIsRejected() {
+    resetState();
+    verifiedPayload = applePayload({ email_verified: false });
+    users.set("email-uid", firebaseUser("email-uid", "user@example.com"));
+    const db = validChallengeFirestore("unverified-email");
+
+    await assertAppleReason(
+        () => requestAppleCustomTokenWithDatabase(
+            db,
+            "unverified-email",
+            "authorization-code",
+            "Apple User"
+        ),
+        "email_not_found"
+    );
+
+    assert.strictEqual(authCreates.length, 0);
+    assert.strictEqual(authUpdates.length, 0);
+    assert.strictEqual(customTokenUIDs.length, 0);
+}
+
+// 이메일이 없는 Apple 인증으로 Firebase 사용자를 생성하지 않는지 검증합니다.
+async function assertMissingEmailIsRejected() {
     resetState();
     verifiedPayload = applePayload({ email: undefined, email_verified: undefined });
     const db = validChallengeFirestore("subject-login");
 
-    const result = await requestAppleCustomTokenWithDatabase(
-        db,
-        "subject-login",
-        "authorization-code",
-        "Apple User"
+    await assertAppleReason(
+        () => requestAppleCustomTokenWithDatabase(
+            db,
+            "subject-login",
+            "authorization-code",
+            "Apple User"
+        ),
+        "email_not_found"
     );
 
-    assert.deepStrictEqual(result, { customToken: "custom-token:apple:apple-subject" });
-    assert.strictEqual(authCreates[0].uid, "apple:apple-subject");
-    assert.strictEqual(authCreates[0].providerToLink, undefined);
-    assert.strictEqual(authUpdates[0].properties.providerToLink.providerId, "apple.com");
+    assert.strictEqual(authCreates.length, 0);
+    assert.strictEqual(authUpdates.length, 0);
+    assert.strictEqual(customTokenUIDs.length, 0);
 }
 
 // 전달된 이름을 정리해 선택된 Firebase Auth 사용자의 profile에 반영하는지 검증합니다.
