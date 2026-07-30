@@ -125,7 +125,7 @@ async function assertServerAuthCodeProviderFailureIsDistinguished() {
         "Google 인증 서버 요청에 실패했습니다.",
         {
             status: 503,
-            message: "요청이 status code 503로 실패했습니다.",
+            errorMessage: "요청이 status code 503로 실패했습니다.",
             error: "temporarily_unavailable"
         }
     ]]);
@@ -146,7 +146,7 @@ async function assertServerAuthCodeNetworkFailureIsDistinguished() {
     );
     assert.deepStrictEqual(loggerErrors, [[
         "Google 인증 서버 요청에 실패했습니다.",
-        { message: "Google token endpoint에 연결할 수 없습니다." }
+        { errorMessage: "Google token endpoint에 연결할 수 없습니다." }
     ]]);
 }
 
@@ -196,7 +196,7 @@ async function assertAlreadyInvalidTokenIsAccepted() {
             uid: "firebase-uid",
             google: {
                 status: 400,
-                message: "요청이 status code 400로 실패했습니다.",
+                errorMessage: "요청이 status code 400로 실패했습니다.",
                 error: "invalid_token"
             }
         }
@@ -216,7 +216,7 @@ async function assertGrantRevocationFailureIsDistinguished() {
         "Google OAuth grant 폐기에 실패했습니다.",
         {
             status: 500,
-            message: "요청이 status code 500로 실패했습니다.",
+            errorMessage: "요청이 status code 500로 실패했습니다.",
             error: "server_error"
         }
     ]]);

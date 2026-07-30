@@ -306,19 +306,19 @@ function errorMetadata(error: unknown) {
     if (axios.isAxiosError(error)) {
         return {
             status: error.response?.status,
-            message: error.message,
+            errorMessage: error.message,
             data: error.response?.data
         };
     }
 
     if (error instanceof Error) {
         return {
-            message: error.message
+            errorMessage: error.message
         };
     }
 
     return {
-        message: "Unknown error"
+        errorMessage: "Unknown error"
     };
 }
 

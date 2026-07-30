@@ -238,7 +238,7 @@ async function assertGitHubTokenRequestFailureIsDistinguished() {
             "GitHub 인증 서버 요청에 실패했습니다.",
             {
                 status: 503,
-                message: "요청이 status code 503로 실패했습니다.",
+                errorMessage: "요청이 status code 503로 실패했습니다.",
                 data: { message: "GitHub unavailable" }
             }
         ]]);
@@ -685,7 +685,7 @@ async function assertGithubUnlinkSucceedsWhenGrantDeleteFindsInvalidToken() {
             uid: "firebase-uid",
             github: {
                 status: 422,
-                message: "요청이 status code 422로 실패했습니다.",
+                errorMessage: "요청이 status code 422로 실패했습니다.",
                 data: { message: "grant 삭제 실패" }
             }
         }
@@ -715,7 +715,7 @@ async function assertGithubTokenRevokeSucceedsWhenTokenIsAlreadyInvalid() {
             uid: "firebase-uid",
             github: {
                 status: 422,
-                message: "요청이 status code 422로 실패했습니다.",
+                errorMessage: "요청이 status code 422로 실패했습니다.",
                 data: { message: "token 삭제 실패" }
             }
         }
@@ -744,7 +744,7 @@ async function assertGithubUnlinkReportsTokenCheckFailureAsError() {
             "GitHub 토큰 상태 확인에 실패했습니다.",
             {
                 status: 500,
-                message: "요청이 status code 500로 실패했습니다.",
+                errorMessage: "요청이 status code 500로 실패했습니다.",
                 data: { message: "token을 찾을 수 없음" }
             }
         ],
@@ -752,7 +752,7 @@ async function assertGithubUnlinkReportsTokenCheckFailureAsError() {
             "GitHub OAuth App grant 제거에 실패했습니다.",
             {
                 status: 422,
-                message: "요청이 status code 422로 실패했습니다.",
+                errorMessage: "요청이 status code 422로 실패했습니다.",
                 data: { message: "grant 삭제 실패" }
             }
         ]
@@ -778,7 +778,7 @@ async function assertGithubUnlinkFailureIsDistinguished() {
         "GitHub OAuth App grant 제거에 실패했습니다.",
         {
             status: 500,
-            message: "요청이 status code 500로 실패했습니다.",
+            errorMessage: "요청이 status code 500로 실패했습니다.",
             data: { message: "grant 삭제 실패" }
         }
     ]]);

@@ -174,12 +174,12 @@ function errorMetadata(error: unknown) {
             undefined;
         return {
             status: error.response?.status,
-            message: error.message,
+            errorMessage: error.message,
             error: typeof providerError === "string" ? providerError : undefined
         };
     }
     if (error instanceof Error) {
-        return { message: error.message };
+        return { errorMessage: error.message };
     }
-    return { message: "Unknown error" };
+    return { errorMessage: "Unknown error" };
 }

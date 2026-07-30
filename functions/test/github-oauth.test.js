@@ -142,11 +142,11 @@ async function assertCallbackCompensationFailureKeepsDurableCleanupPayload() {
     assert.deepStrictEqual(loggerErrors, [
         [
             "GitHub OAuth callback 보상 폐기 실패",
-            { name: "Error", message: "token revoke failed" }
+            { name: "Error", errorMessage: "token revoke failed" }
         ],
         [
             "GitHub OAuth callback 처리 실패",
-            { name: "Error", message: "ticket create failed" }
+            { name: "Error", errorMessage: "ticket create failed" }
         ]
     ]);
 }
@@ -179,7 +179,7 @@ async function assertCallbackTicketFailureRevokesExchangedGrant() {
     ]]);
     assert.deepStrictEqual(loggerErrors, [[
         "GitHub OAuth callback 처리 실패",
-        { name: "Error", message: "ticket create failed" }
+        { name: "Error", errorMessage: "ticket create failed" }
     ]]);
 }
 

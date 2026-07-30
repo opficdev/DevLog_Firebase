@@ -163,16 +163,16 @@ export async function githubCallbackURL(
 }
 
 // 비밀값 없이 callback 오류의 종류와 문구만 로그 데이터로 구성합니다.
-function callbackErrorMetadata(error: unknown): { name: string; message: string } {
+function callbackErrorMetadata(error: unknown): { name: string; errorMessage: string } {
     if (error instanceof Error) {
         return {
             name: error.name,
-            message: error.message
+            errorMessage: error.message
         };
     }
     return {
         name: "UnknownError",
-        message: "알 수 없는 GitHub OAuth callback 오류"
+        errorMessage: "알 수 없는 GitHub OAuth callback 오류"
     };
 }
 
