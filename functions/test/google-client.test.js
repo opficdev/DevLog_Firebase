@@ -1,6 +1,7 @@
 const assert = require("assert");
 
 const axiosCalls = [];
+const loggerErrors = [];
 let tokenResponse = googleTokenResponse();
 let requestError;
 const fakeAxios = {
@@ -25,6 +26,13 @@ const fakeAxios = {
 
 require.cache[require.resolve("axios")] = {
     exports: fakeAxios
+};
+require.cache[require.resolve("firebase-functions/logger")] = {
+    exports: {
+        error: (...values) => {
+            loggerErrors.push(values);
+        }
+    }
 };
 
 const {
@@ -109,6 +117,14 @@ async function assertServerAuthCodeProviderFailureIsDistinguished() {
         ),
         (error) => error.details?.reason === "google_provider_failed"
     );
+    assert.deepStrictEqual(loggerErrors, [[
+        "Google 인증 서버 요청에 실패했습니다.",
+        {
+            status: 503,
+            message: "요청이 status code 503로 실패했습니다.",
+            error: "temporarily_unavailable"
+        }
+    ]]);
 }
 
 // Google token endpoint 통신 실패를 provider 오류로 구분하는지 검증합니다.
@@ -124,6 +140,10 @@ async function assertServerAuthCodeNetworkFailureIsDistinguished() {
         ),
         (error) => error.details?.reason === "google_provider_failed"
     );
+    assert.deepStrictEqual(loggerErrors, [[
+        "Google 인증 서버 요청에 실패했습니다.",
+        { message: "Google token endpoint에 연결할 수 없습니다." }
+    ]]);
 }
 
 // Google token endpoint 응답에 필수 token이 없으면 provider 오류로 처리하는지 검증합니다.
@@ -177,11 +197,20 @@ async function assertGrantRevocationFailureIsDistinguished() {
         () => revokeGoogleOAuthToken("firebase-uid", "refresh-token"),
         (error) => error.details?.reason === "google_revoke_failed"
     );
+    assert.deepStrictEqual(loggerErrors, [[
+        "Google OAuth grant 폐기에 실패했습니다.",
+        {
+            status: 500,
+            message: "요청이 status code 500로 실패했습니다.",
+            error: "server_error"
+        }
+    ]]);
 }
 
 // Google client 테스트 상태를 초기화합니다.
 function resetState() {
     axiosCalls.length = 0;
+    loggerErrors.length = 0;
     tokenResponse = googleTokenResponse();
     requestError = undefined;
 }

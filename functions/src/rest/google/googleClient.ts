@@ -1,4 +1,5 @@
 import axios from "axios";
+import * as logger from "firebase-functions/logger";
 import { HttpsError } from "firebase-functions/v2/https";
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -120,7 +121,7 @@ async function requestGoogleAPI<T>(
         if (invalidGoogleGrant(error)) {
             throw googleInvalidProofError();
         }
-        console.error("Google 인증 서버 요청에 실패했습니다.", errorMetadata(error));
+        logger.error("Google 인증 서버 요청에 실패했습니다.", errorMetadata(error));
         throw googleProviderError();
     }
 }
@@ -156,7 +157,7 @@ function googleInvalidProofError(): HttpsError {
 
 // Google grant 폐기 실패를 REST 계층에서 구분할 수 있는 오류로 변환합니다.
 function googleRevocationError(error: unknown): HttpsError {
-    console.error("Google OAuth grant 폐기에 실패했습니다.", errorMetadata(error));
+    logger.error("Google OAuth grant 폐기에 실패했습니다.", errorMetadata(error));
     return new HttpsError(
         "internal",
         "Google grant 폐기에 실패했습니다.",
