@@ -1,4 +1,5 @@
 import axios from "axios";
+import * as logger from "firebase-functions/logger";
 import { HttpsError } from "firebase-functions/v2/https";
 
 // GitHub authorization code 교환 응답을 나타냅니다.
@@ -249,7 +250,7 @@ async function isAccessTokenAlreadyInvalid(
     } catch (checkError) {
         if (responseStatus(checkError) === NOT_FOUND_STATUS) { return true; }
 
-        console.error("GitHub 토큰 상태 확인에 실패했습니다.", errorMetadata(checkError));
+        logger.error("GitHub 토큰 상태 확인에 실패했습니다.", errorMetadata(checkError));
         return false;
     }
 }
@@ -292,7 +293,7 @@ function responseStatus(error: unknown): number | undefined {
 
 // 외부 grant 제거 실패를 REST 계층에서 처리할 수 있는 오류로 변환합니다.
 function grantRevocationError(error: unknown): HttpsError {
-    console.error("GitHub OAuth App grant 제거에 실패했습니다.", errorMetadata(error));
+    logger.error("GitHub OAuth App grant 제거에 실패했습니다.", errorMetadata(error));
     return new HttpsError(
         "internal",
         "GitHub OAuth App grant 제거에 실패했습니다.",
@@ -326,7 +327,7 @@ async function requestGitHubAPI<T>(request: () => Promise<T>): Promise<T> {
     try {
         return await request();
     } catch (error) {
-        console.error("GitHub 인증 서버 요청에 실패했습니다.", errorMetadata(error));
+        logger.error("GitHub 인증 서버 요청에 실패했습니다.", errorMetadata(error));
         throw new HttpsError(
             "internal",
             "GitHub 인증 서버 요청에 실패했습니다.",
