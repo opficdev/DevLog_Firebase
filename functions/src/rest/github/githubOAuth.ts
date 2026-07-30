@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import * as logger from "firebase-functions/logger";
 import { HttpsError } from "firebase-functions/v2/https";
 import {
     requestGitHubAccessToken,
@@ -127,7 +128,7 @@ export async function githubCallbackURL(
                     configuration.clientSecret
                 );
             } catch (revokeError) {
-                console.error(
+                logger.error(
                     "GitHub OAuth callback 보상 폐기 실패",
                     callbackErrorMetadata(revokeError)
                 );
@@ -138,7 +139,7 @@ export async function githubCallbackURL(
                             clientId: configuration.clientId
                         });
                     } catch (storageError) {
-                        console.error(
+                        logger.error(
                             "GitHub OAuth callback 보상 정보 저장 실패",
                             callbackErrorMetadata(storageError)
                         );
@@ -150,28 +151,28 @@ export async function githubCallbackURL(
             try {
                 await releaseOAuthSession(db, session);
             } catch (releaseError) {
-                console.error(
+                logger.error(
                     "GitHub OAuth callback session 해제 실패",
                     callbackErrorMetadata(releaseError)
                 );
             }
         }
-        console.error("GitHub OAuth callback 처리 실패", callbackErrorMetadata(error));
+        logger.error("GitHub OAuth callback 처리 실패", callbackErrorMetadata(error));
         return githubCallbackFailureURL();
     }
 }
 
 // 비밀값 없이 callback 오류의 종류와 문구만 로그 데이터로 구성합니다.
-function callbackErrorMetadata(error: unknown): { name: string; message: string } {
+function callbackErrorMetadata(error: unknown): { name: string; errorMessage: string } {
     if (error instanceof Error) {
         return {
             name: error.name,
-            message: error.message
+            errorMessage: error.message
         };
     }
     return {
         name: "UnknownError",
-        message: "알 수 없는 GitHub OAuth callback 오류"
+        errorMessage: "알 수 없는 GitHub OAuth callback 오류"
     };
 }
 

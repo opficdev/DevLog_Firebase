@@ -7,6 +7,7 @@ const credentialRevokeCalls = [];
 const providerLinkCalls = [];
 const authUpdateCalls = [];
 const grantRevokeCalls = [];
+const loggerErrors = [];
 let currentUser = githubUser([githubProvider(), googleProvider()]);
 let tokenRevokeError;
 
@@ -26,6 +27,13 @@ const fakeAuth = {
 require.cache[require.resolve("firebase-admin")] = {
     exports: {
         auth: () => fakeAuth
+    }
+};
+require.cache[require.resolve("firebase-functions/logger")] = {
+    exports: {
+        error: (...values) => {
+            loggerErrors.push(values);
+        }
     }
 };
 require.cache[require.resolve("../lib/rest/github/githubClient")] = {
@@ -131,6 +139,16 @@ async function assertCallbackCompensationFailureKeepsDurableCleanupPayload() {
         accessToken: "github-access-token",
         clientId: "client-id"
     });
+    assert.deepStrictEqual(loggerErrors, [
+        [
+            "GitHub OAuth callback 보상 폐기 실패",
+            { name: "Error", errorMessage: "token revoke failed" }
+        ],
+        [
+            "GitHub OAuth callback 처리 실패",
+            { name: "Error", errorMessage: "ticket create failed" }
+        ]
+    ]);
 }
 
 // code 교환 뒤 ticket 저장이 실패하면 발급된 GitHub grant를 보상 폐기하는지 검증합니다.
@@ -158,6 +176,10 @@ async function assertCallbackTicketFailureRevokesExchangedGrant() {
         "github-access-token",
         "client-id",
         "client-secret"
+    ]]);
+    assert.deepStrictEqual(loggerErrors, [[
+        "GitHub OAuth callback 처리 실패",
+        { name: "Error", errorMessage: "ticket create failed" }
     ]]);
 }
 
@@ -366,5 +388,6 @@ function resetCalls() {
     providerLinkCalls.length = 0;
     authUpdateCalls.length = 0;
     grantRevokeCalls.length = 0;
+    loggerErrors.length = 0;
     tokenRevokeError = undefined;
 }

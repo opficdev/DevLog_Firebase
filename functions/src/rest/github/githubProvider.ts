@@ -4,6 +4,7 @@ import type {
     UserProvider,
     UserRecord
 } from "firebase-admin/auth";
+import * as logger from "firebase-functions/logger";
 import { HttpsError } from "firebase-functions/v2/https";
 import {
     requestGitHubUser,
@@ -170,7 +171,7 @@ async function linkGitHubProvider(
     }
 
     await admin.auth().updateUser(uid, { providerToLink });
-    console.log(`현재 사용자(${uid})에 GitHub provider 연결을 추가했습니다.`);
+    logger.info(`현재 사용자(${uid})에 GitHub provider 연결을 추가했습니다.`);
 }
 
 // 다른 사용자에 연결된 GitHub provider 충돌을 클라이언트가 구분할 수 있는 오류로 구성합니다.
@@ -237,7 +238,7 @@ async function firebaseUIDForGitHubEmail(
             photoURL: userData.avatar_url ?? null,
             providerToLink
         });
-        console.log(`이메일(${email}) 기존 사용자에 GitHub provider 연결을 추가했습니다.`);
+        logger.info(`이메일(${email}) 기존 사용자에 GitHub provider 연결을 추가했습니다.`);
         return userRecord.uid;
     } catch (error) {
         if (firebaseAuthErrorCode(error) !== "auth/user-not-found") { throw error; }
@@ -249,7 +250,7 @@ async function firebaseUIDForGitHubEmail(
         photoURL: userData.avatar_url,
         providerToLink
     });
-    console.log(`GitHub provider 연결 사용자가 생성됨: ${userRecord.uid}`);
+    logger.info(`GitHub provider 연결 사용자가 생성됨: ${userRecord.uid}`);
     return userRecord.uid;
 }
 
