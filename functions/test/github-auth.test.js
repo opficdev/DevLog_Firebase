@@ -3,6 +3,7 @@ const assert = require("assert");
 const axiosCalls = [];
 const axiosRequests = [];
 const loggerErrors = [];
+const loggerInfos = [];
 const loggerWarnings = [];
 const userLookupCalls = [];
 const providerLookupCalls = [];
@@ -161,6 +162,9 @@ require.cache[require.resolve("firebase-functions/logger")] = {
     exports: {
         error: (...values) => {
             loggerErrors.push(values);
+        },
+        info: (...values) => {
+            loggerInfos.push(values);
         },
         warn: (...values) => {
             loggerWarnings.push(values);
@@ -395,6 +399,9 @@ async function assertGithubLoginRefreshesProfileForExistingEmailUser() {
             providerToLink: githubProviderData("user@example.com")
         }
     }]);
+    assert.deepStrictEqual(loggerInfos, [[
+        "이메일(user@example.com) 기존 사용자에 GitHub provider 연결을 추가했습니다."
+    ]]);
 }
 
 // provider 연결과 같은 email 계정이 없으면 현재 email 기준 새 provider 연결 계정을 생성하는지 검증합니다.
@@ -412,6 +419,9 @@ async function assertGithubLoginCreatesProviderLinkedUserForNewEmail() {
     assert.deepStrictEqual(emailLookupCalls, ["user@example.com"]);
     assert.deepStrictEqual(updatedUsers, []);
     assert.deepStrictEqual(createdUsers, [newGitHubUserProperties("user@example.com")]);
+    assert.deepStrictEqual(loggerInfos, [[
+        "GitHub provider 연결 사용자가 생성됨: new-uid"
+    ]]);
     assertHeaders("https://api.github.com/user");
     assertHeaders("https://api.github.com/user/emails");
 }
@@ -562,6 +572,9 @@ async function assertGithubLinkConnectsUnlinkedProvider() {
         }
     }]);
     assert.deepStrictEqual(createdUsers, []);
+    assert.deepStrictEqual(loggerInfos, [[
+        "현재 사용자(current-uid)에 GitHub provider 연결을 추가했습니다."
+    ]]);
     assertHeaders("https://api.github.com/user");
     assertHeaders("https://api.github.com/user/emails");
 }
@@ -790,6 +803,7 @@ function resetGithubLoginState() {
     axiosCalls.length = 0;
     axiosRequests.length = 0;
     loggerErrors.length = 0;
+    loggerInfos.length = 0;
     userLookupCalls.length = 0;
     providerLookupCalls.length = 0;
     emailLookupCalls.length = 0;
