@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import * as logger from "firebase-functions/logger";
 import { HttpsError } from "firebase-functions/v2/https";
 import {
     requestGitHubAccessToken,
@@ -127,7 +128,7 @@ export async function githubCallbackURL(
                     configuration.clientSecret
                 );
             } catch (revokeError) {
-                console.error(
+                logger.error(
                     "GitHub OAuth callback 보상 폐기 실패",
                     callbackErrorMetadata(revokeError)
                 );
@@ -138,7 +139,7 @@ export async function githubCallbackURL(
                             clientId: configuration.clientId
                         });
                     } catch (storageError) {
-                        console.error(
+                        logger.error(
                             "GitHub OAuth callback 보상 정보 저장 실패",
                             callbackErrorMetadata(storageError)
                         );
@@ -150,13 +151,13 @@ export async function githubCallbackURL(
             try {
                 await releaseOAuthSession(db, session);
             } catch (releaseError) {
-                console.error(
+                logger.error(
                     "GitHub OAuth callback session 해제 실패",
                     callbackErrorMetadata(releaseError)
                 );
             }
         }
-        console.error("GitHub OAuth callback 처리 실패", callbackErrorMetadata(error));
+        logger.error("GitHub OAuth callback 처리 실패", callbackErrorMetadata(error));
         return githubCallbackFailureURL();
     }
 }
