@@ -3,13 +3,14 @@ const assert = require("assert");
 const axiosCalls = [];
 const axiosRequests = [];
 const loggerErrors = [];
-const consoleWarnings = [];
+const loggerWarnings = [];
 const userLookupCalls = [];
 const providerLookupCalls = [];
 const emailLookupCalls = [];
 const createdUsers = [];
 const updatedUsers = [];
 let grantDeleteStatus = 204;
+let tokenDeleteStatus = 204;
 let tokenCheckStatus = 404;
 let tokenRequestError;
 let currentUser;
@@ -17,7 +18,6 @@ let providerUIDUser;
 let emailUser;
 let createdUserUID = "firebase-uid";
 let githubEmails = defaultGithubEmails();
-const originalConsoleWarn = console.warn;
 const fakeAxios = {
     async post(url, data, config) {
         if (tokenRequestError) {
@@ -77,6 +77,17 @@ const fakeAxios = {
             }
 
             throw axiosError(grantDeleteStatus, { message: "grant 삭제 실패" });
+        }
+
+        if (
+            config.method === "delete" &&
+            config.url === "https://api.github.com/applications/client-id/token"
+        ) {
+            if (tokenDeleteStatus === 204) {
+                return { status: 204 };
+            }
+
+            throw axiosError(tokenDeleteStatus, { message: "token 삭제 실패" });
         }
 
         if (
@@ -150,16 +161,17 @@ require.cache[require.resolve("firebase-functions/logger")] = {
     exports: {
         error: (...values) => {
             loggerErrors.push(values);
+        },
+        warn: (...values) => {
+            loggerWarnings.push(values);
         }
     }
-};
-console.warn = (...args) => {
-    consoleWarnings.push(args);
 };
 
 const {
     requestGitHubAccessToken,
-    revokeGitHubOAuthGrant
+    revokeGitHubOAuthGrant,
+    revokeGitHubOAuthToken
 } = require("../lib/rest/github/githubClient");
 const {
     linkGithubProviderWithAccessToken,
@@ -167,30 +179,27 @@ const {
 } = require("../lib/rest/github/githubProvider");
 
 (async () => {
-    try {
-        await assertGitHubTokenRequestUsesCallback();
-        await assertGitHubTokenRequestFailureIsDistinguished();
-        await assertGithubLoginKeepsProviderWithoutVerifiedEmail();
-        await assertGithubLoginRefreshesSoleProviderProfile();
-        await assertGithubLoginKeepsProviderWhenEmailChangesWithoutEmailUser();
-        await assertGithubLoginKeepsProviderWhenEmailChangesWithEmailUser();
-        await assertGithubLoginRefreshesProfileForExistingEmailUser();
-        await assertGithubLoginCreatesProviderLinkedUserForNewEmail();
-        await assertGithubLoginReportsUnavailableEmail();
+    await assertGitHubTokenRequestUsesCallback();
+    await assertGitHubTokenRequestFailureIsDistinguished();
+    await assertGithubLoginKeepsProviderWithoutVerifiedEmail();
+    await assertGithubLoginRefreshesSoleProviderProfile();
+    await assertGithubLoginKeepsProviderWhenEmailChangesWithoutEmailUser();
+    await assertGithubLoginKeepsProviderWhenEmailChangesWithEmailUser();
+    await assertGithubLoginRefreshesProfileForExistingEmailUser();
+    await assertGithubLoginCreatesProviderLinkedUserForNewEmail();
+    await assertGithubLoginReportsUnavailableEmail();
 
-        await assertGithubLinkRejectsMismatchedEmail();
-        await assertGithubLinkKeepsCurrentProvider();
-        await assertGithubLinkRejectsDifferentCurrentProvider();
-        await assertGithubLinkConnectsUnlinkedProvider();
-        await assertGithubLinkBlocksProviderConnectedToOtherUser();
+    await assertGithubLinkRejectsMismatchedEmail();
+    await assertGithubLinkKeepsCurrentProvider();
+    await assertGithubLinkRejectsDifferentCurrentProvider();
+    await assertGithubLinkConnectsUnlinkedProvider();
+    await assertGithubLinkBlocksProviderConnectedToOtherUser();
 
-        await assertGithubUnlinkRemovesOAuthGrant();
-        await assertGithubUnlinkSucceedsWhenGrantDeleteFindsInvalidToken();
-        await assertGithubUnlinkReportsTokenCheckFailureAsError();
-        await assertGithubUnlinkFailureIsDistinguished();
-    } finally {
-        console.warn = originalConsoleWarn;
-    }
+    await assertGithubUnlinkRemovesOAuthGrant();
+    await assertGithubUnlinkSucceedsWhenGrantDeleteFindsInvalidToken();
+    await assertGithubTokenRevokeSucceedsWhenTokenIsAlreadyInvalid();
+    await assertGithubUnlinkReportsTokenCheckFailureAsError();
+    await assertGithubUnlinkFailureIsDistinguished();
 })().catch((error) => {
     console.error(error);
     process.exitCode = 1;
@@ -602,7 +611,7 @@ async function assertGithubUnlinkRemovesOAuthGrant() {
     grantDeleteStatus = 204;
     axiosRequests.length = 0;
     loggerErrors.length = 0;
-    consoleWarnings.length = 0;
+    loggerWarnings.length = 0;
 
     const revokeResult = await revokeGitHubOAuthGrant(
         "firebase-uid",
@@ -624,7 +633,7 @@ async function assertGithubUnlinkRemovesOAuthGrant() {
     });
     assertRevokeHeaders(axiosRequests[0]);
     assert.deepStrictEqual(loggerErrors, []);
-    assert.deepStrictEqual(consoleWarnings, []);
+    assert.deepStrictEqual(loggerWarnings, []);
 }
 
 async function assertGithubUnlinkSucceedsWhenGrantDeleteFindsInvalidToken() {
@@ -632,7 +641,7 @@ async function assertGithubUnlinkSucceedsWhenGrantDeleteFindsInvalidToken() {
     tokenCheckStatus = 404;
     axiosRequests.length = 0;
     loggerErrors.length = 0;
-    consoleWarnings.length = 0;
+    loggerWarnings.length = 0;
 
     const revokeResult = await revokeGitHubOAuthGrant(
         "firebase-uid",
@@ -657,15 +666,47 @@ async function assertGithubUnlinkSucceedsWhenGrantDeleteFindsInvalidToken() {
     });
     assertRevokeHeaders(axiosRequests[1]);
 
-    const grantWarningMetadata = consoleWarnings
-        .flat()
-        .map((item) => item && typeof item === "object" ? item.github : undefined)
-        .find((item) => item && typeof item === "object" && item.status === 422);
-    assert.deepStrictEqual(grantWarningMetadata, {
-        status: 422,
-        message: "요청이 status code 422로 실패했습니다.",
-        data: { message: "grant 삭제 실패" }
-    });
+    assert.deepStrictEqual(loggerWarnings, [[
+        "GitHub OAuth App grant를 제거할 수 없지만 토큰이 이미 무효화되어 성공으로 처리합니다.",
+        {
+            uid: "firebase-uid",
+            github: {
+                status: 422,
+                message: "요청이 status code 422로 실패했습니다.",
+                data: { message: "grant 삭제 실패" }
+            }
+        }
+    ]]);
+    assert.deepStrictEqual(loggerErrors, []);
+}
+
+// 이미 무효화된 GitHub token 폐기는 경고를 남기고 반복 호출 가능한 성공으로 처리하는지 검증합니다.
+async function assertGithubTokenRevokeSucceedsWhenTokenIsAlreadyInvalid() {
+    tokenDeleteStatus = 422;
+    tokenCheckStatus = 404;
+    axiosRequests.length = 0;
+    loggerErrors.length = 0;
+    loggerWarnings.length = 0;
+
+    const revokeResult = await revokeGitHubOAuthToken(
+        "firebase-uid",
+        "invalid-token",
+        "client-id",
+        "client-secret"
+    );
+
+    assert.strictEqual(revokeResult, undefined);
+    assert.deepStrictEqual(loggerWarnings, [[
+        "GitHub OAuth token이 이미 무효화되어 성공으로 처리합니다.",
+        {
+            uid: "firebase-uid",
+            github: {
+                status: 422,
+                message: "요청이 status code 422로 실패했습니다.",
+                data: { message: "token 삭제 실패" }
+            }
+        }
+    ]]);
     assert.deepStrictEqual(loggerErrors, []);
 }
 
@@ -759,6 +800,7 @@ function resetGithubLoginState() {
     emailUser = undefined;
     createdUserUID = "firebase-uid";
     grantDeleteStatus = 204;
+    tokenDeleteStatus = 204;
     tokenCheckStatus = 404;
     githubEmails = defaultGithubEmails();
 }

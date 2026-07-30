@@ -2,6 +2,7 @@ const assert = require("assert");
 
 const axiosCalls = [];
 const loggerErrors = [];
+const loggerWarnings = [];
 let tokenResponse = googleTokenResponse();
 let requestError;
 const fakeAxios = {
@@ -31,6 +32,9 @@ require.cache[require.resolve("firebase-functions/logger")] = {
     exports: {
         error: (...values) => {
             loggerErrors.push(values);
+        },
+        warn: (...values) => {
+            loggerWarnings.push(values);
         }
     }
 };
@@ -186,6 +190,17 @@ async function assertAlreadyInvalidTokenIsAccepted() {
     requestError = axiosError(400, { error: "invalid_token" });
 
     await revokeGoogleOAuthToken("firebase-uid", "invalid-token");
+    assert.deepStrictEqual(loggerWarnings, [[
+        "Google OAuth token이 이미 무효화되어 성공으로 처리합니다.",
+        {
+            uid: "firebase-uid",
+            google: {
+                status: 400,
+                message: "요청이 status code 400로 실패했습니다.",
+                error: "invalid_token"
+            }
+        }
+    ]]);
 }
 
 // Google grant 폐기 실패를 별도 오류로 구분하는지 검증합니다.
@@ -211,6 +226,7 @@ async function assertGrantRevocationFailureIsDistinguished() {
 function resetState() {
     axiosCalls.length = 0;
     loggerErrors.length = 0;
+    loggerWarnings.length = 0;
     tokenResponse = googleTokenResponse();
     requestError = undefined;
 }

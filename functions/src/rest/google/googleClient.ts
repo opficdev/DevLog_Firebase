@@ -88,7 +88,7 @@ export async function revokeGoogleOAuthToken(
         }
     } catch (error) {
         if (alreadyInvalidToken(error)) {
-            console.warn("Google OAuth token이 이미 무효화되어 성공으로 처리합니다.", {
+            logger.warn("Google OAuth token이 이미 무효화되어 성공으로 처리합니다.", {
                 uid,
                 google: errorMetadata(error)
             });

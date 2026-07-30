@@ -140,7 +140,7 @@ export async function revokeGitHubOAuthGrant(
             clientSecret,
             accessToken
         )) {
-            console.warn("GitHub OAuth App grant를 제거할 수 없지만 토큰이 이미 무효화되어 성공으로 처리합니다.", {
+            logger.warn("GitHub OAuth App grant를 제거할 수 없지만 토큰이 이미 무효화되어 성공으로 처리합니다.", {
                 uid, github: errorMetadata(error)
             });
             return;
@@ -185,7 +185,7 @@ export async function revokeGitHubOAuthToken(
             clientSecret,
             accessToken
         )) {
-            console.warn("GitHub OAuth token이 이미 무효화되어 성공으로 처리합니다.", {
+            logger.warn("GitHub OAuth token이 이미 무효화되어 성공으로 처리합니다.", {
                 uid, github: errorMetadata(error)
             });
             return;
