@@ -1,11 +1,16 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  type CollectionReference,
   type DocumentReference,
+  FieldPath,
   FieldValue,
   type Firestore,
+  type QueryDocumentSnapshot,
 } from 'firebase-admin/firestore';
 
 import { FIREBASE_FIRESTORE_TOKEN } from '../firebase/firebase.tokens';
+
+const notificationQueryBatchSize = 200;
 
 /** Todo 문서에 저장된 삭제 처리 상태입니다. */
 export type TodoDeletionState = 'missing' | 'active' | 'deleted';
@@ -61,6 +66,62 @@ export class TodosRepository {
     });
   }
 
+  /** Todo에 연결된 알림에 삭제 상태를 기록합니다. */
+  // prettier-ignore
+  async markNotificationsDeleted(
+    uid: string,
+    todoId: string,
+  ): Promise<void> {
+    await this.updateNotificationsDeletionState(uid, todoId, true);
+  }
+
+  /** Todo에 연결된 알림의 삭제 상태를 복구합니다. */
+  // prettier-ignore
+  async restoreNotifications(
+    uid: string,
+    todoId: string,
+  ): Promise<void> {
+    await this.updateNotificationsDeletionState(uid, todoId, false);
+  }
+
+  /** 연결 알림을 문서 ID 순서에 따라 일정 개수씩 갱신합니다. */
+  private async updateNotificationsDeletionState(
+    uid: string,
+    todoId: string,
+    isDeleted: boolean,
+  ): Promise<void> {
+    let lastDocument: QueryDocumentSnapshot | undefined;
+
+    while (true) {
+      let query = this.notificationsCollection(uid)
+        .where('todoId', '==', todoId)
+        .orderBy(FieldPath.documentId())
+        .limit(notificationQueryBatchSize);
+      if (lastDocument) {
+        query = query.startAfter(lastDocument);
+      }
+
+      const snapshot = await query.get();
+      if (snapshot.empty) {
+        return;
+      }
+
+      const batch = this.firestore.batch();
+      for (const document of snapshot.docs) {
+        batch.update(document.ref, {
+          deletingAt: FieldValue.delete(),
+          isDeleted,
+        });
+      }
+      await batch.commit();
+
+      if (snapshot.size < notificationQueryBatchSize) {
+        return;
+      }
+      lastDocument = snapshot.docs[snapshot.docs.length - 1];
+    }
+  }
+
   /** 검증된 사용자 UID 범위에서 Todo 문서 참조를 생성합니다. */
   // prettier-ignore
   private todoDocument(
@@ -68,5 +129,10 @@ export class TodosRepository {
     todoId: string,
   ): DocumentReference {
     return this.firestore.doc(`users/${uid}/todoLists/${todoId}`);
+  }
+
+  /** 검증된 사용자 UID 범위에서 알림 collection 참조를 생성합니다. */
+  private notificationsCollection(uid: string): CollectionReference {
+    return this.firestore.collection(`users/${uid}/notifications`);
   }
 }
