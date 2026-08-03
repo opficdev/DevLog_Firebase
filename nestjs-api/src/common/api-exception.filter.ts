@@ -4,6 +4,7 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 
 import { ApiException } from './api.exception';
@@ -43,10 +44,20 @@ interface ApiExceptionResponse {
 /** 모든 예외를 공통 API 오류 응답으로 변환하는 전역 경계입니다. */
 @Catch()
 export class ApiExceptionFilter implements ExceptionFilter {
+  /** 서버 내부 오류 원인을 기록하는 로그 기능입니다. */
+  private readonly logger = new Logger(ApiExceptionFilter.name);
+
   /** 발생한 예외를 HTTP 상태와 공통 오류 본문으로 응답합니다. */
   catch(exception: unknown, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<ApiExceptionResponse>();
     const error = apiExceptionFrom(exception);
+
+    if (
+      Number(HttpStatus.INTERNAL_SERVER_ERROR) === error.getStatus() &&
+      !(exception instanceof HttpException)
+    ) {
+      this.logger.error(exception);
+    }
 
     response.status(error.getStatus()).json(error.getResponse());
   }

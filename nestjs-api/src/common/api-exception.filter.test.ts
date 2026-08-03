@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   HttpException,
   HttpStatus,
+  Logger,
   NotFoundException,
   PreconditionFailedException,
   UnauthorizedException,
@@ -14,6 +15,10 @@ import { ApiExceptionFilter } from './api-exception.filter';
 import { ApiException } from './api.exception';
 
 describe(ApiExceptionFilter.name, () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it('ApiException의 상태와 공통 오류 응답을 반환한다', () => {
     const status = jest.fn().mockReturnThis();
     const json = jest.fn();
@@ -210,7 +215,36 @@ describe(ApiExceptionFilter.name, () => {
   it.each([
     new Error('내부 오류 상세'),
     { code: 'auth/internal-error', message: 'Firebase 내부 오류 상세' },
-  ])('내부 또는 미분류 오류를 internal 응답으로 변환한다', (error) => {
+  ])(
+    '내부 또는 미분류 오류를 internal 응답으로 변환하고 원본을 기록한다',
+    (error) => {
+      const loggerError = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation();
+      const status = jest.fn().mockReturnThis();
+      const json = jest.fn();
+      const host = {
+        switchToHttp: () => ({
+          getResponse: () => ({ status, json }),
+        }),
+      } as unknown as ArgumentsHost;
+      const filter = new ApiExceptionFilter();
+
+      filter.catch(error, host);
+
+      expect(loggerError).toHaveBeenCalledWith(error);
+      expect(status).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
+      expect(json).toHaveBeenCalledWith({
+        code: 'internal',
+        message: '서버 오류가 발생했습니다.',
+      });
+    },
+  );
+
+  it('클라이언트 요청 오류를 응답으로 변환하고 오류 로그에는 기록하지 않는다', () => {
+    const loggerError = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation();
     const status = jest.fn().mockReturnThis();
     const json = jest.fn();
     const host = {
@@ -220,12 +254,16 @@ describe(ApiExceptionFilter.name, () => {
     } as unknown as ArgumentsHost;
     const filter = new ApiExceptionFilter();
 
-    filter.catch(error, host);
+    filter.catch(
+      new BadRequestException('요청 형식이 올바르지 않습니다.'),
+      host,
+    );
 
-    expect(status).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
+    expect(loggerError).not.toHaveBeenCalled();
+    expect(status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
     expect(json).toHaveBeenCalledWith({
-      code: 'internal',
-      message: '서버 오류가 발생했습니다.',
+      code: 'invalid-argument',
+      message: '요청 형식이 올바르지 않습니다.',
     });
   });
 });
