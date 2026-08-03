@@ -175,26 +175,31 @@ jobs:
   report:
     name: Report
     runs-on: ubuntu-latest
-    needs: [build, test]
+    needs: [build, test, nestjs-api]
     if: |
       always()
       && github.event.pull_request.head.repo.fork == false
       && (
         needs.build.result == 'failure'
         || needs.test.result == 'failure'
-        || (needs.build.result == 'success' && needs.test.result == 'success')
+        || needs['nestjs-api'].result == 'failure'
+        || (
+          needs.build.result == 'success'
+          && needs.test.result == 'success'
+          && needs['nestjs-api'].result == 'success'
+        )
       )
 
     steps:
       - name: Download CI logs
-        if: needs.build.result == 'failure' || needs.test.result == 'failure'
+        if: needs.build.result == 'failure' || needs.test.result == 'failure' || needs['nestjs-api'].result == 'failure'
         uses: actions/download-artifact@v7
         continue-on-error: true
         with:
           path: ci-artifacts
 
       - name: Delete resolved CI failure comments
-        if: needs.build.result == 'success' && needs.test.result == 'success'
+        if: needs.build.result == 'success' && needs.test.result == 'success' && needs['nestjs-api'].result == 'success'
         uses: actions/github-script@v8
         with:
           script: |
@@ -227,11 +232,12 @@ jobs:
             }
 
       - name: Comment CI failure on PR
-        if: needs.build.result == 'failure' || needs.test.result == 'failure'
+        if: needs.build.result == 'failure' || needs.test.result == 'failure' || needs['nestjs-api'].result == 'failure'
         uses: actions/github-script@v8
         env:
           BUILD_RESULT: ${{ needs.build.result }}
           TEST_RESULT: ${{ needs.test.result }}
+          NESTJS_RESULT: ${{ needs['nestjs-api'].result }}
         with:
           script: |
             const fs = require('fs');
@@ -343,6 +349,7 @@ jobs:
               '',
               failureSection('Build', process.env.BUILD_RESULT, 'firebase-build', 'build.log'),
               failureSection('Tests', process.env.TEST_RESULT, 'firebase-test', 'test.log'),
+              failureSection('NestJS API', process.env.NESTJS_RESULT, 'nestjs-api', 'nestjs-api.log'),
               'Check the uploaded CI log artifacts for full diagnostics.',
               '',
             ].join('\n');
