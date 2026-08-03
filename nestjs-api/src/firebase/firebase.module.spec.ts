@@ -7,9 +7,14 @@ import {
   initializeApp,
 } from 'firebase-admin/app';
 import { type Auth, getAuth } from 'firebase-admin/auth';
+import { type Firestore, getFirestore } from 'firebase-admin/firestore';
 
 import { FirebaseModule } from './firebase.module';
-import { FIREBASE_APP_TOKEN, FIREBASE_AUTH_TOKEN } from './firebase.tokens';
+import {
+  FIREBASE_APP_TOKEN,
+  FIREBASE_AUTH_TOKEN,
+  FIREBASE_FIRESTORE_TOKEN,
+} from './firebase.tokens';
 
 jest.mock('firebase-admin/app', () => ({
   applicationDefault: jest.fn(),
@@ -19,12 +24,19 @@ jest.mock('firebase-admin/app', () => ({
 jest.mock('firebase-admin/auth', () => ({
   getAuth: jest.fn(),
 }));
+jest.mock('firebase-admin/firestore', () => ({
+  getFirestore: jest.fn(),
+}));
 
 const mockedApplicationDefault = jest.mocked(applicationDefault);
 const mockedGetApps = jest.mocked(getApps);
 const mockedInitializeApp = jest.mocked(initializeApp);
 const mockedGetAuth = jest.mocked(getAuth);
+const mockedGetFirestore = jest.mocked(getFirestore);
 const firebaseAuthConsumerToken = Symbol('FIREBASE_AUTH_CONSUMER_TOKEN');
+const firebaseFirestoreConsumerToken = Symbol(
+  'FIREBASE_FIRESTORE_CONSUMER_TOKEN',
+);
 
 describe(FirebaseModule.name, () => {
   beforeEach(() => {
@@ -101,6 +113,30 @@ describe(FirebaseModule.name, () => {
 
     expect(mockedGetAuth).toHaveBeenCalledWith(app);
     expect(module.get(firebaseAuthConsumerToken)).toBe(auth);
+
+    await module.close();
+  });
+
+  it('같은 Firebase App의 Firestore를 외부 모듈에 제공한다', async () => {
+    const app = { name: '[DEFAULT]' } as App;
+    const firestore = {} as Firestore;
+    mockedGetApps.mockReturnValue([app]);
+    mockedGetFirestore.mockReturnValue(firestore);
+
+    const module = await Test.createTestingModule({
+      imports: [FirebaseModule],
+      providers: [
+        {
+          provide: firebaseFirestoreConsumerToken,
+          inject: [FIREBASE_FIRESTORE_TOKEN],
+          useFactory: (injectedFirestore: Firestore) => injectedFirestore,
+        },
+      ],
+    }).compile();
+
+    expect(mockedGetAuth).toHaveBeenCalledWith(app);
+    expect(mockedGetFirestore).toHaveBeenCalledWith(app);
+    expect(module.get(firebaseFirestoreConsumerToken)).toBe(firestore);
 
     await module.close();
   });
