@@ -16,6 +16,8 @@ firebase-debug.*.log
 node_modules/
 *.log
 functions/lib/
+nestjs-api/dist/
+nestjs-api/coverage/
 
 # AI
 docs/superpowers/
