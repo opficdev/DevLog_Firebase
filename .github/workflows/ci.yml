@@ -267,6 +267,7 @@ jobs:
               const lines = fs.readFileSync(logPath, 'utf8').split(/\r?\n/);
               const importantPatterns = [
                 /error TS\d+:/,
+                /^\s*\d+:\d+\s+error\s+/,
                 /AssertionError/,
                 /Error:/,
                 /SyntaxError/,
