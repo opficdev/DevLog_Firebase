@@ -152,4 +152,75 @@ describe(TodosService.name, () => {
     );
     expect(loggerError).not.toHaveBeenCalled();
   });
+
+  it('삭제 상태인 Todo와 연결 알림을 순서대로 복구한다', async () => {
+    const sequence: string[] = [];
+    const getTodoDeletionState = jest.fn().mockImplementation(() => {
+      sequence.push('Todo 상태 조회');
+      return Promise.resolve('deleted');
+    });
+    const restoreTodoDeletion = jest.fn().mockImplementation(() => {
+      sequence.push('Todo 복구');
+      return Promise.resolve();
+    });
+    const restoreNotifications = jest.fn().mockImplementation(() => {
+      sequence.push('알림 복구');
+      return Promise.resolve();
+    });
+    const repository = {
+      getTodoDeletionState,
+      restoreTodoDeletion,
+      restoreNotifications,
+    } as unknown as TodosRepository;
+    const service = new TodosService(repository);
+
+    await expect(service.undoDeletion(uid, todoId)).resolves.toBeUndefined();
+
+    expect(sequence).toEqual(['Todo 상태 조회', 'Todo 복구', '알림 복구']);
+  });
+
+  it.each(['missing', 'active'])(
+    '%s Todo는 쓰지 않고 연결 알림을 복구한다',
+    async (state) => {
+      const getTodoDeletionState = jest.fn().mockResolvedValue(state);
+      const restoreTodoDeletion = jest.fn();
+      const restoreNotifications = jest.fn().mockResolvedValue(undefined);
+      const repository = {
+        getTodoDeletionState,
+        restoreTodoDeletion,
+        restoreNotifications,
+      } as unknown as TodosRepository;
+      const service = new TodosService(repository);
+
+      await expect(service.undoDeletion(uid, todoId)).resolves.toBeUndefined();
+
+      expect(restoreTodoDeletion).not.toHaveBeenCalled();
+      expect(restoreNotifications).toHaveBeenCalledWith(uid, todoId);
+    },
+  );
+
+  it('삭제 취소 실패를 internal 오류로 변환한다', async () => {
+    const error = new Error('알림 복구 실패');
+    const repository = {
+      getTodoDeletionState: jest.fn().mockResolvedValue('deleted'),
+      restoreTodoDeletion: jest.fn().mockResolvedValue(undefined),
+      restoreNotifications: jest.fn().mockRejectedValue(error),
+    } as unknown as TodosRepository;
+    const loggerError = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation();
+    const service = new TodosService(repository);
+
+    await expect(service.undoDeletion(uid, todoId)).rejects.toMatchObject({
+      status: HttpStatus.INTERNAL_SERVER_ERROR,
+      response: {
+        code: 'internal',
+        message: 'Todo 삭제 취소에 실패했습니다.',
+      },
+    });
+    expect(loggerError).toHaveBeenCalledWith('Todo 삭제 취소 실패', error, {
+      uid,
+      todoId,
+    });
+  });
 });

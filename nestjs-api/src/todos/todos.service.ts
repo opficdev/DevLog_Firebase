@@ -54,4 +54,27 @@ export class TodosService {
       );
     }
   }
+
+  /** Todo가 없어도 연결 알림의 삭제 상태를 복구합니다. */
+  // prettier-ignore
+  async undoDeletion(
+    uid: string,
+    todoId: string,
+  ): Promise<void> {
+    try {
+      const state = await this.repository.getTodoDeletionState(uid, todoId);
+      if (state === 'deleted') {
+        await this.repository.restoreTodoDeletion(uid, todoId);
+      }
+
+      await this.repository.restoreNotifications(uid, todoId);
+    } catch (error) {
+      this.logger.error('Todo 삭제 취소 실패', error, { uid, todoId });
+      throw new ApiException(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'internal',
+        'Todo 삭제 취소에 실패했습니다.',
+      );
+    }
+  }
 }
