@@ -130,9 +130,8 @@ function firebaseAuthErrorCodeFrom(error: unknown): string | undefined {
   }
 
   const code = (error as Record<string, unknown>).code;
-  return typeof code === 'string' && firebaseAuthErrorCodes.has(code)
-    ? code
-    : undefined;
+  // prettier-ignore
+  return typeof code === 'string' && firebaseAuthErrorCodes.has(code) ? code : undefined;
 }
 
 /** Error 형태에 포함된 message가 없으면 기본 문구를 반환합니다. */
