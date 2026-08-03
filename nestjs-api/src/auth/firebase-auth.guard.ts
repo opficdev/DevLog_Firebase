@@ -12,6 +12,7 @@ import { FIREBASE_AUTH_TOKEN } from '../firebase/firebase.tokens';
 import { FirebaseAuthenticatedRequest } from './firebase-authenticated-request';
 
 const bearerPrefix = 'Bearer ';
+const normalizedBearerPrefix = bearerPrefix.toLowerCase();
 
 /** 모든 HTTP 요청의 Firebase ID Token을 검증하는 전역 인증 경계입니다. */
 @Injectable()
@@ -39,7 +40,8 @@ function authenticationTokenFrom(
   const authorization = request.headers.authorization;
   if (
     typeof authorization !== 'string' ||
-    !authorization.startsWith(bearerPrefix)
+    authorization.slice(0, bearerPrefix.length).toLowerCase() !==
+      normalizedBearerPrefix
   ) {
     throw missingAuthenticationTokenException();
   }
