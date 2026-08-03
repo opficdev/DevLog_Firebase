@@ -6,6 +6,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
+    "docker:build": "docker build --platform linux/amd64 --tag devlog-nestjs-api:local .",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
