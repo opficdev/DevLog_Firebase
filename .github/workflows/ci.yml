@@ -99,6 +99,79 @@ jobs:
           path: functions/test.log
           if-no-files-found: ignore
 
+  nestjs-api:
+    name: NestJS API
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: nestjs-api/package-lock.json
+
+      - name: Install dependencies
+        shell: bash
+        working-directory: nestjs-api
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee -a nestjs-api.log
+
+      - name: Lint
+        shell: bash
+        working-directory: nestjs-api
+        run: |
+          set -o pipefail
+          npm run lint 2>&1 | tee -a nestjs-api.log
+
+      - name: Build
+        shell: bash
+        working-directory: nestjs-api
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee -a nestjs-api.log
+
+      - name: Test
+        shell: bash
+        working-directory: nestjs-api
+        run: |
+          set -o pipefail
+          npm test -- --runInBand 2>&1 | tee -a nestjs-api.log
+
+      - name: Test API
+        shell: bash
+        working-directory: nestjs-api
+        run: |
+          set -o pipefail
+          npm run test:e2e -- --runInBand 2>&1 | tee -a nestjs-api.log
+
+      - name: Build Docker image
+        shell: bash
+        working-directory: nestjs-api
+        run: |
+          set -o pipefail
+          npm run docker:build 2>&1 | tee -a nestjs-api.log
+
+      - name: Check diff
+        shell: bash
+        run: |
+          set -o pipefail
+          git diff --check "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}" 2>&1 | tee -a nestjs-api/nestjs-api.log
+
+      - name: Upload NestJS API log
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: nestjs-api
+          path: nestjs-api/nestjs-api.log
+          if-no-files-found: ignore
+
   report:
     name: Report
     runs-on: ubuntu-latest
