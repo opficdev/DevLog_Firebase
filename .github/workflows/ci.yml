@@ -99,29 +99,107 @@ jobs:
           path: functions/test.log
           if-no-files-found: ignore
 
+  nestjs-api:
+    name: NestJS API
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: nestjs-api/package-lock.json
+
+      - name: Install dependencies
+        shell: bash
+        working-directory: nestjs-api
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee -a nestjs-api.log
+
+      - name: Lint
+        shell: bash
+        working-directory: nestjs-api
+        run: |
+          set -o pipefail
+          npm run lint 2>&1 | tee -a nestjs-api.log
+
+      - name: Build
+        shell: bash
+        working-directory: nestjs-api
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee -a nestjs-api.log
+
+      - name: Test
+        shell: bash
+        working-directory: nestjs-api
+        run: |
+          set -o pipefail
+          npm test -- --runInBand 2>&1 | tee -a nestjs-api.log
+
+      - name: Test API
+        shell: bash
+        working-directory: nestjs-api
+        run: |
+          set -o pipefail
+          npm run test:e2e -- --runInBand 2>&1 | tee -a nestjs-api.log
+
+      - name: Build Docker image
+        shell: bash
+        working-directory: nestjs-api
+        run: |
+          set -o pipefail
+          npm run docker:build 2>&1 | tee -a nestjs-api.log
+
+      - name: Check diff
+        shell: bash
+        run: |
+          set -o pipefail
+          git diff --check "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}" 2>&1 | tee -a nestjs-api/nestjs-api.log
+
+      - name: Upload NestJS API log
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: nestjs-api
+          path: nestjs-api/nestjs-api.log
+          if-no-files-found: ignore
+
   report:
     name: Report
     runs-on: ubuntu-latest
-    needs: [build, test]
+    needs: [build, test, nestjs-api]
     if: |
       always()
       && github.event.pull_request.head.repo.fork == false
       && (
         needs.build.result == 'failure'
         || needs.test.result == 'failure'
-        || (needs.build.result == 'success' && needs.test.result == 'success')
+        || needs['nestjs-api'].result == 'failure'
+        || (
+          needs.build.result == 'success'
+          && needs.test.result == 'success'
+          && needs['nestjs-api'].result == 'success'
+        )
       )
 
     steps:
       - name: Download CI logs
-        if: needs.build.result == 'failure' || needs.test.result == 'failure'
+        if: needs.build.result == 'failure' || needs.test.result == 'failure' || needs['nestjs-api'].result == 'failure'
         uses: actions/download-artifact@v7
         continue-on-error: true
         with:
           path: ci-artifacts
 
       - name: Delete resolved CI failure comments
-        if: needs.build.result == 'success' && needs.test.result == 'success'
+        if: needs.build.result == 'success' && needs.test.result == 'success' && needs['nestjs-api'].result == 'success'
         uses: actions/github-script@v8
         with:
           script: |
@@ -154,11 +232,12 @@ jobs:
             }
 
       - name: Comment CI failure on PR
-        if: needs.build.result == 'failure' || needs.test.result == 'failure'
+        if: needs.build.result == 'failure' || needs.test.result == 'failure' || needs['nestjs-api'].result == 'failure'
         uses: actions/github-script@v8
         env:
           BUILD_RESULT: ${{ needs.build.result }}
           TEST_RESULT: ${{ needs.test.result }}
+          NESTJS_RESULT: ${{ needs['nestjs-api'].result }}
         with:
           script: |
             const fs = require('fs');
@@ -188,6 +267,11 @@ jobs:
               const lines = fs.readFileSync(logPath, 'utf8').split(/\r?\n/);
               const importantPatterns = [
                 /error TS\d+:/,
+                /^\s*\d+:\d+\s+error\s+/,
+                /^\s*FAIL\s+/,
+                /^\s*●\s+/,
+                /^\s*Expected:/,
+                /^\s*Received:/,
                 /AssertionError/,
                 /Error:/,
                 /SyntaxError/,
@@ -270,6 +354,7 @@ jobs:
               '',
               failureSection('Build', process.env.BUILD_RESULT, 'firebase-build', 'build.log'),
               failureSection('Tests', process.env.TEST_RESULT, 'firebase-test', 'test.log'),
+              failureSection('NestJS API', process.env.NESTJS_RESULT, 'nestjs-api', 'nestjs-api.log'),
               'Check the uploaded CI log artifacts for full diagnostics.',
               '',
             ].join('\n');

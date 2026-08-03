@@ -8,6 +8,7 @@ DevLog의 Firebase Cloud Functions와 Firestore index 설정을 관리하는 저
 - `firebase.test.json`: 테스트용 Firebase emulator 설정
 - `firestore.index.json`: Firestore composite index 설정
 - `functions`: Cloud Functions TypeScript 소스
+- `nestjs-api`: Cloud Run용 NestJS API 소스와 Docker 이미지 구성
 
 ## AI 역할 분리
 
@@ -90,28 +91,63 @@ Google 인증은 서버 callback route와 Firebase Hosting rewrite를 사용하�
 
 Apple JSON에는 `teamId`, `clientId`, `keyId`, `privateKey` 필드를 모두 포함합니다.
 
-## 로컬 빌드
+## 로컬 검증
+
+### Functions
 
 ```bash
 cd functions
 npm ci
 npm run build
+npm run test:run
 ```
 
-`functions/node_modules`와 `functions/lib`는 로컬 생성물입니다. Git에는 포함하지 않습니다.
+### NestJS API
+
+```bash
+cd nestjs-api
+npm ci
+npm run lint
+npm run build
+npm test -- --runInBand
+npm run test:e2e -- --runInBand
+npm run docker:build
+```
+
+`functions/node_modules`, `functions/lib`, `nestjs-api/node_modules`, `nestjs-api/dist`는 로컬 생성물입니다. Git에는 포함하지 않습니다.
 
 ## CI
 
-Pull Request에서만 build 검증을 실행합니다.
+Pull Request에서만 Functions와 NestJS API 검증을 실행합니다.
 
-CI는 `functions`에서 다음 명령만 확인합니다.
+Functions `build`, `test` job은 다음 명령을 확인합니다.
 
 ```bash
+cd functions
 npm ci
 npm run build
+npm run test:run
 ```
 
-GitHub Actions의 action 런타임은 Node 24 대응 버전을 사용하고, Functions 빌드 Node 버전은 `functions/package.json`의 `engines.node`와 맞춘 Node 22를 사용합니다.
+`nestjs-api` job은 다음 명령을 확인하고 실행 로그를 artifact로 보관합니다.
+
+```bash
+cd nestjs-api
+npm ci
+npm run lint
+npm run build
+npm test -- --runInBand
+npm run test:e2e -- --runInBand
+npm run docker:build
+cd ..
+git diff --check
+```
+
+Docker 이미지는 검증을 위해 build만 수행하며 실행하거나 게시하지 않습니다. `report` job은 Functions와 NestJS API 결과를 함께 확인하고 실패 원인을 Pull Request 댓글로 남깁니다.
+
+현재 CI는 검증만 담당합니다. Cloud Run 배포와 Docker 이미지 게시 자동화는 [이슈 #65](https://github.com/opficdev/DevLog_Firebase/issues/65)에서 별도로 다룹니다.
+
+GitHub Actions의 action 런타임은 Node 24 대응 버전을 사용하고, Functions와 NestJS API 검증용 Node 버전은 각 `package.json`의 `engines.node`와 맞춘 Node 22를 사용합니다.
 
 ## 배포
 
