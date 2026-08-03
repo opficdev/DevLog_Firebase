@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   HttpCode,
   HttpStatus,
   Param,
@@ -25,6 +26,20 @@ export class TodosController {
     @Param('id') todoId: string,
   ): Promise<{ success: true }> {
     await this.service.requestDeletion(
+      requiredUid(request),
+      requiredTodoId(todoId),
+    );
+
+    return { success: true };
+  }
+
+  /** 인증된 사용자의 Todo 삭제 취소 요청을 처리합니다. */
+  @Delete(':id/deletion-request')
+  async undoDeletion(
+    @Req() request: FirebaseAuthenticatedRequest,
+    @Param('id') todoId: string,
+  ): Promise<{ success: true }> {
+    await this.service.undoDeletion(
       requiredUid(request),
       requiredTodoId(todoId),
     );

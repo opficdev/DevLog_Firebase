@@ -30,11 +30,12 @@ jest.mock('firebase-admin/firestore', () => ({
   getFirestore: jest.fn(),
 }));
 
-describe('Todo 삭제 요청 API', () => {
+describe('Todo 삭제 API', () => {
   const uid = 'user-1';
   const token = 'Firebase-ID-Token';
   const verifyIdToken = jest.fn();
   const requestDeletion = jest.fn();
+  const undoDeletion = jest.fn();
   let app: INestApplication;
 
   beforeAll(async () => {
@@ -48,7 +49,7 @@ describe('Todo 삭제 요청 API', () => {
       .overrideProvider(FIREBASE_FIRESTORE_TOKEN)
       .useValue({})
       .overrideProvider(TodosService)
-      .useValue({ requestDeletion })
+      .useValue({ requestDeletion, undoDeletion })
       .compile();
 
     app = module.createNestApplication();
@@ -59,6 +60,7 @@ describe('Todo 삭제 요청 API', () => {
   beforeEach(() => {
     verifyIdToken.mockReset().mockResolvedValue({ uid });
     requestDeletion.mockReset().mockResolvedValue(undefined);
+    undoDeletion.mockReset().mockResolvedValue(undefined);
   });
 
   afterAll(async () => {
@@ -157,6 +159,84 @@ describe('Todo 삭제 요청 API', () => {
       .expect({
         code: 'internal',
         message: 'Todo 삭제 요청에 실패했습니다.',
+      });
+  });
+
+  it('검증된 UID와 공백을 제거한 Todo ID로 삭제를 취소한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .delete('/api/todos/%20todo-1%20/deletion-request')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(HttpStatus.OK)
+      .expect({ success: true });
+
+    expect(verifyIdToken).toHaveBeenCalledWith(token);
+    expect(undoDeletion).toHaveBeenCalledWith(uid, 'todo-1');
+  });
+
+  it('삭제 취소에서 공백인 Todo ID를 invalid-argument로 거부한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .delete('/api/todos/%20/deletion-request')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(HttpStatus.BAD_REQUEST)
+      .expect({ code: 'invalid-argument', message: 'id가 필요합니다.' });
+
+    expect(undoDeletion).not.toHaveBeenCalled();
+  });
+
+  it('삭제 취소에서 인증 token이 없으면 unauthenticated로 거부한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .delete('/api/todos/todo-1/deletion-request')
+      .expect(HttpStatus.UNAUTHORIZED)
+      .expect({
+        code: 'unauthenticated',
+        message: '인증 토큰이 필요합니다.',
+      });
+
+    expect(undoDeletion).not.toHaveBeenCalled();
+  });
+
+  it('삭제 취소에서 Firebase Auth 오류를 401 응답으로 보존한다', async () => {
+    const server = app.getHttpServer() as Server;
+    verifyIdToken.mockRejectedValue({
+      code: 'auth/id-token-expired',
+      message: 'Firebase ID token has expired.',
+    });
+
+    await request(server)
+      .delete('/api/todos/todo-1/deletion-request')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(HttpStatus.UNAUTHORIZED)
+      .expect({
+        code: 'auth/id-token-expired',
+        message: 'Firebase ID token has expired.',
+      });
+
+    expect(undoDeletion).not.toHaveBeenCalled();
+  });
+
+  it('삭제 취소 실패를 Service의 internal 오류로 반환한다', async () => {
+    const server = app.getHttpServer() as Server;
+    undoDeletion.mockRejectedValue(
+      new ApiException(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'internal',
+        'Todo 삭제 취소에 실패했습니다.',
+      ),
+    );
+
+    await request(server)
+      .delete('/api/todos/todo-1/deletion-request')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(HttpStatus.INTERNAL_SERVER_ERROR)
+      .expect({
+        code: 'internal',
+        message: 'Todo 삭제 취소에 실패했습니다.',
       });
   });
 });
