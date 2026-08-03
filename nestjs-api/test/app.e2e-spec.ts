@@ -5,7 +5,10 @@ import request from 'supertest';
 
 import { configureApplication } from '../src/app.config';
 import { AppModule } from '../src/app.module';
-import { ApiException } from '../src/common/api.exception';
+import {
+  type ApiErrorResponse,
+  ApiException,
+} from '../src/common/api.exception';
 import {
   FIREBASE_APP_TOKEN,
   FIREBASE_AUTH_TOKEN,
@@ -239,4 +242,76 @@ describe('Todo 삭제 API', () => {
         message: 'Todo 삭제 취소에 실패했습니다.',
       });
   });
+
+  it('malformed JSON을 공통 invalid-argument 오류로 반환한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    const response = await request(server)
+      .post('/api/todos/todo-1/deletion-request')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Content-Type', 'application/json')
+      .send('{"invalid"')
+      .expect(HttpStatus.BAD_REQUEST);
+
+    const body = response.body as ApiErrorResponse;
+    expect(body.code).toBe('invalid-argument');
+    expect(body.message).not.toHaveLength(0);
+    expect(requestDeletion).not.toHaveBeenCalled();
+  });
+
+  it('지원하지 않는 method를 not-found로 반환한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    const response = await request(server)
+      .put('/api/todos/todo-1/deletion-request')
+      .expect(HttpStatus.NOT_FOUND);
+
+    const body = response.body as ApiErrorResponse;
+    expect(body.code).toBe('not-found');
+    expect(body.message).not.toHaveLength(0);
+    expect(requestDeletion).not.toHaveBeenCalled();
+    expect(undoDeletion).not.toHaveBeenCalled();
+  });
+
+  it('지원하지 않는 route를 not-found로 반환한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    const response = await request(server)
+      .get('/api/unsupported')
+      .expect(HttpStatus.NOT_FOUND);
+
+    const body = response.body as ApiErrorResponse;
+    expect(body.code).toBe('not-found');
+    expect(body.message).not.toHaveLength(0);
+    expect(requestDeletion).not.toHaveBeenCalled();
+    expect(undoDeletion).not.toHaveBeenCalled();
+  });
+
+  it('Todo 삭제 요청에 CORS 응답 header를 반환한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .post('/api/todos/todo-1/deletion-request')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Origin', 'https://example.com')
+      .expect('Access-Control-Allow-Origin', '*')
+      .expect(HttpStatus.OK);
+  });
+
+  it.each(['/health', '/status'])(
+    '%s 경로를 not-found로 반환한다',
+    async (path) => {
+      const server = app.getHttpServer() as Server;
+
+      const response = await request(server)
+        .get(path)
+        .expect(HttpStatus.NOT_FOUND);
+
+      const body = response.body as ApiErrorResponse;
+      expect(body.code).toBe('not-found');
+      expect(body.message).not.toHaveLength(0);
+      expect(requestDeletion).not.toHaveBeenCalled();
+      expect(undoDeletion).not.toHaveBeenCalled();
+    },
+  );
 });
