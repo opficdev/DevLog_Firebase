@@ -21,8 +21,14 @@ const apiCodeByHttpStatus = new Map<number, string>([
   [HttpStatus.UNAUTHORIZED, 'unauthenticated'],
   [HttpStatus.FORBIDDEN, 'permission-denied'],
   [HttpStatus.NOT_FOUND, 'not-found'],
+  [HttpStatus.REQUEST_TIMEOUT, 'deadline-exceeded'],
   [HttpStatus.CONFLICT, 'aborted'],
   [HttpStatus.PRECONDITION_FAILED, 'failed-precondition'],
+  [HttpStatus.PAYLOAD_TOO_LARGE, 'resource-exhausted'],
+  [HttpStatus.UNSUPPORTED_MEDIA_TYPE, 'invalid-argument'],
+  [HttpStatus.UNPROCESSABLE_ENTITY, 'invalid-argument'],
+  [HttpStatus.TOO_MANY_REQUESTS, 'resource-exhausted'],
+  [HttpStatus.INTERNAL_SERVER_ERROR, 'internal'],
 ]);
 
 /** 공통 오류 응답을 전송하는 HTTP 응답 기능입니다. */
@@ -63,14 +69,11 @@ function apiExceptionFrom(exception: unknown): ApiException {
 
   if (exception instanceof HttpException) {
     const status = exception.getStatus();
-    const apiCode = apiCodeByHttpStatus.get(status);
-    if (apiCode) {
-      return new ApiException(
-        status,
-        apiCode,
-        httpExceptionMessageFrom(exception),
-      );
-    }
+    return new ApiException(
+      status,
+      apiCodeByHttpStatus.get(status) ?? 'unknown',
+      httpExceptionMessageFrom(exception),
+    );
   }
 
   return new ApiException(
@@ -80,8 +83,12 @@ function apiExceptionFrom(exception: unknown): ApiException {
   );
 }
 
-/** HTTP 예외가 제공하는 단일 message를 공통 오류 문구로 반환합니다. */
+/** 서버 오류의 내부 정보를 숨기고 나머지 HTTP message를 반환합니다. */
 function httpExceptionMessageFrom(exception: HttpException): string {
+  if (Number(HttpStatus.INTERNAL_SERVER_ERROR) <= exception.getStatus()) {
+    return '서버 오류가 발생했습니다.';
+  }
+
   const response = exception.getResponse();
   if (typeof response === 'string' && response) {
     return response;

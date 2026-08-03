@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
   HttpStatus,
   NotFoundException,
   PreconditionFailedException,
@@ -101,6 +102,69 @@ describe(ApiExceptionFilter.name, () => {
       statusCode: HttpStatus.PRECONDITION_FAILED,
       code: 'failed-precondition',
       message: '처리 조건이 맞지 않습니다.',
+    },
+    {
+      exception: new HttpException(
+        '요청 시간이 초과되었습니다.',
+        HttpStatus.REQUEST_TIMEOUT,
+      ),
+      statusCode: HttpStatus.REQUEST_TIMEOUT,
+      code: 'deadline-exceeded',
+      message: '요청 시간이 초과되었습니다.',
+    },
+    {
+      exception: new HttpException(
+        '요청 본문이 너무 큽니다.',
+        HttpStatus.PAYLOAD_TOO_LARGE,
+      ),
+      statusCode: HttpStatus.PAYLOAD_TOO_LARGE,
+      code: 'resource-exhausted',
+      message: '요청 본문이 너무 큽니다.',
+    },
+    {
+      exception: new HttpException(
+        '지원하지 않는 형식입니다.',
+        HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+      ),
+      statusCode: HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+      code: 'invalid-argument',
+      message: '지원하지 않는 형식입니다.',
+    },
+    {
+      exception: new HttpException(
+        '요청 내용을 처리할 수 없습니다.',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      ),
+      statusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+      code: 'invalid-argument',
+      message: '요청 내용을 처리할 수 없습니다.',
+    },
+    {
+      exception: new HttpException(
+        '요청이 너무 많습니다.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      ),
+      statusCode: HttpStatus.TOO_MANY_REQUESTS,
+      code: 'resource-exhausted',
+      message: '요청이 너무 많습니다.',
+    },
+    {
+      exception: new HttpException(
+        '알 수 없는 HTTP 오류입니다.',
+        HttpStatus.I_AM_A_TEAPOT,
+      ),
+      statusCode: HttpStatus.I_AM_A_TEAPOT,
+      code: 'unknown',
+      message: '알 수 없는 HTTP 오류입니다.',
+    },
+    {
+      exception: new HttpException(
+        '외부에 노출하면 안 되는 내부 오류입니다.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ),
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+      code: 'internal',
+      message: '서버 오류가 발생했습니다.',
     },
   ])(
     '예상 가능한 HTTP $statusCode 오류의 상태와 의미를 보존한다',
