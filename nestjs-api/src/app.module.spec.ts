@@ -1,3 +1,6 @@
+import { type Provider } from '@nestjs/common';
+import { MODULE_METADATA } from '@nestjs/common/constants';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import {
   applicationDefault,
@@ -9,6 +12,8 @@ import {
 import { type Auth, getAuth } from 'firebase-admin/auth';
 import { type Firestore, getFirestore } from 'firebase-admin/firestore';
 
+import { FirebaseAuthGuard } from './auth/firebase-auth.guard';
+import { ApiExceptionFilter } from './common/api-exception.filter';
 import { AppModule } from './app.module';
 
 jest.mock('firebase-admin/app', () => ({
@@ -50,6 +55,20 @@ describe(AppModule.name, () => {
     expect(mockedGetFirestore).toHaveBeenCalledWith(app);
 
     await module.close();
+  });
+
+  it('인증 Guard와 오류 Filter를 전역 provider로 구성한다', () => {
+    const providers = Reflect.getMetadata(
+      MODULE_METADATA.PROVIDERS,
+      AppModule,
+    ) as Provider[];
+
+    expect(providers).toEqual(
+      expect.arrayContaining([
+        { provide: APP_GUARD, useClass: FirebaseAuthGuard },
+        { provide: APP_FILTER, useClass: ApiExceptionFilter },
+      ]),
+    );
   });
 
   it('Firebase App 초기화 오류가 발생하면 구성을 중단한다', async () => {
