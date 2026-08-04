@@ -143,13 +143,20 @@ unset FIREBASE_ID_TOKEN TODO_ID SERVICE_URL
 2. Token이 있는 `POST`: `200`, `{"success":true}`
 3. Token이 있는 `DELETE`: `200`, `{"success":true}`
 
-하나라도 실패하면 이슈 #81 라우팅을 진행하지 않습니다.
+하나라도 실패하면 이슈 #81 라우팅을 진행하지 않습니다. 첫 배포에서 Token이 없는 `POST`가 `401`이 아니면 Cloud Run Invoker IAM 검사를 즉시 다시 활성화해 직접 주소의 무인증 호출을 차단합니다.
 
-Token이 없는 요청이 `403`이면 Cloud Run 공개 설정이 적용되지 않은 상태입니다. `POST` 성공 뒤 `DELETE`가 실패한 첫 배포는 수정본을 다시 배포한 뒤 같은 `DELETE`부터 실행합니다. 이후 배포에서는 이전 revision으로 복구한 뒤 같은 `DELETE`를 실행합니다. Todo와 연결 알림의 삭제 상태가 복구됐는지 확인한 뒤 직접 호출 검증을 다시 수행합니다.
+```bash
+gcloud run services update http-api \
+	--project devlog-staging \
+	--region asia-northeast3 \
+	--invoker-iam-check
+```
+
+Token이 없는 요청이 `403`이면 Cloud Run 공개 설정이 적용되지 않은 상태입니다. 원인을 수정한 뒤 배포 명령을 다시 실행해 공개 설정을 적용하고 직접 호출 검증 전체를 반복합니다. `POST` 성공 뒤 `DELETE`가 실패한 첫 배포는 수정본을 다시 배포한 뒤 같은 `DELETE`부터 실행합니다. 이후 배포에서는 이전 revision으로 복구한 뒤 같은 `DELETE`를 실행합니다. Todo와 연결 알림의 삭제 상태가 복구됐는지 확인한 뒤 직접 호출 검증을 다시 수행합니다.
 
 ## revision 복구
 
-첫 배포 검증에 실패하면 서비스를 라우팅하지 않고 수정 후 다시 배포합니다. 이후 배포 검증에 실패하면 기록한 revision으로 트래픽을 되돌립니다.
+첫 배포에서 Token이 없는 `POST`의 인증 검증에 실패하면 앞 절의 비공개 전환을 마친 뒤 수정본을 다시 배포합니다. 다른 첫 배포 검증에 실패하면 수정본을 다시 배포합니다. 이후 배포 검증에 실패하면 기록한 revision으로 트래픽을 되돌립니다.
 
 ```bash
 read -r -p "Previous revision: " PREVIOUS_REVISION
