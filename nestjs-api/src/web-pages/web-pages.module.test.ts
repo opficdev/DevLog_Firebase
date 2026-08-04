@@ -2,6 +2,7 @@ import { type Provider } from '@nestjs/common';
 import { MODULE_METADATA } from '@nestjs/common/constants';
 
 import { FirebaseModule } from '../firebase/firebase.module';
+import { WebPagesController } from './web-pages.controller';
 import { WebPagesModule } from './web-pages.module';
 import { WebPagesRepository } from './web-pages.repository';
 import { WebPagesService } from './web-pages.service';
@@ -28,8 +29,13 @@ describe(WebPagesModule.name, () => {
       MODULE_METADATA.PROVIDERS,
       WebPagesModule,
     ) as Provider[];
+    const controllers = Reflect.getMetadata(
+      MODULE_METADATA.CONTROLLERS,
+      WebPagesModule,
+    ) as unknown[];
 
     expect(imports).toContain(FirebaseModule);
+    expect(controllers).toContain(WebPagesController);
     expect(providers).toEqual(
       expect.arrayContaining([WebPagesRepository, WebPagesService]),
     );
