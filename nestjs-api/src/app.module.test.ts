@@ -16,6 +16,7 @@ import { FirebaseAuthGuard } from './auth/firebase-auth.guard';
 import { ApiExceptionFilter } from './common/api-exception.filter';
 import { AppModule } from './app.module';
 import { TodosModule } from './todos/todos.module';
+import { WebPagesModule } from './web-pages/web-pages.module';
 
 jest.mock('firebase-admin/app', () => ({
   applicationDefault: jest.fn(),
@@ -79,6 +80,15 @@ describe(AppModule.name, () => {
     ) as unknown[];
 
     expect(imports).toContain(TodosModule);
+  });
+
+  it('WebPagesModule을 애플리케이션에 연결한다', () => {
+    const imports = Reflect.getMetadata(
+      MODULE_METADATA.IMPORTS,
+      AppModule,
+    ) as unknown[];
+
+    expect(imports).toContain(WebPagesModule);
   });
 
   it('Firebase App 초기화 오류가 발생하면 구성을 중단한다', async () => {

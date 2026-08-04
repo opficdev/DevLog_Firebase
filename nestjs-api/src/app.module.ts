@@ -5,10 +5,11 @@ import { FirebaseAuthGuard } from './auth/firebase-auth.guard';
 import { ApiExceptionFilter } from './common/api-exception.filter';
 import { FirebaseModule } from './firebase/firebase.module';
 import { TodosModule } from './todos/todos.module';
+import { WebPagesModule } from './web-pages/web-pages.module';
 
 /** 애플리케이션의 최상위 의존성 경계를 구성하는 모듈입니다. */
 @Module({
-  imports: [FirebaseModule, TodosModule],
+  imports: [FirebaseModule, TodosModule, WebPagesModule],
   providers: [
     { provide: APP_GUARD, useClass: FirebaseAuthGuard },
     { provide: APP_FILTER, useClass: ApiExceptionFilter },
