@@ -10,6 +10,36 @@ DevLog의 Firebase Cloud Functions와 Firestore index 설정을 관리하는 저
 - `functions`: Cloud Functions TypeScript 소스
 - `nestjs-api`: Cloud Run용 NestJS API 소스와 Docker 이미지 구성
 
+## 백엔드 요청 구조
+
+이 저장소는 기존 Cloud Functions와 별도로 배포할 수 있는 NestJS API를 함께 관리합니다. 아래는 Todo API 전환이 설정된 요청 흐름이며 Firebase Hosting rewrite가 요청 경로에 따라 두 실행 단위로 HTTP 요청을 분기합니다.
+
+```mermaid
+flowchart LR
+	Client["API Client"] --> Hosting["Firebase Hosting"]
+	Hosting -->|"/api/todos/**"| CloudRun["Cloud Run<br/>http-api"]
+	Hosting -->|"/api/auth/github/callback<br/>나머지 /api/**"| Functions["Cloud Functions<br/>api"]
+	CloudRun --> Auth["Firebase Auth"]
+	Functions --> Auth
+	CloudRun --> Firestore["Firestore"]
+	Functions --> Firestore
+```
+
+| 실행 구성 | 소스 | 책임 |
+| --- | --- | --- |
+| Firebase Hosting | `firebase.json` | 공개 요청 진입점과 경로별 rewrite 순서 관리 |
+| Cloud Run `http-api` | `nestjs-api` | Firebase ID Token을 검증하고 Todo 삭제 요청과 취소 처리 |
+| Cloud Functions `api` | `functions` | 기존 REST API와 OAuth 처리 |
+| Cloud Functions 개별 함수 | `functions` | trigger, Scheduler, Cloud Tasks, FCM 처리 |
+| Firebase Auth | — | 인증이 필요한 경로에 전달된 Bearer token 검증 |
+| Firestore | — | 검증된 사용자 UID 범위의 공통 데이터 저장 |
+
+Todo API 전환이 설정된 Hosting에서는 `/api/todos/**`를 Cloud Run `http-api`가 우선 처리하고 GitHub callback과 나머지 `/api/**`는 기존 Functions `api`가 계속 처리합니다.
+
+기존 Functions를 한 번에 교체하지 않고 요청 계약을 유지하면서 경로 단위로 NestJS API에 이전하는 구조입니다. 최종적으로 Cloud Functions `api`가 담당하는 HTTP API 전체를 Cloud Run 기반 `http-api`로 이전하는 것을 목표로 합니다.
+
+Cloud Run 배포와 직접 호출 검증은 [`docs/cloud-run-staging.md`](docs/cloud-run-staging.md), Firebase Hosting 분기 배포와 복구는 [`docs/firebase-hosting-staging.md`](docs/firebase-hosting-staging.md)에서 관리합니다.
+
 ## 환경 변수
 
 Firebase CLI의 `--project`로 staging 또는 prod Firebase project를 선택합니다. 각 project에 배포된 함수는 인자 없는 `getFirestore()`로 해당 project의 `(default)` database를 사용합니다.
@@ -91,7 +121,7 @@ Docker 이미지는 검증을 위해 build만 수행하며 실행하거나 게�
 
 현재 CI는 검증만 담당합니다. Cloud Run 배포와 Docker 이미지 게시 자동화는 [이슈 #65](https://github.com/opficdev/DevLog_Firebase/issues/65)에서 별도로 다룹니다.
 
-GitHub Actions의 action 런타임은 Node 24 대응 버전을 사용하고, Functions와 NestJS API 검증용 Node 버전은 각 `package.json`의 `engines.node`와 맞춘 Node 22를 사용합니다.
+GitHub Actions의 action 런타임은 Node 24 대응 버전을 사용하고 Functions와 NestJS API 검증용 Node 버전은 각 `package.json`의 `engines.node`와 맞춘 Node 22를 사용합니다.
 
 ## 배포
 
@@ -106,7 +136,7 @@ firebase deploy --project <staging-project-id> --only functions:<functionName>
 firebase deploy --project <prod-project-id> --only functions:<functionName>
 ```
 
-양쪽 project에는 같은 함수 이름을 배포하며, 각 함수는 해당 project의 `(default)` database만 사용합니다.
+양쪽 project에는 같은 함수 이름을 배포하며 각 함수는 해당 project의 `(default)` database만 사용합니다.
 
 기존 prod named database의 데이터를 prod project의 `(default)`로 이전하기 전에는 이 변경을 prod project에 배포하지 않습니다.
 
@@ -164,7 +194,7 @@ flowchart LR
 | GitHub/CI Analyst | `github_ci_analyst` | `gpt-5.3-codex-spark` (`Lightweight`) | issue, PR thread, review comment, workflow run, CI log 분석 | Planner |
 | Documentation Writer | `documentation_writer` | `gpt-5.3-codex-spark` (`Lightweight`) | PR 본문, release note, README, issue/comment 문안 작성 | Final Integration |
 
-`Lightweight`와 `Fast` 역할은 현재 main task에 연결되는 사이드 작업으로 실행합니다. 도구에서는 `spawn_agent`, UI에서는 `Option-Command-S`를 사용하며, 역할 결과는 현재 main task로 돌아와 `Primary`가 검토하고 통합합니다.
+`Lightweight`와 `Fast` 역할은 현재 main task에 연결되는 사이드 작업으로 실행합니다. 도구에서는 `spawn_agent`, UI에서는 `Option-Command-S`를 사용하며 역할 결과는 현재 main task로 돌아와 `Primary`가 검토하고 통합합니다.
 
 `spawn_agent.task_name`은 표의 이름, `.codex/agents/<name>.toml` 파일명, TOML의 `name`과 정확히 일치해야 합니다. 임의의 접두어나 접미사를 붙인 이름은 configured custom agent 위임으로 인정하지 않습니다.
 
