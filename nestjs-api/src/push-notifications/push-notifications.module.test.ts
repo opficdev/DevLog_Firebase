@@ -2,6 +2,7 @@ import { type Provider } from '@nestjs/common';
 import { MODULE_METADATA } from '@nestjs/common/constants';
 
 import { FirebaseModule } from '../firebase/firebase.module';
+import { PushNotificationsController } from './push-notifications.controller';
 import { PushNotificationsModule } from './push-notifications.module';
 import { PushNotificationsRepository } from './push-notifications.repository';
 import { PushNotificationsService } from './push-notifications.service';
@@ -28,8 +29,13 @@ describe(PushNotificationsModule.name, () => {
       MODULE_METADATA.PROVIDERS,
       PushNotificationsModule,
     ) as Provider[];
+    const controllers = Reflect.getMetadata(
+      MODULE_METADATA.CONTROLLERS,
+      PushNotificationsModule,
+    ) as unknown[];
 
     expect(imports).toContain(FirebaseModule);
+    expect(controllers).toContain(PushNotificationsController);
     expect(providers).toEqual(
       expect.arrayContaining([
         PushNotificationsRepository,
