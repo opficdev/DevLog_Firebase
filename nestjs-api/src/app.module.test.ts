@@ -15,6 +15,7 @@ import { type Firestore, getFirestore } from 'firebase-admin/firestore';
 import { FirebaseAuthGuard } from './auth/firebase-auth.guard';
 import { ApiExceptionFilter } from './common/api-exception.filter';
 import { AppModule } from './app.module';
+import { PushNotificationsModule } from './push-notifications/push-notifications.module';
 import { TodosModule } from './todos/todos.module';
 import { WebPagesModule } from './web-pages/web-pages.module';
 
@@ -80,6 +81,15 @@ describe(AppModule.name, () => {
     ) as unknown[];
 
     expect(imports).toContain(TodosModule);
+  });
+
+  it('PushNotificationsModule을 애플리케이션에 연결한다', () => {
+    const imports = Reflect.getMetadata(
+      MODULE_METADATA.IMPORTS,
+      AppModule,
+    ) as unknown[];
+
+    expect(imports).toContain(PushNotificationsModule);
   });
 
   it('WebPagesModule을 애플리케이션에 연결한다', () => {
