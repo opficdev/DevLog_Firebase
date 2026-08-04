@@ -178,6 +178,20 @@ describe('PushNotification 삭제 API', () => {
     expect(undoDeletion).toHaveBeenCalledWith(uid, 'notification-1');
   });
 
+  it('삭제 취소에서 인증 token이 없으면 unauthenticated로 거부한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .delete('/api/push-notifications/notification-1/deletion-request')
+      .expect(HttpStatus.UNAUTHORIZED)
+      .expect({
+        code: 'unauthenticated',
+        message: '인증 토큰이 필요합니다.',
+      });
+
+    expect(undoDeletion).not.toHaveBeenCalled();
+  });
+
   it('삭제 취소에서 공백인 PushNotification ID를 invalid-argument로 거부한다', async () => {
     const server = app.getHttpServer() as Server;
 
