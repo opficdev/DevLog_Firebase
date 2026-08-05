@@ -38,6 +38,20 @@
           }
         },
         {
+          "source": "/api/web-pages/**",
+          "run": {
+            "serviceId": "http-api",
+            "region": "asia-northeast3"
+          }
+        },
+        {
+          "source": "/api/push-notifications/**",
+          "run": {
+            "serviceId": "http-api",
+            "region": "asia-northeast3"
+          }
+        },
+        {
           "source": "/api/auth/github/callback",
           "function": {
             "functionId": "api",
