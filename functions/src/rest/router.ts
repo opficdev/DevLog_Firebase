@@ -1,11 +1,5 @@
 // REST route가 실행할 처리 종류를 나타냅니다.
 export type RestAction =
-    "requestTodoDeletion" |
-    "undoTodoDeletion" |
-    "requestWebPageDeletion" |
-    "undoWebPageDeletion" |
-    "requestPushNotificationDeletion" |
-    "undoPushNotificationDeletion" |
     "createAppleChallenge" |
     "requestAppleCustomToken" |
     "linkAppleProvider" |
@@ -28,7 +22,6 @@ export type RestAction =
 export interface RestRoute {
     action: RestAction;
     requiresAuth: boolean;
-    id?: string;
 }
 
 export function parseRestRouteSegments(pathSegments: string[]): string[] | undefined {
@@ -42,45 +35,6 @@ export function parseRestRouteSegments(pathSegments: string[]): string[] | undef
 
 export function matchRestRoute(method: string, routeSegments: string[]): RestRoute | undefined {
     const normalizedMethod = method.toUpperCase();
-
-    if (
-        routeSegments.length === 3 &&
-        routeSegments[0] === "todos" &&
-        routeSegments[2] === "deletion-request"
-    ) {
-        return deletionRoute(
-            normalizedMethod,
-            routeSegments[1],
-            "requestTodoDeletion",
-            "undoTodoDeletion"
-        );
-    }
-
-    if (
-        routeSegments.length === 3 &&
-        routeSegments[0] === "web-pages" &&
-        routeSegments[2] === "deletion-request"
-    ) {
-        return deletionRoute(
-            normalizedMethod,
-            routeSegments[1],
-            "requestWebPageDeletion",
-            "undoWebPageDeletion"
-        );
-    }
-
-    if (
-        routeSegments.length === 3 &&
-        routeSegments[0] === "push-notifications" &&
-        routeSegments[2] === "deletion-request"
-    ) {
-        return deletionRoute(
-            normalizedMethod,
-            routeSegments[1],
-            "requestPushNotificationDeletion",
-            "undoPushNotificationDeletion"
-        );
-    }
 
     if (routeSegments.join("/") === "auth/apple/custom-token" && normalizedMethod === "POST") {
         return {
@@ -214,35 +168,6 @@ export function matchRestRoute(method: string, routeSegments: string[]): RestRou
         return {
             action: "revokeGoogleAccessToken",
             requiresAuth: true
-        };
-    }
-
-    return undefined;
-}
-
-function deletionRoute(
-    method: string,
-    id: string,
-    requestAction: RestAction,
-    undoAction: RestAction
-): RestRoute | undefined {
-    if (!id) {
-        return undefined;
-    }
-
-    if (method === "POST") {
-        return {
-            action: requestAction,
-            requiresAuth: true,
-            id
-        };
-    }
-
-    if (method === "DELETE") {
-        return {
-            action: undoAction,
-            requiresAuth: true,
-            id
         };
     }
 

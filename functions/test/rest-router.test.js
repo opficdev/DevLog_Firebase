@@ -11,60 +11,6 @@ assert.deepStrictEqual(
 assert.strictEqual(parseRestRouteSegments(["staging", "todos"]), undefined);
 
 assert.deepStrictEqual(
-    matchRestRoute("POST", ["todos", "todo-1", "deletion-request"]),
-    {
-        action: "requestTodoDeletion",
-        requiresAuth: true,
-        id: "todo-1"
-    }
-);
-
-assert.deepStrictEqual(
-    matchRestRoute("DELETE", ["todos", "todo-1", "deletion-request"]),
-    {
-        action: "undoTodoDeletion",
-        requiresAuth: true,
-        id: "todo-1"
-    }
-);
-
-assert.deepStrictEqual(
-    matchRestRoute("POST", ["web-pages", "web-page-1", "deletion-request"]),
-    {
-        action: "requestWebPageDeletion",
-        requiresAuth: true,
-        id: "web-page-1"
-    }
-);
-
-assert.deepStrictEqual(
-    matchRestRoute("DELETE", ["web-pages", "web-page-1", "deletion-request"]),
-    {
-        action: "undoWebPageDeletion",
-        requiresAuth: true,
-        id: "web-page-1"
-    }
-);
-
-assert.deepStrictEqual(
-    matchRestRoute("POST", ["push-notifications", "notification-1", "deletion-request"]),
-    {
-        action: "requestPushNotificationDeletion",
-        requiresAuth: true,
-        id: "notification-1"
-    }
-);
-
-assert.deepStrictEqual(
-    matchRestRoute("DELETE", ["push-notifications", "notification-1", "deletion-request"]),
-    {
-        action: "undoPushNotificationDeletion",
-        requiresAuth: true,
-        id: "notification-1"
-    }
-);
-
-assert.deepStrictEqual(
     matchRestRoute("POST", ["auth", "apple", "challenges"]),
     {
         action: "createAppleChallenge",
