@@ -5,11 +5,13 @@ import {
   Inject,
   Injectable,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { type Auth } from 'firebase-admin/auth';
 
 import { ApiException } from '../common/api.exception';
 import { FIREBASE_AUTH_TOKEN } from '../firebase/firebase.tokens';
 import { FirebaseAuthenticatedRequest } from './firebase-authenticated-request';
+import { PUBLIC_ENDPOINT_KEY } from './public.decorator';
 
 const bearerPrefix = 'Bearer ';
 const normalizedBearerPrefix = bearerPrefix.toLowerCase();
@@ -18,10 +20,20 @@ const normalizedBearerPrefix = bearerPrefix.toLowerCase();
 @Injectable()
 export class FirebaseAuthGuard implements CanActivate {
   /** Firebase Auth 검증 의존성을 주입받습니다. */
-  constructor(@Inject(FIREBASE_AUTH_TOKEN) private readonly auth: Auth) {}
+  constructor(
+    @Inject(FIREBASE_AUTH_TOKEN) private readonly auth: Auth,
+    private readonly reflector: Reflector,
+  ) {}
 
   /** Bearer token을 검증하고 확인된 UID만 요청에 저장합니다. */
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const isPublic =
+      this.reflector.get<boolean>(PUBLIC_ENDPOINT_KEY, context.getHandler()) ===
+      true;
+    if (isPublic) {
+      return true;
+    }
+
     const request = context
       .switchToHttp()
       .getRequest<FirebaseAuthenticatedRequest>();
