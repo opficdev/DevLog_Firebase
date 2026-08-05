@@ -37,7 +37,10 @@ export class WebPagesService {
     } catch (error) {
       await this.cleanupDeletionRequest(uid, webPageId);
 
-      this.logger.error('웹페이지 삭제 요청 실패', error, {
+      this.logger.error({
+        message: '웹페이지 삭제 요청 실패',
+        errorMessage: error instanceof Error ? error.message : '알 수 없는 오류',
+        errorStack: error instanceof Error ? error.stack : undefined,
         uid,
         webPageId,
       });
@@ -64,7 +67,10 @@ export class WebPagesService {
         await this.repository.restoreWebPageDeletion(uid, webPageId);
       }
     } catch (error) {
-      this.logger.error('웹페이지 삭제 취소 실패', error, {
+      this.logger.error({
+        message: '웹페이지 삭제 취소 실패',
+        errorMessage: error instanceof Error ? error.message : '알 수 없는 오류',
+        errorStack: error instanceof Error ? error.stack : undefined,
         uid,
         webPageId,
       });
@@ -90,7 +96,11 @@ export class WebPagesService {
         await this.repository.restoreWebPageDeletion(uid, webPageId);
       }
     } catch (error) {
-      this.logger.error('웹페이지 삭제 요청 cleanup 실패', error, {
+      this.logger.error({
+        message: '웹페이지 삭제 요청 cleanup 실패',
+        errorMessage:
+          error instanceof Error ? error.message : '알 수 없는 오류',
+        errorStack: error instanceof Error ? error.stack : undefined,
         uid,
         webPageId,
       });

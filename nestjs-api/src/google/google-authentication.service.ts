@@ -71,7 +71,16 @@ export class GoogleAuthenticationService {
             claim,
           );
         } catch (renewError) {
-          this.logger.error('Google 계정 연결 lease 갱신 실패', renewError, {
+          let errorMessage = '알 수 없는 오류';
+          let errorStack: string | undefined;
+          if (renewError instanceof Error) {
+            errorMessage = renewError.message;
+            errorStack = renewError.stack;
+          }
+          this.logger.error({
+            message: 'Google 계정 연결 lease 갱신 실패',
+            errorMessage,
+            errorStack,
             uid,
           });
         }
@@ -81,18 +90,34 @@ export class GoogleAuthenticationService {
               providersToUnlink: ['google.com'],
             });
           } catch (compensationError) {
-            this.logger.error(
-              'Google provider 연결 보상 실패',
-              compensationError,
-              { uid },
-            );
+            let errorMessage = '알 수 없는 오류';
+            let errorStack: string | undefined;
+            if (compensationError instanceof Error) {
+              errorMessage = compensationError.message;
+              errorStack = compensationError.stack;
+            }
+            this.logger.error({
+              message: 'Google provider 연결 보상 실패',
+              errorMessage,
+              errorStack,
+              uid,
+            });
           }
         }
       }
       try {
         await this.credentialRepository.releaseAccountLink(uid, claim);
       } catch (releaseError) {
-        this.logger.error('Google 계정 연결 lease 해제 실패', releaseError, {
+        let errorMessage = '알 수 없는 오류';
+        let errorStack: string | undefined;
+        if (releaseError instanceof Error) {
+          errorMessage = releaseError.message;
+          errorStack = releaseError.stack;
+        }
+        this.logger.error({
+          message: 'Google 계정 연결 lease 해제 실패',
+          errorMessage,
+          errorStack,
           uid,
         });
       }

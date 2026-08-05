@@ -1,4 +1,4 @@
-import { HttpStatus } from '@nestjs/common';
+import { HttpStatus, Logger } from '@nestjs/common';
 import axios, { type AxiosError } from 'axios';
 import * as jwt from 'jsonwebtoken';
 
@@ -122,19 +122,37 @@ describe(GoogleAuthenticationClient.name, () => {
   });
 
   it('이미 무효화된 token 폐기를 성공으로 처리한다', async () => {
-    mockedAxios.post.mockRejectedValue(
-      axiosError(HttpStatus.BAD_REQUEST, { error: 'invalid_token' }),
-    );
+    const error = axiosError(HttpStatus.BAD_REQUEST, {
+      error: 'invalid_token',
+    });
+    const loggerWarn = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation();
+    mockedAxios.post.mockRejectedValue(error);
 
     await expect(
       client.revokeOAuthToken('user-1', 'invalid-token'),
     ).resolves.toBeUndefined();
+    expect(loggerWarn).toHaveBeenCalledWith({
+      message: 'Google OAuth token이 이미 무효화되어 성공으로 처리합니다.',
+      uid: 'user-1',
+      google: {
+        status: HttpStatus.BAD_REQUEST,
+        errorMessage: error.message,
+        error: 'invalid_token',
+      },
+    });
+    loggerWarn.mockRestore();
   });
 
   it('Google revoke 실패를 계약 오류로 변환한다', async () => {
-    mockedAxios.post.mockRejectedValue(
-      axiosError(HttpStatus.INTERNAL_SERVER_ERROR, { error: 'server_error' }),
-    );
+    const error = axiosError(HttpStatus.INTERNAL_SERVER_ERROR, {
+      error: 'server_error',
+    });
+    const loggerError = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation();
+    mockedAxios.post.mockRejectedValue(error);
 
     await expect(
       client.revokeOAuthToken('user-1', 'refresh-token'),
@@ -142,6 +160,13 @@ describe(GoogleAuthenticationClient.name, () => {
       status: HttpStatus.BAD_GATEWAY,
       response: { code: 'google-revoke-failed' },
     });
+    expect(loggerError).toHaveBeenCalledWith({
+      message: 'Google OAuth grant 폐기에 실패했습니다.',
+      status: HttpStatus.INTERNAL_SERVER_ERROR,
+      errorMessage: error.message,
+      error: 'server_error',
+    });
+    loggerError.mockRestore();
   });
 });
 

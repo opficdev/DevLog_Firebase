@@ -117,10 +117,17 @@ export class GoogleProviderRepository {
       try {
         await this.auth.deleteUser(user.uid);
       } catch (deleteError) {
-        this.logger.error(
-          'Google provider 연결 실패 사용자 정리 실패',
-          deleteError,
-        );
+        let errorMessage = '알 수 없는 오류';
+        let errorStack: string | undefined;
+        if (deleteError instanceof Error) {
+          errorMessage = deleteError.message;
+          errorStack = deleteError.stack;
+        }
+        this.logger.error({
+          message: 'Google provider 연결 실패 사용자 정리 실패',
+          errorMessage,
+          errorStack,
+        });
       }
       throw error;
     }

@@ -122,7 +122,10 @@ describe(TodosService.name, () => {
       'Todo 복구',
       '알림 복구',
     ]);
-    expect(loggerError).toHaveBeenCalledWith('Todo 삭제 요청 실패', error, {
+    expect(loggerError).toHaveBeenCalledWith({
+      message: 'Todo 삭제 요청 실패',
+      errorMessage: error.message,
+      errorStack: error.stack,
       uid,
       todoId,
     });
@@ -218,7 +221,10 @@ describe(TodosService.name, () => {
         message: 'Todo 삭제 취소에 실패했습니다.',
       },
     });
-    expect(loggerError).toHaveBeenCalledWith('Todo 삭제 취소 실패', error, {
+    expect(loggerError).toHaveBeenCalledWith({
+      message: 'Todo 삭제 취소 실패',
+      errorMessage: error.message,
+      errorStack: error.stack,
       uid,
       todoId,
     });

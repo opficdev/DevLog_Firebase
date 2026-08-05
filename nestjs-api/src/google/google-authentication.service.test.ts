@@ -299,16 +299,18 @@ describe(GoogleAuthenticationService.name, () => {
       error,
     );
     expect(updateUser).not.toHaveBeenCalled();
-    expect(loggerError).toHaveBeenCalledWith(
-      'Google 계정 연결 lease 갱신 실패',
-      renewError,
-      { uid: 'user-1' },
-    );
-    expect(loggerError).toHaveBeenCalledWith(
-      'Google 계정 연결 lease 해제 실패',
-      releaseError,
-      { uid: 'user-1' },
-    );
+    expect(loggerError).toHaveBeenCalledWith({
+      message: 'Google 계정 연결 lease 갱신 실패',
+      errorMessage: renewError.message,
+      errorStack: renewError.stack,
+      uid: 'user-1',
+    });
+    expect(loggerError).toHaveBeenCalledWith({
+      message: 'Google 계정 연결 lease 해제 실패',
+      errorMessage: releaseError.message,
+      errorStack: releaseError.stack,
+      uid: 'user-1',
+    });
   });
 
   it('provider 연결 보상 실패가 원래 오류를 덮지 않는다', async () => {
@@ -329,11 +331,12 @@ describe(GoogleAuthenticationService.name, () => {
       error,
     );
     expect(releaseAccountLink).toHaveBeenCalledWith('user-1', 'claim');
-    expect(loggerError).toHaveBeenCalledWith(
-      'Google provider 연결 보상 실패',
-      compensationError,
-      { uid: 'user-1' },
-    );
+    expect(loggerError).toHaveBeenCalledWith({
+      message: 'Google provider 연결 보상 실패',
+      errorMessage: compensationError.message,
+      errorStack: compensationError.stack,
+      uid: 'user-1',
+    });
   });
 
   it('refresh token으로 grant를 폐기한 뒤 credential을 삭제한다', async () => {

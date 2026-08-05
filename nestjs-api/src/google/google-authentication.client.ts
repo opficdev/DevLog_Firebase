@@ -106,19 +106,21 @@ export class GoogleAuthenticationClient {
       }
     } catch (error) {
       if (alreadyInvalidToken(error)) {
-        this.logger.warn(
-          'Google OAuth token이 이미 무효화되어 성공으로 처리합니다.',
-          { uid, google: errorMetadata(error) },
-        );
+        this.logger.warn({
+          message: 'Google OAuth token이 이미 무효화되어 성공으로 처리합니다.',
+          uid,
+          google: errorMetadata(error),
+        });
         return;
       }
-      this.logger.error(
-        'Google OAuth grant 폐기에 실패했습니다.',
-        errorMetadata(error),
-      );
+      this.logger.error({
+        message: 'Google OAuth grant 폐기에 실패했습니다.',
+        ...errorMetadata(error),
+      });
       throw googleRevocationException;
     }
-    this.logger.error('Google OAuth grant 폐기에 실패했습니다.', {
+    this.logger.error({
+      message: 'Google OAuth grant 폐기에 실패했습니다.',
       errorMessage: 'Google OAuth token 폐기 응답이 올바르지 않습니다.',
     });
     throw googleRevocationException;
@@ -132,10 +134,10 @@ export class GoogleAuthenticationClient {
       if (invalidGoogleGrant(error)) {
         throw invalidGoogleProofException;
       }
-      this.logger.error(
-        'Google 인증 서버 요청에 실패했습니다.',
-        errorMetadata(error),
-      );
+      this.logger.error({
+        message: 'Google 인증 서버 요청에 실패했습니다.',
+        ...errorMetadata(error),
+      });
       throw googleProviderException;
     }
   }

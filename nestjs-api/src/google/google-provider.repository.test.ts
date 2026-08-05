@@ -1,4 +1,4 @@
-import { HttpStatus } from '@nestjs/common';
+import { HttpStatus, Logger } from '@nestjs/common';
 import { type Auth, type UserRecord } from 'firebase-admin/auth';
 
 import { type GoogleTokenPayload } from './google-authentication.types';
@@ -80,6 +80,27 @@ describe(GoogleProviderRepository.name, () => {
       'link-failed',
     );
     expect(deleteUser).toHaveBeenCalledWith('new-uid');
+  });
+
+  it('신규 사용자 정리 실패를 단일 구조화 오류로 기록한다', async () => {
+    const linkError = new Error('link-failed');
+    const deleteError = new Error('delete-failed');
+    const loggerError = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation();
+    getUserByProviderUid.mockRejectedValue(authError('auth/user-not-found'));
+    getUserByEmail.mockRejectedValue(authError('auth/user-not-found'));
+    createUser.mockResolvedValue(userRecord('new-uid'));
+    updateUser.mockRejectedValue(linkError);
+    deleteUser.mockRejectedValue(deleteError);
+
+    await expect(repository.resolveUid(payload())).rejects.toBe(linkError);
+    expect(loggerError).toHaveBeenCalledWith({
+      message: 'Google provider 연결 실패 사용자 정리 실패',
+      errorMessage: deleteError.message,
+      errorStack: deleteError.stack,
+    });
+    loggerError.mockRestore();
   });
 
   it('미검증 이메일의 자동 연결을 거부한다', async () => {
