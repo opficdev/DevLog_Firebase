@@ -1,12 +1,20 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { type Auth } from 'firebase-admin/auth';
 
+import { ApiException } from '../common/api.exception';
 import { FIREBASE_AUTH_TOKEN } from '../firebase/firebase.tokens';
 import { GoogleAuthenticationClient } from './google-authentication.client';
 import { GOOGLE_AUTHENTICATION_CONFIGURATION_TOKEN } from './google-authentication.configuration';
 import { type GoogleAuthenticationConfiguration } from './google-authentication.types';
 import { GoogleCredentialRepository } from './google-credential.repository';
 import { GoogleProviderRepository } from './google-provider.repository';
+
+// 마지막 로그인 provider 해제 오류입니다.
+const lastProviderException = new ApiException(
+  HttpStatus.PRECONDITION_FAILED,
+  'last-provider',
+  '마지막 로그인 provider는 해제할 수 없습니다.',
+);
 
 // Google 인증과 Firebase 사용자 연결, credential 처리를 조정합니다.
 @Injectable()
@@ -113,6 +121,25 @@ export class GoogleAuthenticationService {
     } catch (error) {
       await this.credentialRepository.releaseRevocation(uid, claim);
       throw error;
+    }
+  }
+
+  // Google grant와 credential을 정리한 뒤 provider 연결을 해제합니다.
+  async unlink(uid: string): Promise<void> {
+    const user = await this.auth.getUser(uid);
+    const providers = user.providerData ?? [];
+    const hasGoogleProvider = providers.some(
+      (provider) => provider.providerId === 'google.com',
+    );
+    if (hasGoogleProvider && providers.length <= 1) {
+      throw lastProviderException;
+    }
+
+    await this.revoke(uid);
+    if (hasGoogleProvider) {
+      await this.auth.updateUser(uid, {
+        providersToUnlink: ['google.com'],
+      });
     }
   }
 }

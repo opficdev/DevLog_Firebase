@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { HttpStatus, Logger } from '@nestjs/common';
 import { type Auth } from 'firebase-admin/auth';
 
 import { GoogleAuthenticationClient } from './google-authentication.client';
@@ -26,6 +26,7 @@ describe(GoogleAuthenticationService.name, () => {
   const releaseRevocation = jest.fn();
   const save = jest.fn();
   const createCustomToken = jest.fn();
+  const getUser = jest.fn();
   const updateUser = jest.fn();
   const loggerError = jest
     .spyOn(Logger.prototype, 'error')
@@ -35,7 +36,7 @@ describe(GoogleAuthenticationService.name, () => {
     clientSecret: 'client-secret',
   };
   const service = new GoogleAuthenticationService(
-    { createCustomToken, updateUser } as unknown as Auth,
+    { createCustomToken, getUser, updateUser } as unknown as Auth,
     configuration,
     {
       exchangeAuthorizationCode,
@@ -436,6 +437,104 @@ describe(GoogleAuthenticationService.name, () => {
     releaseRevocation.mockRejectedValue(releaseError);
 
     await expect(service.revoke('user-1')).rejects.toBe(releaseError);
+  });
+
+  it('grant와 credential을 정리한 뒤 Google provider를 해제한다', async () => {
+    const sequence: string[] = [];
+    const credential = {
+      accessToken: 'access-token',
+      clientId: 'client-id',
+      refreshToken: 'refresh-token',
+    };
+    getUser.mockImplementation(() => {
+      sequence.push('provider 조회');
+      return Promise.resolve({
+        providerData: [
+          { providerId: 'google.com' },
+          { providerId: 'github.com' },
+        ],
+      });
+    });
+    find.mockImplementation(() => {
+      sequence.push('credential 조회');
+      return Promise.resolve(credential);
+    });
+    claimRevocation.mockImplementation(() => {
+      sequence.push('폐기 claim 획득');
+      return Promise.resolve('claim');
+    });
+    revokeOAuthToken.mockImplementation(() => {
+      sequence.push('Google grant 폐기');
+      return Promise.resolve();
+    });
+    deleteRevoked.mockImplementation(() => {
+      sequence.push('credential 삭제');
+      return Promise.resolve();
+    });
+    updateUser.mockImplementation(() => {
+      sequence.push('provider 해제');
+      return Promise.resolve();
+    });
+
+    await expect(service.unlink('user-1')).resolves.toBeUndefined();
+    expect(updateUser).toHaveBeenCalledWith('user-1', {
+      providersToUnlink: ['google.com'],
+    });
+    expect(sequence).toEqual([
+      'provider 조회',
+      'credential 조회',
+      '폐기 claim 획득',
+      'Google grant 폐기',
+      'credential 삭제',
+      'provider 해제',
+    ]);
+  });
+
+  it('마지막 Google provider는 grant 폐기 전에 해제를 거부한다', async () => {
+    getUser.mockResolvedValue({
+      providerData: [{ providerId: 'google.com' }],
+    });
+
+    await expect(service.unlink('user-1')).rejects.toMatchObject({
+      status: HttpStatus.PRECONDITION_FAILED,
+      response: {
+        code: 'last-provider',
+        message: '마지막 로그인 provider는 해제할 수 없습니다.',
+      },
+    });
+    expect(find).not.toHaveBeenCalled();
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it('Google provider가 없어도 남은 credential을 정리한다', async () => {
+    getUser.mockResolvedValue({
+      providerData: [{ providerId: 'github.com' }],
+    });
+    find.mockResolvedValue(undefined);
+
+    await expect(service.unlink('user-1')).resolves.toBeUndefined();
+    expect(deleteEmpty).toHaveBeenCalledWith('user-1');
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it('provider 해제 실패 시 정리한 credential은 복구하지 않고 오류를 전달한다', async () => {
+    const error = new Error('provider 해제 실패');
+    const credential = {
+      accessToken: 'access-token',
+      clientId: 'client-id',
+    };
+    getUser.mockResolvedValue({
+      providerData: [
+        { providerId: 'google.com' },
+        { providerId: 'github.com' },
+      ],
+    });
+    find.mockResolvedValue(credential);
+    claimRevocation.mockResolvedValue('claim');
+    updateUser.mockRejectedValue(error);
+
+    await expect(service.unlink('user-1')).rejects.toBe(error);
+    expect(deleteRevoked).toHaveBeenCalledWith('user-1', credential, 'claim');
   });
 });
 
