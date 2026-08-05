@@ -7,9 +7,11 @@ import { GoogleAuthenticationService } from './google-authentication.service';
 describe(GoogleAuthenticationController.name, () => {
   const customToken = jest.fn();
   const link = jest.fn();
+  const revoke = jest.fn();
   const controller = new GoogleAuthenticationController({
     customToken,
     link,
+    revoke,
   } as unknown as GoogleAuthenticationService);
 
   beforeEach(() => {
@@ -82,5 +84,26 @@ describe(GoogleAuthenticationController.name, () => {
       },
     });
     expect(link).not.toHaveBeenCalled();
+  });
+
+  it('검증된 UID의 Google grant와 credential을 폐기한다', async () => {
+    revoke.mockResolvedValue(undefined);
+    const request = { uid: 'user-1' } as FirebaseAuthenticatedRequest;
+
+    await expect(controller.revoke(request)).resolves.toBeUndefined();
+    expect(revoke).toHaveBeenCalledWith('user-1');
+  });
+
+  it('폐기 요청에 검증된 UID가 없으면 unauthenticated로 거부한다', async () => {
+    await expect(
+      controller.revoke({} as FirebaseAuthenticatedRequest),
+    ).rejects.toMatchObject({
+      status: HttpStatus.UNAUTHORIZED,
+      response: {
+        code: 'unauthenticated',
+        message: '인증된 사용자가 아닙니다.',
+      },
+    });
+    expect(revoke).not.toHaveBeenCalled();
   });
 });

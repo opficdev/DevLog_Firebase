@@ -33,6 +33,7 @@ describe('Google 인증 API', () => {
   const verifyIdToken = jest.fn();
   const customToken = jest.fn();
   const link = jest.fn();
+  const revoke = jest.fn();
   let app: INestApplication;
 
   beforeAll(async () => {
@@ -46,7 +47,7 @@ describe('Google 인증 API', () => {
       .overrideProvider(FIREBASE_FIRESTORE_TOKEN)
       .useValue({})
       .overrideProvider(GoogleAuthenticationService)
-      .useValue({ customToken, link })
+      .useValue({ customToken, link, revoke })
       .compile();
 
     app = module.createNestApplication();
@@ -58,6 +59,7 @@ describe('Google 인증 API', () => {
     verifyIdToken.mockReset().mockResolvedValue({ uid: 'user-1' });
     customToken.mockReset().mockResolvedValue('custom-token');
     link.mockReset().mockResolvedValue(undefined);
+    revoke.mockReset().mockResolvedValue(undefined);
   });
 
   afterAll(async () => {
@@ -138,5 +140,33 @@ describe('Google 인증 API', () => {
 
     expect(verifyIdToken).toHaveBeenCalledWith('Firebase-ID-Token');
     expect(link).not.toHaveBeenCalled();
+  });
+
+  it('인증된 UID의 Google grant와 credential을 폐기한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .delete('/api/auth/google/access-token')
+      .set('Authorization', 'Bearer Firebase-ID-Token')
+      .expect(HttpStatus.NO_CONTENT)
+      .expect('');
+
+    expect(verifyIdToken).toHaveBeenCalledWith('Firebase-ID-Token');
+    expect(revoke).toHaveBeenCalledWith('user-1');
+  });
+
+  it('Google grant 폐기에 인증 token이 없으면 unauthenticated로 거부한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .delete('/api/auth/google/access-token')
+      .expect(HttpStatus.UNAUTHORIZED)
+      .expect({
+        code: 'unauthenticated',
+        message: '인증 토큰이 필요합니다.',
+      });
+
+    expect(verifyIdToken).not.toHaveBeenCalled();
+    expect(revoke).not.toHaveBeenCalled();
   });
 });
