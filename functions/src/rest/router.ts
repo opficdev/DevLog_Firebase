@@ -2,10 +2,6 @@
 export type RestAction =
     "requestTodoDeletion" |
     "undoTodoDeletion" |
-    "requestWebPageDeletion" |
-    "undoWebPageDeletion" |
-    "requestPushNotificationDeletion" |
-    "undoPushNotificationDeletion" |
     "createAppleChallenge" |
     "requestAppleCustomToken" |
     "linkAppleProvider" |
@@ -53,32 +49,6 @@ export function matchRestRoute(method: string, routeSegments: string[]): RestRou
             routeSegments[1],
             "requestTodoDeletion",
             "undoTodoDeletion"
-        );
-    }
-
-    if (
-        routeSegments.length === 3 &&
-        routeSegments[0] === "web-pages" &&
-        routeSegments[2] === "deletion-request"
-    ) {
-        return deletionRoute(
-            normalizedMethod,
-            routeSegments[1],
-            "requestWebPageDeletion",
-            "undoWebPageDeletion"
-        );
-    }
-
-    if (
-        routeSegments.length === 3 &&
-        routeSegments[0] === "push-notifications" &&
-        routeSegments[2] === "deletion-request"
-    ) {
-        return deletionRoute(
-            normalizedMethod,
-            routeSegments[1],
-            "requestPushNotificationDeletion",
-            "undoPushNotificationDeletion"
         );
     }
 

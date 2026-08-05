@@ -7,14 +7,6 @@ import * as logger from "firebase-functions/logger";
 import { toError } from "../common/error";
 import { requestTodoDeletionInFirestore, undoTodoDeletionInFirestore } from "./todoDeletion";
 import {
-    requestPushNotificationDeletionInFirestore,
-    undoPushNotificationDeletionInFirestore
-} from "./pushNotificationDeletion";
-import {
-    requestWebPageDeletionByDocumentID,
-    undoWebPageDeletionByDocumentID
-} from "./webPageDeletion";
-import {
     createAppleChallengeWithDatabase,
     linkAppleProviderWithDatabase,
     requestAppleCustomTokenWithDatabase,
@@ -132,18 +124,6 @@ async function handleRoute(
         return { success: true };
     case "undoTodoDeletion":
         await undoTodoDeletionInFirestore(db, requiredUID(uid), requiredID(route));
-        return { success: true };
-    case "requestWebPageDeletion":
-        await requestWebPageDeletionByDocumentID(db, requiredUID(uid), requiredID(route));
-        return { success: true };
-    case "undoWebPageDeletion":
-        await undoWebPageDeletionByDocumentID(db, requiredUID(uid), requiredID(route));
-        return { success: true };
-    case "requestPushNotificationDeletion":
-        await requestPushNotificationDeletionInFirestore(db, requiredUID(uid), requiredID(route));
-        return { success: true };
-    case "undoPushNotificationDeletion":
-        await undoPushNotificationDeletionInFirestore(db, requiredUID(uid), requiredID(route));
         return { success: true };
     case "createAppleChallenge":
         return createAppleChallengeWithDatabase(db);
