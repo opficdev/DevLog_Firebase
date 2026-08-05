@@ -32,6 +32,7 @@ jest.mock('firebase-admin/firestore', () => ({
 describe('Google 인증 API', () => {
   const verifyIdToken = jest.fn();
   const customToken = jest.fn();
+  const link = jest.fn();
   let app: INestApplication;
 
   beforeAll(async () => {
@@ -45,7 +46,7 @@ describe('Google 인증 API', () => {
       .overrideProvider(FIREBASE_FIRESTORE_TOKEN)
       .useValue({})
       .overrideProvider(GoogleAuthenticationService)
-      .useValue({ customToken })
+      .useValue({ customToken, link })
       .compile();
 
     app = module.createNestApplication();
@@ -54,8 +55,9 @@ describe('Google 인증 API', () => {
   });
 
   beforeEach(() => {
-    verifyIdToken.mockReset();
+    verifyIdToken.mockReset().mockResolvedValue({ uid: 'user-1' });
     customToken.mockReset().mockResolvedValue('custom-token');
+    link.mockReset().mockResolvedValue(undefined);
   });
 
   afterAll(async () => {
@@ -89,5 +91,52 @@ describe('Google 인증 API', () => {
 
     expect(verifyIdToken).not.toHaveBeenCalled();
     expect(customToken).not.toHaveBeenCalled();
+  });
+
+  it('인증된 UID로 Google 계정을 연결한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .put('/api/auth/google/authorization-code/account-link')
+      .set('Authorization', 'Bearer Firebase-ID-Token')
+      .send({ serverAuthCode: ' server-auth-code ' })
+      .expect(HttpStatus.NO_CONTENT)
+      .expect('');
+
+    expect(verifyIdToken).toHaveBeenCalledWith('Firebase-ID-Token');
+    expect(link).toHaveBeenCalledWith('user-1', 'server-auth-code');
+  });
+
+  it('계정 연결에 인증 token이 없으면 unauthenticated로 거부한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .put('/api/auth/google/authorization-code/account-link')
+      .send({ serverAuthCode: 'server-auth-code' })
+      .expect(HttpStatus.UNAUTHORIZED)
+      .expect({
+        code: 'unauthenticated',
+        message: '인증 토큰이 필요합니다.',
+      });
+
+    expect(verifyIdToken).not.toHaveBeenCalled();
+    expect(link).not.toHaveBeenCalled();
+  });
+
+  it('계정 연결에 serverAuthCode가 없으면 invalid-argument로 거부한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .put('/api/auth/google/authorization-code/account-link')
+      .set('Authorization', 'Bearer Firebase-ID-Token')
+      .send({ serverAuthCode: ' ' })
+      .expect(HttpStatus.BAD_REQUEST)
+      .expect({
+        code: 'invalid-argument',
+        message: 'serverAuthCode가 필요합니다.',
+      });
+
+    expect(verifyIdToken).toHaveBeenCalledWith('Firebase-ID-Token');
+    expect(link).not.toHaveBeenCalled();
   });
 });

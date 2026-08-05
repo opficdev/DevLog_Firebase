@@ -1,5 +1,14 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Put,
+  Req,
+} from '@nestjs/common';
 
+import { type FirebaseAuthenticatedRequest } from '../auth/firebase-authenticated-request';
 import { Public } from '../auth/public.decorator';
 import { ApiException } from '../common/api.exception';
 import { GoogleAuthenticationService } from './google-authentication.service';
@@ -22,10 +31,10 @@ export class GoogleAuthenticationController {
   @Post('authorization-code/custom-token')
   @HttpCode(HttpStatus.OK)
   async customToken(@Body() body: unknown): Promise<{ customToken: string }> {
-    const serverAuthCode =
-      body && typeof body === 'object' && !Array.isArray(body)
-        ? (body as Record<string, unknown>).serverAuthCode
-        : undefined;
+    let serverAuthCode: unknown;
+    if (body && typeof body === 'object' && !Array.isArray(body)) {
+      serverAuthCode = (body as Record<string, unknown>).serverAuthCode;
+    }
     if (typeof serverAuthCode !== 'string' || !serverAuthCode.trim()) {
       throw missingServerAuthCodeException;
     }
@@ -33,5 +42,32 @@ export class GoogleAuthenticationController {
     return {
       customToken: await this.service.customToken(serverAuthCode.trim()),
     };
+  }
+
+  // serverAuthCode를 검증해 인증된 사용자의 Google 계정을 연결합니다.
+  @Put('authorization-code/account-link')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async link(
+    @Req() request: FirebaseAuthenticatedRequest,
+    @Body() body: unknown,
+  ): Promise<void> {
+    const uid = request.uid;
+    if (!uid) {
+      throw new ApiException(
+        HttpStatus.UNAUTHORIZED,
+        'unauthenticated',
+        '인증된 사용자가 아닙니다.',
+      );
+    }
+
+    let serverAuthCode: unknown;
+    if (body && typeof body === 'object' && !Array.isArray(body)) {
+      serverAuthCode = (body as Record<string, unknown>).serverAuthCode;
+    }
+    if (typeof serverAuthCode !== 'string' || !serverAuthCode.trim()) {
+      throw missingServerAuthCodeException;
+    }
+
+    await this.service.link(uid, serverAuthCode.trim());
   }
 }
