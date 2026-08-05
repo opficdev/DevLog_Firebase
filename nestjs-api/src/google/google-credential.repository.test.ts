@@ -9,7 +9,11 @@ import { GoogleCredentialRepository } from './google-credential.repository';
 
 describe(GoogleCredentialRepository.name, () => {
   const transactionGet = jest.fn();
-  const set = jest.fn();
+  const set = jest.fn<
+    void,
+    [unknown, Record<string, unknown>, { merge: boolean }]
+  >();
+  const update = jest.fn<void, [unknown, Record<string, unknown>]>();
   const get = jest.fn();
   const reference = { get };
   const doc = jest.fn().mockReturnValue(reference);
@@ -27,9 +31,120 @@ describe(GoogleCredentialRepository.name, () => {
         callback: (transaction: {
           get: typeof transactionGet;
           set: typeof set;
+          update: typeof update;
         }) => Promise<unknown>,
-      ) => callback({ get: transactionGet, set }),
+      ) => callback({ get: transactionGet, set, update }),
     );
+  });
+
+  it('Google 계정 연결 claim을 획득한다', async () => {
+    transactionGet
+      .mockResolvedValueOnce({ data: () => undefined })
+      .mockResolvedValueOnce({ data: () => undefined });
+
+    const claim = await repository.claimAccountLink('user-1');
+
+    expect(Buffer.from(claim, 'base64url')).toHaveLength(32);
+    expect(set).toHaveBeenCalledWith(
+      reference,
+      expect.objectContaining({ accountLinkClaim: claim }),
+      { merge: true },
+    );
+    expect(set.mock.calls[0]?.[1].accountLinkExpiresAt).toBeInstanceOf(
+      Timestamp,
+    );
+  });
+
+  it('삭제 중인 사용자의 계정 연결 claim 획득을 거부한다', async () => {
+    transactionGet
+      .mockResolvedValueOnce({ data: () => ({ deletionStartedAt: {} }) })
+      .mockResolvedValueOnce({ data: () => undefined });
+
+    await expect(repository.claimAccountLink('user-1')).rejects.toMatchObject({
+      status: HttpStatus.PRECONDITION_FAILED,
+      response: { code: 'failed-precondition' },
+    });
+  });
+
+  it('credential 폐기 중이면 계정 연결 claim 획득을 거부한다', async () => {
+    transactionGet
+      .mockResolvedValueOnce({ data: () => undefined })
+      .mockResolvedValueOnce({
+        data: () => ({
+          revocationClaim: 'revocation-claim',
+          revocationExpiresAt: Timestamp.fromMillis(Date.now() + 60_000),
+        }),
+      });
+
+    await expect(repository.claimAccountLink('user-1')).rejects.toMatchObject({
+      status: HttpStatus.CONFLICT,
+      response: { code: 'aborted' },
+    });
+  });
+
+  it('계정 연결 중이면 새 claim 획득을 거부한다', async () => {
+    transactionGet
+      .mockResolvedValueOnce({ data: () => undefined })
+      .mockResolvedValueOnce({
+        data: () => ({
+          accountLinkClaim: 'account-link-claim',
+          accountLinkExpiresAt: Timestamp.fromMillis(Date.now() + 60_000),
+        }),
+      });
+
+    await expect(repository.claimAccountLink('user-1')).rejects.toMatchObject({
+      status: HttpStatus.CONFLICT,
+      response: { code: 'google-account-link-in-progress' },
+    });
+  });
+
+  it('소유한 계정 연결 claim을 연장한다', async () => {
+    transactionGet.mockResolvedValue({
+      data: () => ({ accountLinkClaim: 'claim' }),
+    });
+
+    await expect(repository.renewAccountLink('user-1', 'claim')).resolves.toBe(
+      true,
+    );
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update.mock.calls[0]?.[0]).toBe(reference);
+    expect(update.mock.calls[0]?.[1].accountLinkExpiresAt).toBeInstanceOf(
+      Timestamp,
+    );
+  });
+
+  it('소유하지 않은 계정 연결 claim은 연장하지 않는다', async () => {
+    transactionGet.mockResolvedValue({
+      data: () => ({ accountLinkClaim: 'other-claim' }),
+    });
+
+    await expect(repository.renewAccountLink('user-1', 'claim')).resolves.toBe(
+      false,
+    );
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('소유한 계정 연결 claim을 해제한다', async () => {
+    transactionGet.mockResolvedValue({
+      data: () => ({ accountLinkClaim: 'claim' }),
+    });
+
+    await repository.releaseAccountLink('user-1', 'claim');
+
+    expect(update).toHaveBeenCalledWith(reference, {
+      accountLinkClaim: FieldValue.delete(),
+      accountLinkExpiresAt: FieldValue.delete(),
+    });
+  });
+
+  it('소유하지 않은 계정 연결 claim은 해제하지 않는다', async () => {
+    transactionGet.mockResolvedValue({
+      data: () => ({ accountLinkClaim: 'other-claim' }),
+    });
+
+    await repository.releaseAccountLink('user-1', 'claim');
+
+    expect(update).not.toHaveBeenCalled();
   });
 
   it('새 Google credential을 저장한다', async () => {
