@@ -13,11 +13,17 @@ import { GoogleProviderRepository } from './google-provider.repository';
 describe(GoogleAuthenticationService.name, () => {
   const exchangeAuthorizationCode = jest.fn();
   const verifyIdToken = jest.fn();
+  const revokeOAuthToken = jest.fn();
   const resolveUid = jest.fn();
   const link = jest.fn();
   const claimAccountLink = jest.fn();
   const renewAccountLink = jest.fn();
   const releaseAccountLink = jest.fn();
+  const find = jest.fn();
+  const deleteEmpty = jest.fn();
+  const claimRevocation = jest.fn();
+  const deleteRevoked = jest.fn();
+  const releaseRevocation = jest.fn();
   const save = jest.fn();
   const createCustomToken = jest.fn();
   const updateUser = jest.fn();
@@ -33,11 +39,17 @@ describe(GoogleAuthenticationService.name, () => {
     configuration,
     {
       exchangeAuthorizationCode,
+      revokeOAuthToken,
       verifyIdToken,
     } as unknown as GoogleAuthenticationClient,
     {
       claimAccountLink,
+      claimRevocation,
+      deleteEmpty,
+      deleteRevoked,
+      find,
       releaseAccountLink,
+      releaseRevocation,
       renewAccountLink,
       save,
     } as unknown as GoogleCredentialRepository,
@@ -321,6 +333,109 @@ describe(GoogleAuthenticationService.name, () => {
       compensationError,
       { uid: 'user-1' },
     );
+  });
+
+  it('refresh token으로 grant를 폐기한 뒤 credential을 삭제한다', async () => {
+    const sequence: string[] = [];
+    const credential = {
+      accessToken: 'access-token',
+      clientId: 'client-id',
+      refreshToken: 'refresh-token',
+    };
+    find.mockImplementation(() => {
+      sequence.push('credential 조회');
+      return Promise.resolve(credential);
+    });
+    claimRevocation.mockImplementation(() => {
+      sequence.push('폐기 claim 획득');
+      return Promise.resolve('claim');
+    });
+    revokeOAuthToken.mockImplementation(() => {
+      sequence.push('Google grant 폐기');
+      return Promise.resolve();
+    });
+    deleteRevoked.mockImplementation(() => {
+      sequence.push('credential 삭제');
+      return Promise.resolve();
+    });
+
+    await expect(service.revoke('user-1')).resolves.toBeUndefined();
+    expect(find).toHaveBeenCalledWith('user-1');
+    expect(claimRevocation).toHaveBeenCalledWith('user-1', credential);
+    expect(revokeOAuthToken).toHaveBeenCalledWith('user-1', 'refresh-token');
+    expect(deleteRevoked).toHaveBeenCalledWith('user-1', credential, 'claim');
+    expect(sequence).toEqual([
+      'credential 조회',
+      '폐기 claim 획득',
+      'Google grant 폐기',
+      'credential 삭제',
+    ]);
+  });
+
+  it('refresh token이 없으면 access token으로 grant를 폐기한다', async () => {
+    const credential = {
+      accessToken: 'access-token',
+      clientId: 'client-id',
+    };
+    find.mockResolvedValue(credential);
+    claimRevocation.mockResolvedValue('claim');
+
+    await expect(service.revoke('user-1')).resolves.toBeUndefined();
+    expect(revokeOAuthToken).toHaveBeenCalledWith('user-1', 'access-token');
+    expect(deleteRevoked).toHaveBeenCalledWith('user-1', credential, 'claim');
+  });
+
+  it('저장된 credential이 없으면 빈 문서만 삭제한다', async () => {
+    find.mockResolvedValue(undefined);
+
+    await expect(service.revoke('user-1')).resolves.toBeUndefined();
+    expect(deleteEmpty).toHaveBeenCalledWith('user-1');
+    expect(claimRevocation).not.toHaveBeenCalled();
+    expect(revokeOAuthToken).not.toHaveBeenCalled();
+    expect(deleteRevoked).not.toHaveBeenCalled();
+  });
+
+  it('Google grant 폐기 실패 시 claim을 해제하고 오류를 전달한다', async () => {
+    const error = new Error('Google grant 폐기 실패');
+    const credential = {
+      accessToken: 'access-token',
+      clientId: 'client-id',
+    };
+    find.mockResolvedValue(credential);
+    claimRevocation.mockResolvedValue('claim');
+    revokeOAuthToken.mockRejectedValue(error);
+
+    await expect(service.revoke('user-1')).rejects.toBe(error);
+    expect(releaseRevocation).toHaveBeenCalledWith('user-1', 'claim');
+    expect(deleteRevoked).not.toHaveBeenCalled();
+  });
+
+  it('credential 삭제 실패 시 claim을 해제하고 오류를 전달한다', async () => {
+    const error = new Error('credential 삭제 실패');
+    const credential = {
+      accessToken: 'access-token',
+      clientId: 'client-id',
+    };
+    find.mockResolvedValue(credential);
+    claimRevocation.mockResolvedValue('claim');
+    deleteRevoked.mockRejectedValue(error);
+
+    await expect(service.revoke('user-1')).rejects.toBe(error);
+    expect(releaseRevocation).toHaveBeenCalledWith('user-1', 'claim');
+  });
+
+  it('claim 해제 실패 시 해제 오류를 전달한다', async () => {
+    const revocationError = new Error('Google grant 폐기 실패');
+    const releaseError = new Error('claim 해제 실패');
+    find.mockResolvedValue({
+      accessToken: 'access-token',
+      clientId: 'client-id',
+    });
+    claimRevocation.mockResolvedValue('claim');
+    revokeOAuthToken.mockRejectedValue(revocationError);
+    releaseRevocation.mockRejectedValue(releaseError);
+
+    await expect(service.revoke('user-1')).rejects.toBe(releaseError);
   });
 });
 

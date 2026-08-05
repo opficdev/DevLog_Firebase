@@ -8,7 +8,7 @@ import { type GoogleAuthenticationConfiguration } from './google-authentication.
 import { GoogleCredentialRepository } from './google-credential.repository';
 import { GoogleProviderRepository } from './google-provider.repository';
 
-// Google 인증과 Firebase token 발급·사용자 연결 순서를 조정합니다.
+// Google 인증과 Firebase 사용자 연결, credential 처리를 조정합니다.
 @Injectable()
 export class GoogleAuthenticationService {
   // 계정 연결 정리 실패를 기록하는 로그 기능을 저장합니다.
@@ -88,6 +88,30 @@ export class GoogleAuthenticationService {
           uid,
         });
       }
+      throw error;
+    }
+  }
+
+  // Google grant를 폐기한 뒤 같은 credential 문서를 삭제합니다.
+  async revoke(uid: string): Promise<void> {
+    const credential = await this.credentialRepository.find(uid);
+    if (!credential) {
+      await this.credentialRepository.deleteEmpty(uid);
+      return;
+    }
+
+    const claim = await this.credentialRepository.claimRevocation(
+      uid,
+      credential,
+    );
+    try {
+      await this.client.revokeOAuthToken(
+        uid,
+        credential.refreshToken ?? credential.accessToken,
+      );
+      await this.credentialRepository.deleteRevoked(uid, credential, claim);
+    } catch (error) {
+      await this.credentialRepository.releaseRevocation(uid, claim);
       throw error;
     }
   }
