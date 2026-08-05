@@ -5,7 +5,6 @@ import type { Request } from "firebase-functions/v2/https";
 import type { Response } from "express";
 import * as logger from "firebase-functions/logger";
 import { toError } from "../common/error";
-import { requestTodoDeletionInFirestore, undoTodoDeletionInFirestore } from "./todoDeletion";
 import {
     createAppleChallengeWithDatabase,
     linkAppleProviderWithDatabase,
@@ -119,12 +118,6 @@ async function handleRoute(
     switch (route.action) {
     case "githubCallback":
         return undefined;
-    case "requestTodoDeletion":
-        await requestTodoDeletionInFirestore(db, requiredUID(uid), requiredID(route));
-        return { success: true };
-    case "undoTodoDeletion":
-        await undoTodoDeletionInFirestore(db, requiredUID(uid), requiredID(route));
-        return { success: true };
     case "createAppleChallenge":
         return createAppleChallengeWithDatabase(db);
     case "requestAppleCustomToken":
@@ -297,14 +290,6 @@ function parseBodyString(body: string): Record<string, unknown> {
     }
 
     return {};
-}
-
-function requiredID(route: RestRoute): string {
-    const id = route.id?.trim();
-    if (!id) {
-        throw new HttpsError("invalid-argument", "id가 필요합니다.");
-    }
-    return id;
 }
 
 function requiredUID(uid?: string): string {

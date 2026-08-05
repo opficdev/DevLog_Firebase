@@ -11,24 +11,6 @@ assert.deepStrictEqual(
 assert.strictEqual(parseRestRouteSegments(["staging", "todos"]), undefined);
 
 assert.deepStrictEqual(
-    matchRestRoute("POST", ["todos", "todo-1", "deletion-request"]),
-    {
-        action: "requestTodoDeletion",
-        requiresAuth: true,
-        id: "todo-1"
-    }
-);
-
-assert.deepStrictEqual(
-    matchRestRoute("DELETE", ["todos", "todo-1", "deletion-request"]),
-    {
-        action: "undoTodoDeletion",
-        requiresAuth: true,
-        id: "todo-1"
-    }
-);
-
-assert.deepStrictEqual(
     matchRestRoute("POST", ["auth", "apple", "challenges"]),
     {
         action: "createAppleChallenge",
