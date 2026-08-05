@@ -13,11 +13,7 @@ export type RestAction =
     "createGithubAccountLinkSession" |
     "linkGithubAccount" |
     "unlinkGithubAccount" |
-    "revokeGithubAccessToken" |
-    "requestGoogleCustomToken" |
-    "linkGoogleAccount" |
-    "unlinkGoogleAccount" |
-    "revokeGoogleAccessToken";
+    "revokeGithubAccessToken";
 
 export interface RestRoute {
     action: RestAction;
@@ -133,40 +129,6 @@ export function matchRestRoute(method: string, routeSegments: string[]): RestRou
     if (routeSegments.join("/") === "auth/github/access-token" && normalizedMethod === "DELETE") {
         return {
             action: "revokeGithubAccessToken",
-            requiresAuth: true
-        };
-    }
-
-    if (
-        routeSegments.join("/") === "auth/google/authorization-code/custom-token" &&
-        normalizedMethod === "POST"
-    ) {
-        return {
-            action: "requestGoogleCustomToken",
-            requiresAuth: false
-        };
-    }
-
-    if (
-        routeSegments.join("/") === "auth/google/authorization-code/account-link" &&
-        normalizedMethod === "PUT"
-    ) {
-        return {
-            action: "linkGoogleAccount",
-            requiresAuth: true
-        };
-    }
-
-    if (routeSegments.join("/") === "auth/google/account-link" && normalizedMethod === "DELETE") {
-        return {
-            action: "unlinkGoogleAccount",
-            requiresAuth: true
-        };
-    }
-
-    if (routeSegments.join("/") === "auth/google/access-token" && normalizedMethod === "DELETE") {
-        return {
-            action: "revokeGoogleAccessToken",
             requiresAuth: true
         };
     }

@@ -19,8 +19,7 @@ const functionExports = require("../lib/index");
 
 const apiSecretKeys = [
     "APPLE_AUTH_CONFIG",
-    "GITHUB_OAUTH_CONFIG",
-    "GOOGLE_OAUTH_CONFIG"
+    "GITHUB_OAUTH_CONFIG"
 ];
 const githubSecretKeys = ["GITHUB_OAUTH_CONFIG"];
 

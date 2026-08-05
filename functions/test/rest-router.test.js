@@ -96,39 +96,11 @@ for (const [method, segments, action, requiresAuth] of githubOAuthRoutes) {
     );
 }
 
-const googleOAuthRoutes = [
-    [
-        "POST",
-        ["auth", "google", "authorization-code", "custom-token"],
-        "requestGoogleCustomToken",
-        false
-    ],
-    [
-        "PUT",
-        ["auth", "google", "authorization-code", "account-link"],
-        "linkGoogleAccount",
-        true
-    ],
-    ["DELETE", ["auth", "google", "account-link"], "unlinkGoogleAccount", true],
-    ["DELETE", ["auth", "google", "access-token"], "revokeGoogleAccessToken", true]
-];
-
-for (const [method, segments, action, requiresAuth] of googleOAuthRoutes) {
-    assert.deepStrictEqual(
-        matchRestRoute(method, segments),
-        { action, requiresAuth }
-    );
-}
-
-assert.strictEqual(
-    matchRestRoute("GET", ["auth", "google", "authorization-code", "custom-token"]),
-    undefined
-);
-assert.strictEqual(
-    matchRestRoute("POST", ["auth", "google", "authorization-code", "account-link"]),
-    undefined
-);
 for (const [method, segments] of [
+    ["POST", ["auth", "google", "authorization-code", "custom-token"]],
+    ["PUT", ["auth", "google", "authorization-code", "account-link"]],
+    ["DELETE", ["auth", "google", "account-link"]],
+    ["DELETE", ["auth", "google", "access-token"]],
     ["POST", ["auth", "google", "sign-in-sessions"]],
     ["GET", ["auth", "google", "callback"]],
     ["POST", ["auth", "google", "custom-token"]],
@@ -217,14 +189,6 @@ const githubErrors = [
     ["github_revoke_failed", 502, "github-revoke-failed"]
 ];
 
-const googleErrors = [
-    ["invalid_google_proof", 401, "invalid-google-proof"],
-    ["google_account_link_in_progress", 409, "google-account-link-in-progress"],
-    ["google_provider_link_conflict", 409, "google-provider-link-conflict"],
-    ["google_provider_failed", 502, "google-provider-failed"],
-    ["google_revoke_failed", 502, "google-revoke-failed"]
-];
-
 for (const [reason, status, code] of oauthErrors) {
     const error = restErrorFrom(new HttpsError("failed-precondition", reason, { reason }));
     assert.strictEqual(error.status, status);
@@ -232,12 +196,6 @@ for (const [reason, status, code] of oauthErrors) {
 }
 
 for (const [reason, status, code] of githubErrors) {
-    const error = restErrorFrom(new HttpsError("internal", reason, { reason }));
-    assert.strictEqual(error.status, status);
-    assert.strictEqual(error.code, code);
-}
-
-for (const [reason, status, code] of googleErrors) {
     const error = restErrorFrom(new HttpsError("internal", reason, { reason }));
     assert.strictEqual(error.status, status);
     assert.strictEqual(error.code, code);
