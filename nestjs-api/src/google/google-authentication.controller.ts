@@ -72,6 +72,22 @@ export class GoogleAuthenticationController {
     await this.service.link(uid, serverAuthCode.trim());
   }
 
+  // 인증된 사용자의 Google 계정 연결을 해제합니다.
+  @Delete('account-link')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async unlink(@Req() request: FirebaseAuthenticatedRequest): Promise<void> {
+    const uid = request.uid;
+    if (!uid) {
+      throw new ApiException(
+        HttpStatus.UNAUTHORIZED,
+        'unauthenticated',
+        '인증된 사용자가 아닙니다.',
+      );
+    }
+
+    await this.service.unlink(uid);
+  }
+
   // 인증된 사용자의 Google grant와 credential을 폐기합니다.
   @Delete('access-token')
   @HttpCode(HttpStatus.NO_CONTENT)
