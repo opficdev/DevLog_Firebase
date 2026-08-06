@@ -7,10 +7,12 @@ describe(AppleAuthenticationController.name, () => {
   const createChallenge = jest.fn();
   const requestCustomTokenWithChallenge = jest.fn();
   const requestCustomTokenWithIdToken = jest.fn();
+  const linkProvider = jest.fn();
   const controller = new AppleAuthenticationController({
     createChallenge,
     requestCustomTokenWithChallenge,
     requestCustomTokenWithIdToken,
+    linkProvider,
   } as unknown as AppleAuthenticationService);
 
   beforeEach(() => {
@@ -113,5 +115,66 @@ describe(AppleAuthenticationController.name, () => {
       },
     });
     expect(requestCustomTokenWithChallenge).not.toHaveBeenCalled();
+  });
+
+  it('인증된 uid와 정리한 입력으로 Apple provider를 연결한다', async () => {
+    linkProvider.mockResolvedValue(undefined);
+
+    await expect(
+      controller.link(
+        { headers: {}, uid: 'user-1' },
+        {
+          challengeId: ' challenge-1 ',
+          authorizationCode: ' authorization-code ',
+          credentialEmail: ' user@example.com ',
+        },
+      ),
+    ).resolves.toEqual({ success: true });
+    expect(linkProvider).toHaveBeenCalledWith(
+      'user-1',
+      'challenge-1',
+      'authorization-code',
+      'user@example.com',
+    );
+  });
+
+  it('인증된 uid가 없으면 Apple provider 연결을 거부한다', async () => {
+    await expect(
+      controller.link(
+        { headers: {} },
+        {
+          challengeId: 'challenge-1',
+          authorizationCode: 'authorization-code',
+        },
+      ),
+    ).rejects.toMatchObject({
+      status: HttpStatus.UNAUTHORIZED,
+      response: {
+        code: 'unauthenticated',
+        message: '인증된 사용자가 아닙니다.',
+      },
+    });
+    expect(linkProvider).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ authorizationCode: 'code' }, 'challengeId가 필요합니다.'],
+    [{ challengeId: 'challenge-1' }, 'authorizationCode가 필요합니다.'],
+    [
+      {
+        challengeId: 'challenge-1',
+        authorizationCode: 'code',
+        credentialEmail: 1,
+      },
+      'credentialEmail 형식이 올바르지 않습니다.',
+    ],
+  ])('유효하지 않은 account link 요청을 거부한다', async (body, message) => {
+    await expect(
+      controller.link({ headers: {}, uid: 'user-1' }, body),
+    ).rejects.toMatchObject({
+      status: HttpStatus.BAD_REQUEST,
+      response: { code: 'invalid-argument', message },
+    });
+    expect(linkProvider).not.toHaveBeenCalled();
   });
 });

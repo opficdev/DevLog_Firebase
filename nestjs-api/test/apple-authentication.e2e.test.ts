@@ -34,6 +34,7 @@ describe('Apple 로그인 API', () => {
   const createChallenge = jest.fn();
   const requestCustomTokenWithChallenge = jest.fn();
   const requestCustomTokenWithIdToken = jest.fn();
+  const linkProvider = jest.fn();
   let app: INestApplication;
 
   beforeAll(async () => {
@@ -51,6 +52,7 @@ describe('Apple 로그인 API', () => {
         createChallenge,
         requestCustomTokenWithChallenge,
         requestCustomTokenWithIdToken,
+        linkProvider,
       })
       .compile();
 
@@ -70,6 +72,7 @@ describe('Apple 로그인 API', () => {
       .mockReset()
       .mockResolvedValue('custom-token');
     requestCustomTokenWithIdToken.mockReset().mockResolvedValue('custom-token');
+    linkProvider.mockReset().mockResolvedValue(undefined);
   });
 
   afterAll(async () => {
@@ -232,5 +235,46 @@ describe('Apple 로그인 API', () => {
         code: 'expired-apple-challenge',
         message: 'Apple 인증 challenge가 만료되었습니다.',
       });
+  });
+
+  it('인증된 사용자의 Apple provider를 연결한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .put('/api/auth/apple/account-link')
+      .set('Authorization', 'Bearer firebase-id-token')
+      .send({
+        challengeId: ' challenge-1 ',
+        authorizationCode: ' authorization-code ',
+        credentialEmail: ' user@example.com ',
+      })
+      .expect(HttpStatus.OK)
+      .expect({ success: true });
+
+    expect(verifyIdToken).toHaveBeenCalledWith('firebase-id-token');
+    expect(linkProvider).toHaveBeenCalledWith(
+      'user-1',
+      'challenge-1',
+      'authorization-code',
+      'user@example.com',
+    );
+  });
+
+  it('인증 token 없는 Apple provider 연결을 거부한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .put('/api/auth/apple/account-link')
+      .send({
+        challengeId: 'challenge-1',
+        authorizationCode: 'authorization-code',
+      })
+      .expect(HttpStatus.UNAUTHORIZED)
+      .expect({
+        code: 'unauthenticated',
+        message: '인증 토큰이 필요합니다.',
+      });
+
+    expect(linkProvider).not.toHaveBeenCalled();
   });
 });

@@ -5,8 +5,11 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Put,
+  Req,
 } from '@nestjs/common';
 
+import { type FirebaseAuthenticatedRequest } from '../auth/firebase-authenticated-request';
 import { Public } from '../auth/public.decorator';
 import { ApiException } from '../common/api.exception';
 import { AppleAuthenticationService } from './apple-authentication.service';
@@ -56,6 +59,38 @@ export class AppleAuthenticationController {
       ),
     };
   }
+
+  // challenge로 증명한 Apple provider를 인증된 사용자에게 연결합니다.
+  @Put('account-link')
+  @HttpCode(HttpStatus.OK)
+  async link(
+    @Req() request: FirebaseAuthenticatedRequest,
+    @Body() body: unknown,
+  ): Promise<{ success: true }> {
+    const uid = requiredAuthenticatedUid(request);
+    const value = bodyRecord(body);
+    await this.service.linkProvider(
+      uid,
+      requiredBodyString(value, 'challengeId'),
+      requiredBodyString(value, 'authorizationCode'),
+      optionalBodyString(value, 'credentialEmail'),
+    );
+    return { success: true };
+  }
+}
+
+// 인증 경계에서 검증한 사용자 식별자를 반환합니다.
+function requiredAuthenticatedUid(
+  request: FirebaseAuthenticatedRequest,
+): string {
+  if (!request.uid) {
+    throw new ApiException(
+      HttpStatus.UNAUTHORIZED,
+      'unauthenticated',
+      '인증된 사용자가 아닙니다.',
+    );
+  }
+  return request.uid;
 }
 
 // 요청 body를 문자열 필드 조회가 가능한 객체로 변환합니다.

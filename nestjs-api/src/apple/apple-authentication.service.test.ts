@@ -22,6 +22,7 @@ describe(AppleAuthenticationService.name, () => {
   const revokeExchangedTokens = jest.fn();
   const resolveUid = jest.fn();
   const ensureProvider = jest.fn();
+  const link = jest.fn();
   const update = jest.fn();
   const save = jest.fn();
   const service = new AppleAuthenticationService(
@@ -33,7 +34,7 @@ describe(AppleAuthenticationService.name, () => {
       revokeExchangedTokens,
     } as unknown as AppleAuthenticationClient,
     { create: createChallenge, consume } as unknown as AppleChallengeRepository,
-    { resolveUid, ensureProvider } as unknown as AppleProviderRepository,
+    { resolveUid, ensureProvider, link } as unknown as AppleProviderRepository,
     { update } as unknown as AppleProfileRepository,
     { save } as unknown as AppleCredentialRepository,
   );
@@ -52,6 +53,7 @@ describe(AppleAuthenticationService.name, () => {
     revokeExchangedTokens.mockResolvedValue(undefined);
     resolveUid.mockResolvedValue('user-1');
     ensureProvider.mockResolvedValue(undefined);
+    link.mockResolvedValue(undefined);
     update.mockResolvedValue(undefined);
     save.mockResolvedValue(undefined);
     createCustomToken.mockResolvedValue('custom-token');
@@ -429,6 +431,87 @@ describe(AppleAuthenticationService.name, () => {
     ).rejects.toBe(error);
     expect(save).toHaveBeenCalledWith('user-1', 'refresh-token');
     expect(revokeExchangedTokens).not.toHaveBeenCalled();
+  });
+
+  it('Apple provider 연결 처리 순서와 성공 응답을 유지한다', async () => {
+    const sequence: string[] = [];
+    consume.mockImplementation(() => {
+      sequence.push('challenge 소비');
+      return Promise.resolve('hashed-nonce');
+    });
+    exchangeAuthorizationCode.mockImplementation(() => {
+      sequence.push('authorization code 교환');
+      return Promise.resolve(oauthTokens());
+    });
+    verifyIdToken.mockImplementation(() => {
+      sequence.push('ID token 검증');
+      return Promise.resolve(tokenPayload());
+    });
+    requiredRefreshToken.mockImplementation(() => {
+      sequence.push('refresh token 확인');
+      return Promise.resolve('refresh-token');
+    });
+    link.mockImplementation(() => {
+      sequence.push('Apple provider 연결');
+      return Promise.resolve();
+    });
+    save.mockImplementation(() => {
+      sequence.push('Apple credential 저장');
+      return Promise.resolve();
+    });
+
+    await expect(
+      service.linkProvider(
+        'user-1',
+        'challenge-1',
+        'authorization-code',
+        'user@example.com',
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(consume).toHaveBeenCalledWith('challenge-1');
+    expect(exchangeAuthorizationCode).toHaveBeenCalledWith(
+      'authorization-code',
+    );
+    expect(verifyIdToken).toHaveBeenCalledWith('id-token', 'hashed-nonce');
+    expect(requiredRefreshToken).toHaveBeenCalledWith(oauthTokens());
+    expect(link).toHaveBeenCalledWith(
+      'user-1',
+      tokenPayload(),
+      'user@example.com',
+    );
+    expect(save).toHaveBeenCalledWith('user-1', 'refresh-token');
+    expect(revokeExchangedTokens).not.toHaveBeenCalled();
+    expect(sequence).toEqual([
+      'challenge 소비',
+      'authorization code 교환',
+      'ID token 검증',
+      'refresh token 확인',
+      'Apple provider 연결',
+      'Apple credential 저장',
+    ]);
+  });
+
+  it('Apple provider 연결 실패 시 교환 token을 폐기한다', async () => {
+    const error = new Error('Apple provider 연결 실패');
+    link.mockRejectedValue(error);
+
+    await expect(
+      service.linkProvider('user-1', 'challenge-1', 'authorization-code'),
+    ).rejects.toBe(error);
+    expect(revokeExchangedTokens).toHaveBeenCalledWith(oauthTokens());
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('Apple provider 연결 뒤 credential 저장 실패 시 교환 token을 폐기한다', async () => {
+    const error = new Error('Apple credential 저장 실패');
+    save.mockRejectedValue(error);
+
+    await expect(
+      service.linkProvider('user-1', 'challenge-1', 'authorization-code'),
+    ).rejects.toBe(error);
+    expect(link).toHaveBeenCalledWith('user-1', tokenPayload(), undefined);
+    expect(revokeExchangedTokens).toHaveBeenCalledWith(oauthTokens());
   });
 });
 

@@ -19,6 +19,16 @@ const linkConflictException = new ApiException(
   'apple-provider-link-conflict',
   'Apple provider가 다른 계정에 연결되어 있습니다.',
 );
+const emailNotFoundException = new ApiException(
+  HttpStatus.BAD_REQUEST,
+  'email-not-found',
+  '이메일을 찾을 수 없습니다.',
+);
+const emailMismatchException = new ApiException(
+  HttpStatus.BAD_REQUEST,
+  'email-mismatch',
+  '이메일이 일치하지 않습니다.',
+);
 
 // Firebase Auth의 Apple provider 사용자 처리를 담당합니다.
 @Injectable()
@@ -63,6 +73,36 @@ export class AppleProviderRepository {
       }
       throw error;
     }
+  }
+
+  // 현재 사용자와 Apple 이메일 및 provider 소유권을 확인한 뒤 연결합니다.
+  // prettier-ignore
+  async link(
+    uid: string,
+    payload: AppleTokenPayload,
+    credentialEmail?: string,
+  ): Promise<void> {
+    const user = await this.auth.getUser(uid);
+    const appleEmail = verifiedAppleEmail(payload) ?? credentialEmail;
+    if (!user.email || !appleEmail) {
+      throw emailNotFoundException;
+    }
+    if (user.email.toLowerCase() !== appleEmail.toLowerCase()) {
+      throw emailMismatchException;
+    }
+
+    const currentProvider = user.providerData.find(
+      (provider) => provider.providerId === providerId,
+    );
+    if (currentProvider && currentProvider.uid !== payload.sub) {
+      throw linkConflictException;
+    }
+
+    const ownerUid = await this.providerOwnerUid(payload.sub);
+    if (ownerUid && ownerUid !== uid) {
+      throw linkConflictException;
+    }
+    await this.ensureProvider(uid, payload);
   }
 
   // 선택된 Firebase 사용자에게 Apple provider가 없을 때 연결합니다.

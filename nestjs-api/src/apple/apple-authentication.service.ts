@@ -116,4 +116,44 @@ export class AppleAuthenticationService {
 
     return this.auth.createCustomToken(uid);
   }
+
+  // challenge로 증명한 Apple provider와 credential을 현재 사용자에게 연결합니다.
+  // prettier-ignore
+  async linkProvider(
+    uid: string,
+    challengeId: string,
+    authorizationCode: string,
+    credentialEmail?: string,
+  ): Promise<void> {
+    const expectedHashedNonce = await this.challengeRepository.consume(
+      challengeId,
+    );
+    const tokens = await this.client.exchangeAuthorizationCode(
+      authorizationCode,
+    );
+    if (!tokens.idToken) {
+      await this.client.revokeExchangedTokens(tokens);
+      throw missingIdTokenException;
+    }
+
+    let payload: AppleTokenPayload;
+    try {
+      payload = await this.client.verifyIdToken(
+        tokens.idToken,
+        expectedHashedNonce,
+      );
+    } catch (error) {
+      await this.client.revokeExchangedTokens(tokens);
+      throw error;
+    }
+
+    const refreshToken = await this.client.requiredRefreshToken(tokens);
+    try {
+      await this.providerRepository.link(uid, payload, credentialEmail);
+      await this.credentialRepository.save(uid, refreshToken);
+    } catch (error) {
+      await this.client.revokeExchangedTokens(tokens);
+      throw error;
+    }
+  }
 }
