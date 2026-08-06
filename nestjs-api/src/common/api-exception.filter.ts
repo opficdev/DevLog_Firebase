@@ -36,7 +36,6 @@ const apiCodeByHttpStatus = new Map<number, string>([
 interface ApiExceptionResponse {
   /** HTTP 상태를 설정하고 같은 응답 기능을 반환합니다. */
   status(statusCode: number): ApiExceptionResponse;
-
   /** JSON 오류 본문을 클라이언트에 전송합니다. */
   json(body: unknown): void;
 }
