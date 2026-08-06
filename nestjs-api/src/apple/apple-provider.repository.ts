@@ -83,6 +83,7 @@ export class AppleProviderRepository {
     credentialEmail?: string,
   ): Promise<void> {
     const user = await this.auth.getUser(uid);
+    const ownerUid = await this.providerOwnerUid(payload.sub);
     const appleEmail = verifiedAppleEmail(payload) ?? credentialEmail;
     if (!user.email || !appleEmail) {
       throw emailNotFoundException;
@@ -98,7 +99,6 @@ export class AppleProviderRepository {
       throw linkConflictException;
     }
 
-    const ownerUid = await this.providerOwnerUid(payload.sub);
     if (ownerUid && ownerUid !== uid) {
       throw linkConflictException;
     }

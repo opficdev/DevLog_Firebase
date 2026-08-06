@@ -179,6 +179,19 @@ describe(AppleProviderRepository.name, () => {
     });
   });
 
+  it('provider 소유자 조회 실패를 이메일 검증보다 먼저 전달한다', async () => {
+    const error = new Error('provider 소유자 조회 실패');
+    getUser.mockResolvedValue(userRecord('current-uid', [], ''));
+    getUserByProviderUid.mockRejectedValue(error);
+
+    await expect(repository.link('current-uid', payload())).rejects.toBe(error);
+    expect(getUserByProviderUid).toHaveBeenCalledWith(
+      'apple.com',
+      'apple-subject',
+    );
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
   it('검증된 이메일이 없으면 credentialEmail로 Apple provider를 연결한다', async () => {
     getUser.mockResolvedValue(userRecord('current-uid'));
     getUserByProviderUid.mockRejectedValue(authError('auth/user-not-found'));
