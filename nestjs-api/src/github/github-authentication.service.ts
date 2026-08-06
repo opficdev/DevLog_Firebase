@@ -23,6 +23,14 @@ import { GitHubProviderRepository } from './github-provider.repository';
 
 const authorizationEndpoint = 'https://github.com/login/oauth/authorize';
 const appCallbackURL = 'DevLog://oauth-callback';
+const githubProviderId = 'github.com';
+
+// 마지막 로그인 provider 해제 오류입니다.
+const lastProviderException = new ApiException(
+  HttpStatus.PRECONDITION_FAILED,
+  'last-provider',
+  '마지막 로그인 provider는 해제할 수 없습니다.',
+);
 
 // GitHub 인증과 OAuth session 처리를 조정합니다.
 @Injectable()
@@ -179,6 +187,25 @@ export class GitHubAuthenticationService {
     await this.revokePendingCredentials(uid);
     const configuration = this.revocationConfiguration(credential?.clientId);
     await this.revokeCredential(uid, configuration, credential);
+  }
+
+  // GitHub grant와 credential을 정리한 뒤 provider 연결을 해제합니다.
+  async unlink(uid: string): Promise<void> {
+    const user = await this.auth.getUser(uid);
+    const providers = user.providerData ?? [];
+    const hasGitHubProvider = providers.some(
+      (provider) => provider.providerId === githubProviderId,
+    );
+    if (hasGitHubProvider && providers.length <= 1) {
+      throw lastProviderException;
+    }
+
+    await this.revoke(uid);
+    if (hasGitHubProvider) {
+      await this.auth.updateUser(uid, {
+        providersToUnlink: [githubProviderId],
+      });
+    }
   }
 
   // 목적과 UID에 결합된 GitHub OAuth session과 authorization 주소를 생성합니다.

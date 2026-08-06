@@ -70,6 +70,13 @@ export class GitHubAuthenticationController {
     await this.service.revoke(requiredAuthenticatedUid(request));
   }
 
+  // 인증된 사용자의 GitHub provider 연결을 해제합니다.
+  @Delete('account-link')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async unlink(@Req() request: FirebaseAuthenticatedRequest): Promise<void> {
+    await this.service.unlink(requiredAuthenticatedUid(request));
+  }
+
   // GitHub callback 결과를 앱 callback 주소로 전달합니다.
   @Public()
   @Get('callback')
