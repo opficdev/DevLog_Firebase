@@ -12,31 +12,6 @@ interface RestErrorDefinition {
 
 // 정규화된 reason별 REST 오류 응답 정의를 저장합니다.
 const restErrorByReason: Record<string, RestErrorDefinition> = {
-    email_not_found: {
-        status: 400,
-        code: "email-not-found",
-        message: "이메일을 찾을 수 없습니다."
-    },
-    email_mismatch: {
-        status: 400,
-        code: "email-mismatch",
-        message: "이메일이 일치하지 않습니다."
-    },
-    github_email_changed_account_conflict: {
-        status: 409,
-        code: "github-email-changed-account-conflict",
-        message: "GitHub provider가 다른 계정에 연결되어 있습니다."
-    },
-    github_revoke_failed: {
-        status: 502,
-        code: "github-revoke-failed",
-        message: "GitHub grant 폐기에 실패했습니다."
-    },
-    github_provider_failed: {
-        status: 502,
-        code: "github-provider-failed",
-        message: "GitHub 인증 서버 요청에 실패했습니다."
-    },
     invalid_oauth_ticket: {
         status: 400,
         code: "invalid-oauth-ticket",
@@ -61,11 +36,6 @@ const restErrorByReason: Record<string, RestErrorDefinition> = {
         status: 401,
         code: "invalid-app-verifier",
         message: "app verifier가 유효하지 않습니다."
-    },
-    last_provider: {
-        status: 412,
-        code: "last-provider",
-        message: "마지막 로그인 provider는 해제할 수 없습니다."
     }
 };
 
