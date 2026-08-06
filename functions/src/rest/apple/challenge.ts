@@ -1,8 +1,4 @@
-import { createHash, randomBytes } from "crypto";
-import {
-    FieldValue,
-    Timestamp
-} from "firebase-admin/firestore";
+import { FieldValue } from "firebase-admin/firestore";
 import { verifyAppleIdToken } from "../../auth/appleIdToken";
 import type { AppleTokenPayload } from "../../auth/appleIdToken";
 import { FirestorePath } from "../../common/firestorePath";
@@ -13,31 +9,6 @@ import {
 } from "./appleClient";
 import type { AppleTokenResponse } from "./AppleTokenResponse";
 import { appleAuthError } from "./error";
-
-const CHALLENGE_LIFETIME_MILLISECONDS = 5 * 60 * 1000;
-
-// Apple 인증 challenge를 생성하고 서버 전용 문서와 공개 응답을 반환합니다.
-export async function createAppleChallengeWithDatabase(
-    db: FirebaseFirestore.Firestore
-): Promise<{ challengeId: string; hashedNonce: string; expiresAt: string }> {
-    const nonce = randomBytes(32).toString("hex");
-    const hashedNonce = createHash("sha256").update(nonce).digest("hex");
-    const expiresAt = Timestamp.fromMillis(Date.now() + CHALLENGE_LIFETIME_MILLISECONDS);
-    const challengeRef = db.collection(FirestorePath.authChallenges).doc();
-
-    await challengeRef.create({
-        expectedHashedNonce: hashedNonce,
-        expiresAt,
-        consumedAt: null,
-        createdAt: FieldValue.serverTimestamp()
-    });
-
-    return {
-        challengeId: challengeRef.id,
-        hashedNonce,
-        expiresAt: expiresAt.toDate().toISOString()
-    };
-}
 
 // challenge를 소비하고 Apple code 교환 응답의 ID token을 함께 검증합니다.
 export async function requestAppleProofWithChallenge(
