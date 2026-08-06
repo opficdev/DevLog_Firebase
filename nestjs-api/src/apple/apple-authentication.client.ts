@@ -1,4 +1,9 @@
-import { HttpStatus, Inject, Injectable } from '@nestjs/common';
+// prettier-ignore
+import {
+  HttpStatus,
+  Inject,
+  Injectable,
+} from '@nestjs/common';
 import axios from 'axios';
 import * as jwt from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
