@@ -11,6 +11,7 @@ describe(AppleAuthenticationController.name, () => {
   const requestRefreshToken = jest.fn();
   const refreshAccessToken = jest.fn();
   const revokeAccessToken = jest.fn();
+  const unlinkProvider = jest.fn();
   const controller = new AppleAuthenticationController({
     createChallenge,
     requestCustomTokenWithChallenge,
@@ -19,6 +20,7 @@ describe(AppleAuthenticationController.name, () => {
     requestRefreshToken,
     refreshAccessToken,
     revokeAccessToken,
+    unlinkProvider,
   } as unknown as AppleAuthenticationService);
 
   beforeEach(() => {
@@ -234,5 +236,14 @@ describe(AppleAuthenticationController.name, () => {
       'user-1',
       ' legacy-access-token ',
     );
+  });
+
+  it('인증된 uid의 Apple provider를 해제한다', async () => {
+    unlinkProvider.mockResolvedValue(undefined);
+
+    await expect(
+      controller.unlink({ headers: {}, uid: 'user-1' }),
+    ).resolves.toEqual({ success: true });
+    expect(unlinkProvider).toHaveBeenCalledWith('user-1');
   });
 });

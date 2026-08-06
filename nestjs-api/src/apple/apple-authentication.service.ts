@@ -29,6 +29,12 @@ const appleCredentialNotFoundException = new ApiException(
   'apple-credential-not-found',
   'Apple credential을 찾을 수 없습니다.',
 );
+const lastProviderException = new ApiException(
+  HttpStatus.PRECONDITION_FAILED,
+  'last-provider',
+  '마지막 로그인 provider는 해제할 수 없습니다.',
+);
+const appleProviderId = 'apple.com';
 
 // Apple 인증과 Firebase 사용자 연결, credential 처리를 조정합니다.
 @Injectable()
@@ -210,6 +216,25 @@ export class AppleAuthenticationService {
     );
     if (refreshToken) {
       await this.credentialRepository.delete(uid);
+    }
+  }
+
+  // Apple grant와 credential을 정리한 뒤 provider 연결을 해제합니다.
+  async unlinkProvider(uid: string): Promise<void> {
+    const user = await this.auth.getUser(uid);
+    const providers = user.providerData ?? [];
+    const hasAppleProvider = providers.some(
+      (provider) => provider.providerId === appleProviderId,
+    );
+    if (hasAppleProvider && providers.length <= 1) {
+      throw lastProviderException;
+    }
+
+    await this.revokeAccessToken(uid);
+    if (hasAppleProvider) {
+      await this.auth.updateUser(uid, {
+        providersToUnlink: [appleProviderId],
+      });
     }
   }
 }

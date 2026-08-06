@@ -122,6 +122,16 @@ export class AppleAuthenticationController {
     );
     return { success: true };
   }
+
+  // 인증된 사용자의 Apple provider 연결을 해제합니다.
+  @Delete('account-link')
+  @HttpCode(HttpStatus.OK)
+  async unlink(
+    @Req() request: FirebaseAuthenticatedRequest,
+  ): Promise<{ success: true }> {
+    await this.service.unlinkProvider(requiredAuthenticatedUid(request));
+    return { success: true };
+  }
 }
 
 // 인증 경계에서 검증한 사용자 식별자를 반환합니다.

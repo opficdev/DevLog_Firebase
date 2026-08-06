@@ -14,6 +14,8 @@ import { AppleProviderRepository } from './apple-provider.repository';
 
 describe(AppleAuthenticationService.name, () => {
   const createCustomToken = jest.fn();
+  const getUser = jest.fn();
+  const updateUser = jest.fn();
   const createChallenge = jest.fn();
   const consume = jest.fn();
   const exchangeAuthorizationCode = jest.fn();
@@ -30,7 +32,7 @@ describe(AppleAuthenticationService.name, () => {
   const find = jest.fn();
   const deleteCredential = jest.fn();
   const service = new AppleAuthenticationService(
-    { createCustomToken } as unknown as Auth,
+    { createCustomToken, getUser, updateUser } as unknown as Auth,
     {
       exchangeAuthorizationCode,
       verifyIdToken,
@@ -71,6 +73,13 @@ describe(AppleAuthenticationService.name, () => {
     find.mockResolvedValue('refresh-token');
     deleteCredential.mockResolvedValue(undefined);
     createCustomToken.mockResolvedValue('custom-token');
+    getUser.mockResolvedValue({
+      providerData: [
+        { providerId: 'apple.com', uid: 'apple-subject' },
+        { providerId: 'google.com', uid: 'google-subject' },
+      ],
+    });
+    updateUser.mockResolvedValue(undefined);
   });
 
   it('새 Apple 인증 challenge를 반환한다', async () => {
@@ -639,6 +648,78 @@ describe(AppleAuthenticationService.name, () => {
 
     await expect(service.revokeAccessToken('user-1')).rejects.toBe(error);
     expect(deleteCredential).not.toHaveBeenCalled();
+  });
+
+  it('Apple grant와 credential을 정리한 뒤 provider를 해제한다', async () => {
+    const sequence: string[] = [];
+    find.mockImplementation(() => {
+      sequence.push('credential 조회');
+      return Promise.resolve('refresh-token');
+    });
+    revokeAppleGrant.mockImplementation(() => {
+      sequence.push('grant 폐기');
+      return Promise.resolve();
+    });
+    deleteCredential.mockImplementation(() => {
+      sequence.push('credential 삭제');
+      return Promise.resolve();
+    });
+    updateUser.mockImplementation(() => {
+      sequence.push('provider 해제');
+      return Promise.resolve();
+    });
+
+    await expect(service.unlinkProvider('user-1')).resolves.toBeUndefined();
+    expect(getUser).toHaveBeenCalledWith('user-1');
+    expect(updateUser).toHaveBeenCalledWith('user-1', {
+      providersToUnlink: ['apple.com'],
+    });
+    expect(sequence).toEqual([
+      'credential 조회',
+      'grant 폐기',
+      'credential 삭제',
+      'provider 해제',
+    ]);
+  });
+
+  it('Apple provider가 없어도 남은 credential을 정리한다', async () => {
+    getUser.mockResolvedValue({
+      providerData: [{ providerId: 'google.com', uid: 'google-subject' }],
+    });
+
+    await expect(service.unlinkProvider('user-1')).resolves.toBeUndefined();
+    expect(revokeAppleGrant).toHaveBeenCalledWith(
+      'refresh-token',
+      'refresh_token',
+    );
+    expect(deleteCredential).toHaveBeenCalledWith('user-1');
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it('Apple provider가 마지막 provider이면 해제를 거부한다', async () => {
+    getUser.mockResolvedValue({
+      providerData: [{ providerId: 'apple.com', uid: 'apple-subject' }],
+    });
+
+    await expect(service.unlinkProvider('user-1')).rejects.toMatchObject({
+      status: HttpStatus.PRECONDITION_FAILED,
+      response: {
+        code: 'last-provider',
+        message: '마지막 로그인 provider는 해제할 수 없습니다.',
+      },
+    });
+    expect(find).not.toHaveBeenCalled();
+    expect(revokeAppleGrant).not.toHaveBeenCalled();
+    expect(deleteCredential).not.toHaveBeenCalled();
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it('provider 해제 실패 시 이미 완료한 credential 정리를 유지한다', async () => {
+    const error = new Error('provider 해제 실패');
+    updateUser.mockRejectedValue(error);
+
+    await expect(service.unlinkProvider('user-1')).rejects.toBe(error);
+    expect(deleteCredential).toHaveBeenCalledWith('user-1');
   });
 });
 
