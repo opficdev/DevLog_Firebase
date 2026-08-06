@@ -32,6 +32,7 @@ jest.mock('firebase-admin/firestore', () => ({
 describe('GitHub 인증 API', () => {
   const verifyIdToken = jest.fn();
   const createSignInSession = jest.fn();
+  const createAccountLinkSession = jest.fn();
   let app: INestApplication;
 
   beforeAll(async () => {
@@ -45,7 +46,7 @@ describe('GitHub 인증 API', () => {
       .overrideProvider(FIREBASE_FIRESTORE_TOKEN)
       .useValue({})
       .overrideProvider(GitHubAuthenticationService)
-      .useValue({ createSignInSession })
+      .useValue({ createSignInSession, createAccountLinkSession })
       .compile();
 
     app = module.createNestApplication();
@@ -56,6 +57,9 @@ describe('GitHub 인증 API', () => {
   beforeEach(() => {
     verifyIdToken.mockReset().mockResolvedValue({ uid: 'user-1' });
     createSignInSession.mockReset().mockResolvedValue({
+      authorizationURL: 'https://github.com/login/oauth/authorize',
+    });
+    createAccountLinkSession.mockReset().mockResolvedValue({
       authorizationURL: 'https://github.com/login/oauth/authorize',
     });
   });
@@ -93,5 +97,40 @@ describe('GitHub 인증 API', () => {
 
     expect(verifyIdToken).not.toHaveBeenCalled();
     expect(createSignInSession).not.toHaveBeenCalled();
+  });
+
+  it('인증된 UID로 계정 연결 session을 반환한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .post('/api/auth/github/account-link-sessions')
+      .set('Authorization', 'Bearer Firebase-ID-Token')
+      .send({ appChallenge: ' app-challenge ' })
+      .expect(HttpStatus.OK)
+      .expect({
+        authorizationURL: 'https://github.com/login/oauth/authorize',
+      });
+
+    expect(verifyIdToken).toHaveBeenCalledWith('Firebase-ID-Token');
+    expect(createAccountLinkSession).toHaveBeenCalledWith(
+      'user-1',
+      'app-challenge',
+    );
+  });
+
+  it('계정 연결 session에 인증 token이 없으면 거부한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .post('/api/auth/github/account-link-sessions')
+      .send({ appChallenge: 'app-challenge' })
+      .expect(HttpStatus.UNAUTHORIZED)
+      .expect({
+        code: 'unauthenticated',
+        message: '인증 토큰이 필요합니다.',
+      });
+
+    expect(verifyIdToken).not.toHaveBeenCalled();
+    expect(createAccountLinkSession).not.toHaveBeenCalled();
   });
 });

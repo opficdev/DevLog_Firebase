@@ -55,4 +55,17 @@ describe(GitHubAuthenticationService.name, () => {
     });
     expect(response).not.toHaveProperty('providerPKCEVerifier');
   });
+
+  it('현재 UID에 결합된 GitHub 계정 연결 session을 생성한다', async () => {
+    await service.createAccountLinkSession('user-1', 'app-challenge');
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'github',
+        purpose: 'link',
+        appChallenge: 'app-challenge',
+        uid: 'user-1',
+      }),
+    );
+  });
 });

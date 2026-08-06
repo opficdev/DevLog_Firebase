@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { createOAuthVerifier } from '../oauth/oauth-proof';
 import { OAuthSessionRepository } from '../oauth/oauth-session.repository';
+import { type OAuthPurpose } from '../oauth/oauth.types';
 import { GitHubAuthenticationConfigurationProvider } from './github-authentication.configuration';
 import { type GitHubOAuthSessionResponse } from './github-authentication.types';
 
@@ -20,13 +21,31 @@ export class GitHubAuthenticationService {
   async createSignInSession(
     appChallenge: string,
   ): Promise<GitHubOAuthSessionResponse> {
+    return this.createSession('signIn', appChallenge);
+  }
+
+  // 계정 연결 목적 GitHub OAuth session과 authorization 주소를 생성합니다.
+  async createAccountLinkSession(
+    uid: string,
+    appChallenge: string,
+  ): Promise<GitHubOAuthSessionResponse> {
+    return this.createSession('link', appChallenge, uid);
+  }
+
+  // 목적과 UID에 결합된 GitHub OAuth session과 authorization 주소를 생성합니다.
+  private async createSession(
+    purpose: OAuthPurpose,
+    appChallenge: string,
+    uid?: string,
+  ): Promise<GitHubOAuthSessionResponse> {
     const configuration = this.configurationProvider.configuration();
     const providerPKCEVerifier = createOAuthVerifier();
     const session = await this.sessionRepository.create({
       provider: 'github',
-      purpose: 'signIn',
+      purpose,
       appChallenge,
       providerPKCEVerifier,
+      uid,
     });
     const authorizationURL = new URL(authorizationEndpoint);
     authorizationURL.searchParams.set('client_id', configuration.clientId);

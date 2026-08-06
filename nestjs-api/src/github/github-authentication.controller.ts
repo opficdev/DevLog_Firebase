@@ -1,5 +1,13 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Req,
+} from '@nestjs/common';
 
+import { type FirebaseAuthenticatedRequest } from '../auth/firebase-authenticated-request';
 import { Public } from '../auth/public.decorator';
 import { ApiException } from '../common/api.exception';
 import { GitHubAuthenticationService } from './github-authentication.service';
@@ -22,6 +30,33 @@ export class GitHubAuthenticationController {
       requiredBodyString(body, 'appChallenge'),
     );
   }
+
+  // 현재 사용자에 결합된 계정 연결 목적 GitHub OAuth session을 생성합니다.
+  @Post('account-link-sessions')
+  @HttpCode(HttpStatus.OK)
+  async createAccountLinkSession(
+    @Req() request: FirebaseAuthenticatedRequest,
+    @Body() body: unknown,
+  ): Promise<GitHubOAuthSessionResponse> {
+    return this.service.createAccountLinkSession(
+      requiredAuthenticatedUid(request),
+      requiredBodyString(body, 'appChallenge'),
+    );
+  }
+}
+
+// 인증 경계에서 검증한 사용자 식별자를 반환합니다.
+function requiredAuthenticatedUid(
+  request: FirebaseAuthenticatedRequest,
+): string {
+  if (!request.uid) {
+    throw new ApiException(
+      HttpStatus.UNAUTHORIZED,
+      'unauthenticated',
+      '인증된 사용자가 아닙니다.',
+    );
+  }
+  return request.uid;
 }
 
 // 요청 body의 필수 문자열을 공백을 제거해 반환합니다.
