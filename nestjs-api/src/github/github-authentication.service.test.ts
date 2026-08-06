@@ -24,6 +24,7 @@ describe(GitHubAuthenticationService.name, () => {
   const pendingRevocations = jest.fn();
   const removePending = jest.fn();
   const resolveUid = jest.fn();
+  const linkProvider = jest.fn();
   const create = jest.fn<Promise<OAuthSessionCreation>, [OAuthSessionInput]>();
   const claimSession = jest.fn();
   const complete = jest.fn();
@@ -44,7 +45,7 @@ describe(GitHubAuthenticationService.name, () => {
       pendingRevocations,
       removePending,
     } as unknown as GitHubCredentialRepository,
-    { resolveUid } as unknown as GitHubProviderRepository,
+    { resolveUid, link: linkProvider } as unknown as GitHubProviderRepository,
     {
       create,
       claim: claimSession,
@@ -321,6 +322,68 @@ describe(GitHubAuthenticationService.name, () => {
     );
     expect(saveCredential).toHaveBeenCalled();
     expect(releaseTicket).toHaveBeenCalledWith(claimedTicket());
+    expect(consumeTicket).not.toHaveBeenCalled();
+  });
+
+  it('현재 UID에 결합된 ticket 처리 순서를 지켜 GitHub 계정을 연결한다', async () => {
+    const linkedTicket = claimedTicket({ purpose: 'link', uid: 'user-1' });
+    const sequence: string[] = [];
+    claimTicket.mockImplementation(() => {
+      sequence.push('ticket claim');
+      return Promise.resolve(linkedTicket);
+    });
+    linkProvider.mockImplementation(() => {
+      sequence.push('provider 연결');
+      return Promise.resolve();
+    });
+    saveCredential.mockImplementation(() => {
+      sequence.push('credential 저장');
+      return Promise.resolve();
+    });
+    pendingRevocations.mockImplementation(() => {
+      sequence.push('이전 token 조회');
+      return Promise.resolve([]);
+    });
+    consumeTicket.mockImplementation(() => {
+      sequence.push('ticket 소비');
+      return Promise.resolve();
+    });
+
+    await service.link('user-1', 'ticket-1', 'app-verifier');
+
+    expect(claimTicket).toHaveBeenCalledWith(
+      'ticket-1',
+      'app-verifier',
+      'github',
+      'link',
+      'user-1',
+    );
+    expect(linkProvider).toHaveBeenCalledWith('user-1', 'access-token');
+    expect(saveCredential).toHaveBeenCalledWith('user-1', {
+      accessToken: 'access-token',
+      clientId: 'client-id',
+    });
+    expect(sequence).toEqual([
+      'ticket claim',
+      'provider 연결',
+      'credential 저장',
+      '이전 token 조회',
+      'ticket 소비',
+    ]);
+    expect(releaseTicket).not.toHaveBeenCalled();
+  });
+
+  it('GitHub 계정 연결 실패 뒤 ticket을 다시 사용할 수 있도록 해제한다', async () => {
+    const linkedTicket = claimedTicket({ purpose: 'link', uid: 'user-1' });
+    const error = new Error('provider 연결 실패');
+    claimTicket.mockResolvedValue(linkedTicket);
+    linkProvider.mockRejectedValue(error);
+
+    await expect(
+      service.link('user-1', 'ticket-1', 'app-verifier'),
+    ).rejects.toBe(error);
+    expect(releaseTicket).toHaveBeenCalledWith(linkedTicket);
+    expect(saveCredential).not.toHaveBeenCalled();
     expect(consumeTicket).not.toHaveBeenCalled();
   });
 });

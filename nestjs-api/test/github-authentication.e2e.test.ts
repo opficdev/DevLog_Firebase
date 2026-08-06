@@ -35,6 +35,7 @@ describe('GitHub 인증 API', () => {
   const createAccountLinkSession = jest.fn();
   const callback = jest.fn();
   const customToken = jest.fn();
+  const link = jest.fn();
   let app: INestApplication;
 
   beforeAll(async () => {
@@ -53,6 +54,7 @@ describe('GitHub 인증 API', () => {
         createAccountLinkSession,
         callback,
         customToken,
+        link,
       })
       .compile();
 
@@ -73,6 +75,7 @@ describe('GitHub 인증 API', () => {
       .mockReset()
       .mockResolvedValue('devlog://oauth-callback?ticket=ticket-1');
     customToken.mockReset().mockResolvedValue('custom-token');
+    link.mockReset().mockResolvedValue(undefined);
   });
 
   afterAll(async () => {
@@ -196,5 +199,33 @@ describe('GitHub 인증 API', () => {
 
     expect(verifyIdToken).not.toHaveBeenCalled();
     expect(customToken).not.toHaveBeenCalled();
+  });
+
+  it('인증된 UID와 ticket으로 GitHub 계정을 연결한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .put('/api/auth/github/account-link')
+      .set('Authorization', 'Bearer Firebase-ID-Token')
+      .send({ ticket: ' ticket-1 ', appVerifier: ' app-verifier ' })
+      .expect(HttpStatus.NO_CONTENT);
+
+    expect(verifyIdToken).toHaveBeenCalledWith('Firebase-ID-Token');
+    expect(link).toHaveBeenCalledWith('user-1', 'ticket-1', 'app-verifier');
+  });
+
+  it('GitHub 계정 연결 요청에 인증 token이 없으면 거부한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .put('/api/auth/github/account-link')
+      .send({ ticket: 'ticket-1', appVerifier: 'app-verifier' })
+      .expect(HttpStatus.UNAUTHORIZED)
+      .expect({
+        code: 'unauthenticated',
+        message: '인증 토큰이 필요합니다.',
+      });
+
+    expect(link).not.toHaveBeenCalled();
   });
 });

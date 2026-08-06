@@ -147,6 +147,32 @@ export class GitHubAuthenticationService {
     }
   }
 
+  // 현재 UID에 결합된 ticket으로 GitHub provider와 credential을 연결합니다.
+  // prettier-ignore
+  async link(
+    uid: string,
+    ticket: string,
+    appVerifier: string,
+  ): Promise<void> {
+    const claimed = await this.ticketRepository.claim(
+      ticket,
+      appVerifier,
+      'github',
+      'link',
+      uid,
+    );
+    try {
+      const credential = credentialFrom(claimed);
+      await this.providerRepository.link(uid, credential.accessToken);
+      await this.credentialRepository.save(uid, credential);
+      await this.revokePendingCredentials(uid);
+      await this.ticketRepository.consume(claimed);
+    } catch (error) {
+      await this.ticketRepository.release(claimed);
+      throw error;
+    }
+  }
+
   // 목적과 UID에 결합된 GitHub OAuth session과 authorization 주소를 생성합니다.
   private async createSession(
     purpose: OAuthPurpose,

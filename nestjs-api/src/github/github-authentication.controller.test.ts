@@ -9,11 +9,13 @@ describe(GitHubAuthenticationController.name, () => {
   const createAccountLinkSession = jest.fn();
   const callback = jest.fn();
   const customToken = jest.fn();
+  const link = jest.fn();
   const controller = new GitHubAuthenticationController({
     createSignInSession,
     createAccountLinkSession,
     callback,
     customToken,
+    link,
   } as unknown as GitHubAuthenticationService);
 
   beforeEach(() => {
@@ -139,5 +141,17 @@ describe(GitHubAuthenticationController.name, () => {
       },
     });
     expect(customToken).not.toHaveBeenCalled();
+  });
+
+  it('검증된 UID와 ticket으로 GitHub 계정을 연결한다', async () => {
+    const request = { uid: 'user-1' } as FirebaseAuthenticatedRequest;
+
+    await expect(
+      controller.link(request, {
+        ticket: ' ticket-1 ',
+        appVerifier: ' app-verifier ',
+      }),
+    ).resolves.toBeUndefined();
+    expect(link).toHaveBeenCalledWith('user-1', 'ticket-1', 'app-verifier');
   });
 });

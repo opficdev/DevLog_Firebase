@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Put,
   Query,
   Redirect,
   Req,
@@ -44,6 +45,20 @@ export class GitHubAuthenticationController {
     return this.service.createAccountLinkSession(
       requiredAuthenticatedUid(request),
       requiredBodyString(body, 'appChallenge'),
+    );
+  }
+
+  // ticket으로 증명한 GitHub provider를 인증된 사용자에게 연결합니다.
+  @Put('account-link')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async link(
+    @Req() request: FirebaseAuthenticatedRequest,
+    @Body() body: unknown,
+  ): Promise<void> {
+    await this.service.link(
+      requiredAuthenticatedUid(request),
+      requiredBodyString(body, 'ticket'),
+      requiredBodyString(body, 'appVerifier'),
     );
   }
 
