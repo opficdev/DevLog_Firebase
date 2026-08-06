@@ -93,6 +93,19 @@ export class AppleAuthenticationController {
     );
     return { success: true, refreshToken };
   }
+
+  // 저장된 Apple credential로 발급한 access token을 반환합니다.
+  @Post('access-token')
+  @HttpCode(HttpStatus.OK)
+  async accessToken(
+    @Req() request: FirebaseAuthenticatedRequest,
+  ): Promise<{ token: string }> {
+    return {
+      token: await this.service.refreshAccessToken(
+        requiredAuthenticatedUid(request),
+      ),
+    };
+  }
 }
 
 // 인증 경계에서 검증한 사용자 식별자를 반환합니다.

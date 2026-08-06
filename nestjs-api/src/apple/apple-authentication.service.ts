@@ -24,6 +24,11 @@ const missingIdTokenException = new ApiException(
   'invalid-apple-proof',
   'Apple 교환 응답에 ID token이 없습니다.',
 );
+const appleCredentialNotFoundException = new ApiException(
+  HttpStatus.NOT_FOUND,
+  'apple-credential-not-found',
+  'Apple credential을 찾을 수 없습니다.',
+);
 
 // Apple 인증과 Firebase 사용자 연결, credential 처리를 조정합니다.
 @Injectable()
@@ -174,5 +179,14 @@ export class AppleAuthenticationService {
       throw error;
     }
     return refreshToken;
+  }
+
+  // 저장된 Apple credential로 새 access token을 발급합니다.
+  async refreshAccessToken(uid: string): Promise<string> {
+    const refreshToken = await this.credentialRepository.find(uid);
+    if (!refreshToken) {
+      throw appleCredentialNotFoundException;
+    }
+    return this.client.requestAccessToken(refreshToken);
   }
 }

@@ -9,12 +9,14 @@ describe(AppleAuthenticationController.name, () => {
   const requestCustomTokenWithIdToken = jest.fn();
   const linkProvider = jest.fn();
   const requestRefreshToken = jest.fn();
+  const refreshAccessToken = jest.fn();
   const controller = new AppleAuthenticationController({
     createChallenge,
     requestCustomTokenWithChallenge,
     requestCustomTokenWithIdToken,
     linkProvider,
     requestRefreshToken,
+    refreshAccessToken,
   } as unknown as AppleAuthenticationService);
 
   beforeEach(() => {
@@ -206,5 +208,14 @@ describe(AppleAuthenticationController.name, () => {
       },
     });
     expect(requestRefreshToken).not.toHaveBeenCalled();
+  });
+
+  it('인증된 uid의 Apple access token을 반환한다', async () => {
+    refreshAccessToken.mockResolvedValue('access-token');
+
+    await expect(
+      controller.accessToken({ headers: {}, uid: 'user-1' }),
+    ).resolves.toEqual({ token: 'access-token' });
+    expect(refreshAccessToken).toHaveBeenCalledWith('user-1');
   });
 });

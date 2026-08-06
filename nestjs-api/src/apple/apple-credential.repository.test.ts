@@ -143,4 +143,79 @@ describe(AppleCredentialRepository.name, () => {
     );
     expect(update).toHaveBeenCalledTimes(1);
   });
+
+  it('새 경로의 Apple refresh token을 우선 반환하고 기존 필드를 제거한다', async () => {
+    transactionGet
+      .mockResolvedValueOnce({ data: () => undefined })
+      .mockResolvedValueOnce({
+        data: () => ({ refreshToken: 'stored-refresh-token' }),
+      })
+      .mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ appleRefreshToken: 'legacy-refresh-token' }),
+      });
+
+    await expect(repository.find('user-1')).resolves.toBe(
+      'stored-refresh-token',
+    );
+    expect(set).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith(legacyReference, {
+      appleRefreshToken: FieldValue.delete(),
+    });
+  });
+
+  it('기존 Apple refresh token을 새 경로로 이관해 반환한다', async () => {
+    transactionGet
+      .mockResolvedValueOnce({ data: () => undefined })
+      .mockResolvedValueOnce({ data: () => undefined })
+      .mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ appleRefreshToken: 'legacy-refresh-token' }),
+      });
+
+    await expect(repository.find('user-1')).resolves.toBe(
+      'legacy-refresh-token',
+    );
+    expect(set).toHaveBeenCalledWith(
+      credentialReference,
+      {
+        refreshToken: 'legacy-refresh-token',
+        migratedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    expect(update).toHaveBeenCalledWith(legacyReference, {
+      appleRefreshToken: FieldValue.delete(),
+    });
+  });
+
+  it('삭제 중인 사용자의 기존 token은 새 경로에 이관하지 않는다', async () => {
+    transactionGet
+      .mockResolvedValueOnce({ data: () => ({ deletionStartedAt: {} }) })
+      .mockResolvedValueOnce({ data: () => undefined })
+      .mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ appleRefreshToken: 'legacy-refresh-token' }),
+      });
+
+    await expect(repository.find('user-1')).resolves.toBe(
+      'legacy-refresh-token',
+    );
+    expect(set).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith(legacyReference, {
+      appleRefreshToken: FieldValue.delete(),
+    });
+  });
+
+  it('저장된 Apple refresh token이 없으면 undefined를 반환한다', async () => {
+    transactionGet
+      .mockResolvedValueOnce({ data: () => undefined })
+      .mockResolvedValueOnce({ data: () => undefined })
+      .mockResolvedValueOnce({ exists: false, data: () => undefined });
+
+    await expect(repository.find('user-1')).resolves.toBeUndefined();
+    expect(set).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
 });

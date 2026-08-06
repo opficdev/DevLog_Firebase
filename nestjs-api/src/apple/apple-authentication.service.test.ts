@@ -20,11 +20,13 @@ describe(AppleAuthenticationService.name, () => {
   const verifyIdToken = jest.fn();
   const requiredRefreshToken = jest.fn();
   const revokeExchangedTokens = jest.fn();
+  const requestAccessToken = jest.fn();
   const resolveUid = jest.fn();
   const ensureProvider = jest.fn();
   const link = jest.fn();
   const update = jest.fn();
   const save = jest.fn();
+  const find = jest.fn();
   const service = new AppleAuthenticationService(
     { createCustomToken } as unknown as Auth,
     {
@@ -32,11 +34,12 @@ describe(AppleAuthenticationService.name, () => {
       verifyIdToken,
       requiredRefreshToken,
       revokeExchangedTokens,
+      requestAccessToken,
     } as unknown as AppleAuthenticationClient,
     { create: createChallenge, consume } as unknown as AppleChallengeRepository,
     { resolveUid, ensureProvider, link } as unknown as AppleProviderRepository,
     { update } as unknown as AppleProfileRepository,
-    { save } as unknown as AppleCredentialRepository,
+    { save, find } as unknown as AppleCredentialRepository,
   );
 
   beforeEach(() => {
@@ -51,11 +54,13 @@ describe(AppleAuthenticationService.name, () => {
     verifyIdToken.mockResolvedValue(tokenPayload());
     requiredRefreshToken.mockResolvedValue('refresh-token');
     revokeExchangedTokens.mockResolvedValue(undefined);
+    requestAccessToken.mockResolvedValue('access-token');
     resolveUid.mockResolvedValue('user-1');
     ensureProvider.mockResolvedValue(undefined);
     link.mockResolvedValue(undefined);
     update.mockResolvedValue(undefined);
     save.mockResolvedValue(undefined);
+    find.mockResolvedValue('refresh-token');
     createCustomToken.mockResolvedValue('custom-token');
   });
 
@@ -564,6 +569,27 @@ describe(AppleAuthenticationService.name, () => {
     ).rejects.toBe(error);
     expect(requiredRefreshToken).not.toHaveBeenCalled();
     expect(revokeExchangedTokens).not.toHaveBeenCalled();
+  });
+
+  it('저장된 Apple refresh token으로 access token을 반환한다', async () => {
+    await expect(service.refreshAccessToken('user-1')).resolves.toBe(
+      'access-token',
+    );
+    expect(find).toHaveBeenCalledWith('user-1');
+    expect(requestAccessToken).toHaveBeenCalledWith('refresh-token');
+  });
+
+  it('Apple credential이 없으면 찾을 수 없음 오류를 반환한다', async () => {
+    find.mockResolvedValue(undefined);
+
+    await expect(service.refreshAccessToken('user-1')).rejects.toMatchObject({
+      status: HttpStatus.NOT_FOUND,
+      response: {
+        code: 'apple-credential-not-found',
+        message: 'Apple credential을 찾을 수 없습니다.',
+      },
+    });
+    expect(requestAccessToken).not.toHaveBeenCalled();
   });
 });
 

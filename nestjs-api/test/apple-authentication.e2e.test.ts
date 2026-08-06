@@ -36,6 +36,7 @@ describe('Apple 로그인 API', () => {
   const requestCustomTokenWithIdToken = jest.fn();
   const linkProvider = jest.fn();
   const requestRefreshToken = jest.fn();
+  const refreshAccessToken = jest.fn();
   let app: INestApplication;
 
   beforeAll(async () => {
@@ -55,6 +56,7 @@ describe('Apple 로그인 API', () => {
         requestCustomTokenWithIdToken,
         linkProvider,
         requestRefreshToken,
+        refreshAccessToken,
       })
       .compile();
 
@@ -76,6 +78,7 @@ describe('Apple 로그인 API', () => {
     requestCustomTokenWithIdToken.mockReset().mockResolvedValue('custom-token');
     linkProvider.mockReset().mockResolvedValue(undefined);
     requestRefreshToken.mockReset().mockResolvedValue('refresh-token');
+    refreshAccessToken.mockReset().mockResolvedValue('access-token');
   });
 
   afterAll(async () => {
@@ -310,5 +313,31 @@ describe('Apple 로그인 API', () => {
       });
 
     expect(requestRefreshToken).not.toHaveBeenCalled();
+  });
+
+  it('인증된 사용자의 Apple access token을 반환한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .post('/api/auth/apple/access-token')
+      .set('Authorization', 'Bearer firebase-id-token')
+      .expect(HttpStatus.OK)
+      .expect({ token: 'access-token' });
+
+    expect(refreshAccessToken).toHaveBeenCalledWith('user-1');
+  });
+
+  it('인증 token 없는 Apple access token 요청을 거부한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .post('/api/auth/apple/access-token')
+      .expect(HttpStatus.UNAUTHORIZED)
+      .expect({
+        code: 'unauthenticated',
+        message: '인증 토큰이 필요합니다.',
+      });
+
+    expect(refreshAccessToken).not.toHaveBeenCalled();
   });
 });
