@@ -7,3 +7,17 @@ export interface GitHubAuthenticationConfiguration {
   // GitHub가 호출할 callback 주소를 저장합니다.
   callbackURL: string;
 }
+
+// GitHub 사용자 API에서 인증 판단에 사용하는 프로필입니다.
+export interface GitHubUser {
+  // GitHub 계정의 숫자 식별자를 저장합니다.
+  id: number;
+  // GitHub 로그인 이름을 저장합니다.
+  login: string;
+  // 공개 표시 이름을 저장합니다.
+  name?: string;
+  // 공개 이메일을 저장합니다.
+  email?: string;
+  // 공개 프로필 이미지 주소를 저장합니다.
+  avatar_url?: string;
+}
