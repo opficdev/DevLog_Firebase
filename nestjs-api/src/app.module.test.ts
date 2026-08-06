@@ -15,6 +15,8 @@ import { type Firestore, getFirestore } from 'firebase-admin/firestore';
 import { FirebaseAuthGuard } from './auth/firebase-auth.guard';
 import { ApiExceptionFilter } from './common/api-exception.filter';
 import { AppModule } from './app.module';
+import { GOOGLE_AUTHENTICATION_CONFIGURATION_TOKEN } from './google/google-authentication.configuration';
+import { GoogleAuthenticationModule } from './google/google-authentication.module';
 import { PushNotificationsModule } from './push-notifications/push-notifications.module';
 import { TodosModule } from './todos/todos.module';
 import { WebPagesModule } from './web-pages/web-pages.module';
@@ -52,7 +54,10 @@ describe(AppModule.name, () => {
 
     const module = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(GOOGLE_AUTHENTICATION_CONFIGURATION_TOKEN)
+      .useValue({ clientId: 'client-id', clientSecret: 'client-secret' })
+      .compile();
 
     expect(mockedGetAuth).toHaveBeenCalledWith(app);
     expect(mockedGetFirestore).toHaveBeenCalledWith(app);
@@ -81,6 +86,15 @@ describe(AppModule.name, () => {
     ) as unknown[];
 
     expect(imports).toContain(TodosModule);
+  });
+
+  it('GoogleAuthenticationModule을 애플리케이션에 연결한다', () => {
+    const imports = Reflect.getMetadata(
+      MODULE_METADATA.IMPORTS,
+      AppModule,
+    ) as unknown[];
+
+    expect(imports).toContain(GoogleAuthenticationModule);
   });
 
   it('PushNotificationsModule을 애플리케이션에 연결한다', () => {

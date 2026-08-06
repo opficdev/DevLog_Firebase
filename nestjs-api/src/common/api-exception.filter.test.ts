@@ -232,7 +232,13 @@ describe(ApiExceptionFilter.name, () => {
 
       filter.catch(error, host);
 
-      expect(loggerError).toHaveBeenCalledWith(error);
+      const record = error as { code?: string; message: string };
+      expect(loggerError).toHaveBeenCalledWith({
+        message: '처리되지 않은 API 오류',
+        errorCode: record.code,
+        errorMessage: record.message,
+        errorStack: error instanceof Error ? error.stack : undefined,
+      });
       expect(status).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
       expect(json).toHaveBeenCalledWith({
         code: 'internal',

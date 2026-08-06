@@ -46,7 +46,13 @@ export class TodosService {
 
       await this.repository.restoreNotifications(uid, todoId);
 
-      this.logger.error('Todo 삭제 요청 실패', error, { uid, todoId });
+      this.logger.error({
+        message: 'Todo 삭제 요청 실패',
+        errorMessage: error instanceof Error ? error.message : '알 수 없는 오류',
+        errorStack: error instanceof Error ? error.stack : undefined,
+        uid,
+        todoId,
+      });
       throw new ApiException(
         HttpStatus.INTERNAL_SERVER_ERROR,
         'internal',
@@ -69,7 +75,13 @@ export class TodosService {
 
       await this.repository.restoreNotifications(uid, todoId);
     } catch (error) {
-      this.logger.error('Todo 삭제 취소 실패', error, { uid, todoId });
+      this.logger.error({
+        message: 'Todo 삭제 취소 실패',
+        errorMessage: error instanceof Error ? error.message : '알 수 없는 오류',
+        errorStack: error instanceof Error ? error.stack : undefined,
+        uid,
+        todoId,
+      });
       throw new ApiException(
         HttpStatus.INTERNAL_SERVER_ERROR,
         'internal',

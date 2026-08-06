@@ -104,7 +104,10 @@ describe(WebPagesService.name, () => {
       'WebPage 상태 재조회',
       'WebPage 복구',
     ]);
-    expect(loggerError).toHaveBeenCalledWith('웹페이지 삭제 요청 실패', error, {
+    expect(loggerError).toHaveBeenCalledWith({
+      message: '웹페이지 삭제 요청 실패',
+      errorMessage: error.message,
+      errorStack: error.stack,
       uid,
       webPageId,
     });
@@ -136,18 +139,20 @@ describe(WebPagesService.name, () => {
         },
       },
     );
-    expect(loggerError).toHaveBeenNthCalledWith(
-      1,
-      '웹페이지 삭제 요청 cleanup 실패',
-      cleanupError,
-      { uid, webPageId },
-    );
-    expect(loggerError).toHaveBeenNthCalledWith(
-      2,
-      '웹페이지 삭제 요청 실패',
-      deletionError,
-      { uid, webPageId },
-    );
+    expect(loggerError).toHaveBeenNthCalledWith(1, {
+      message: '웹페이지 삭제 요청 cleanup 실패',
+      errorMessage: cleanupError.message,
+      errorStack: cleanupError.stack,
+      uid,
+      webPageId,
+    });
+    expect(loggerError).toHaveBeenNthCalledWith(2, {
+      message: '웹페이지 삭제 요청 실패',
+      errorMessage: deletionError.message,
+      errorStack: deletionError.stack,
+      uid,
+      webPageId,
+    });
   });
 
   it('삭제 상태인 WebPage를 복구한다', async () => {
@@ -201,7 +206,10 @@ describe(WebPagesService.name, () => {
         message: '웹페이지 삭제 취소에 실패했습니다.',
       },
     });
-    expect(loggerError).toHaveBeenCalledWith('웹페이지 삭제 취소 실패', error, {
+    expect(loggerError).toHaveBeenCalledWith({
+      message: '웹페이지 삭제 취소 실패',
+      errorMessage: error.message,
+      errorStack: error.stack,
       uid,
       webPageId,
     });

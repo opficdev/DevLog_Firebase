@@ -1,8 +1,20 @@
 import { ExecutionContext, HttpStatus } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { type Auth } from 'firebase-admin/auth';
 
 import { FirebaseAuthenticatedRequest } from './firebase-authenticated-request';
 import { FirebaseAuthGuard } from './firebase-auth.guard';
+import { Public } from './public.decorator';
+
+// Guard 공개 인증 경계 시험용 Controller입니다.
+class AuthenticationTestController {
+  // 공개 인증 경계 시험 method입니다.
+  @Public()
+  publicEndpoint(this: void): void {}
+
+  // 인증 필수 경계 시험 method입니다.
+  authenticatedEndpoint(this: void): void {}
+}
 
 describe(FirebaseAuthGuard.name, () => {
   it.each([
@@ -19,11 +31,13 @@ describe(FirebaseAuthGuard.name, () => {
       headers: { authorization },
     } as FirebaseAuthenticatedRequest;
     const context = {
+      getHandler: () =>
+        AuthenticationTestController.prototype.authenticatedEndpoint,
       switchToHttp: () => ({
         getRequest: () => request,
       }),
     } as unknown as ExecutionContext;
-    const guard = new FirebaseAuthGuard(auth);
+    const guard = new FirebaseAuthGuard(auth, new Reflector());
 
     await expect(guard.canActivate(context)).rejects.toMatchObject({
       status: HttpStatus.UNAUTHORIZED,
@@ -47,11 +61,13 @@ describe(FirebaseAuthGuard.name, () => {
         headers: { authorization: `${scheme} Firebase-ID-Token` },
       } as FirebaseAuthenticatedRequest;
       const context = {
+        getHandler: () =>
+          AuthenticationTestController.prototype.authenticatedEndpoint,
         switchToHttp: () => ({
           getRequest: () => request,
         }),
       } as unknown as ExecutionContext;
-      const guard = new FirebaseAuthGuard(auth);
+      const guard = new FirebaseAuthGuard(auth, new Reflector());
 
       await expect(guard.canActivate(context)).resolves.toBe(true);
 
@@ -74,13 +90,32 @@ describe(FirebaseAuthGuard.name, () => {
       headers: { authorization: 'Bearer expired-token' },
     } as FirebaseAuthenticatedRequest;
     const context = {
+      getHandler: () =>
+        AuthenticationTestController.prototype.authenticatedEndpoint,
       switchToHttp: () => ({
         getRequest: () => request,
       }),
     } as unknown as ExecutionContext;
-    const guard = new FirebaseAuthGuard(auth);
+    const guard = new FirebaseAuthGuard(auth, new Reflector());
 
     await expect(guard.canActivate(context)).rejects.toBe(error);
+    expect(request.uid).toBeUndefined();
+  });
+
+  it('공개 method는 Firebase ID token 검증을 생략한다', async () => {
+    const verifyIdToken = jest.fn();
+    const auth = { verifyIdToken } as unknown as Auth;
+    const request = { headers: {} } as FirebaseAuthenticatedRequest;
+    const context = {
+      getHandler: () => AuthenticationTestController.prototype.publicEndpoint,
+      switchToHttp: () => ({
+        getRequest: () => request,
+      }),
+    } as unknown as ExecutionContext;
+    const guard = new FirebaseAuthGuard(auth, new Reflector());
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(verifyIdToken).not.toHaveBeenCalled();
     expect(request.uid).toBeUndefined();
   });
 });

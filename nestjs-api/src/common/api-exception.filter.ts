@@ -56,7 +56,23 @@ export class ApiExceptionFilter implements ExceptionFilter {
       Number(HttpStatus.INTERNAL_SERVER_ERROR) === error.getStatus() &&
       !(exception instanceof HttpException)
     ) {
-      this.logger.error(exception);
+      let errorCode: string | undefined;
+      let errorStack: string | undefined;
+      if (exception && typeof exception === 'object') {
+        const code = (exception as Record<string, unknown>).code;
+        if (typeof code === 'string') {
+          errorCode = code;
+        }
+      }
+      if (exception instanceof Error) {
+        errorStack = exception.stack;
+      }
+      this.logger.error({
+        message: '처리되지 않은 API 오류',
+        errorCode,
+        errorMessage: errorMessageFrom(exception, '알 수 없는 오류'),
+        errorStack,
+      });
     }
 
     response.status(error.getStatus()).json(error.getResponse());

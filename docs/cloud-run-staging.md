@@ -11,7 +11,9 @@
 
 ## 권한과 인증
 
-- 런타임 service account에는 `roles/datastore.user`만 부여합니다.
+- 런타임 service account에는 project 단위 `roles/datastore.user`, `roles/firebaseauth.admin`을 부여합니다.
+- Firebase Admin SDK가 ADC로 custom token을 서명할 수 있도록 런타임 service account 자신에 대해 `roles/iam.serviceAccountTokenCreator`를 부여합니다.
+- `GOOGLE_OAUTH_CONFIG` Secret에 대해 런타임 service account에 `roles/secretmanager.secretAccessor`를 부여합니다.
 - 배포 실행자에는 `roles/run.sourceDeveloper`, `roles/serviceusage.serviceUsageConsumer`, 런타임 및 build service account 각각에 대한 `roles/iam.serviceAccountUser`가 필요합니다.
 - build service account에는 `roles/run.builder`가 필요합니다.
 - 최초 공개 설정에는 `run.services.create`, `run.services.update`, `run.services.setIamPolicy` 권한이 필요하며 `roles/run.admin`에 포함됩니다.
@@ -30,7 +32,7 @@ gcloud services list \
 	--enabled \
 	--project devlog-staging \
 	--format='value(config.name)' \
-| grep -E '^(run|cloudbuild|artifactregistry)\.googleapis\.com$'
+| grep -E '^(run|cloudbuild|artifactregistry|secretmanager|identitytoolkit|iamcredentials)\.googleapis\.com$'
 
 read -r -p "Runtime service account email: " RUNTIME_SERVICE_ACCOUNT
 gcloud iam service-accounts describe "$RUNTIME_SERVICE_ACCOUNT" \
@@ -41,9 +43,31 @@ read -r -p "Build service account email: " BUILD_SERVICE_ACCOUNT
 gcloud iam service-accounts describe "$BUILD_SERVICE_ACCOUNT" \
 	--project devlog-staging \
 	--format='value(disabled)'
+
+gcloud projects get-iam-policy devlog-staging \
+	--flatten='bindings[].members' \
+	--filter="bindings.members:serviceAccount:${RUNTIME_SERVICE_ACCOUNT} AND (bindings.role:roles/datastore.user OR bindings.role:roles/firebaseauth.admin)" \
+	--format='value(bindings.role)'
+
+gcloud iam service-accounts get-iam-policy "$RUNTIME_SERVICE_ACCOUNT" \
+	--project devlog-staging \
+	--flatten='bindings[].members' \
+	--filter="bindings.members:serviceAccount:${RUNTIME_SERVICE_ACCOUNT} AND bindings.role:roles/iam.serviceAccountTokenCreator" \
+	--format='value(bindings.role)'
+
+gcloud secrets get-iam-policy GOOGLE_OAUTH_CONFIG \
+	--project devlog-staging \
+	--flatten='bindings[].members' \
+	--filter="bindings.members:serviceAccount:${RUNTIME_SERVICE_ACCOUNT} AND bindings.role:roles/secretmanager.secretAccessor" \
+	--format='value(bindings.role)'
+
+gcloud secrets versions list GOOGLE_OAUTH_CONFIG \
+	--project devlog-staging \
+	--filter='state=ENABLED' \
+	--format='value(name)'
 ```
 
-결제는 `True`, 두 service account의 비활성 상태는 각각 `False`, 필수 API 세 개는 모두 출력되어야 합니다. 실행자와 build service account에는 앞 절의 권한이 있어야 합니다.
+결제는 `True`, 두 service account의 비활성 상태는 각각 `False`, 필수 API 여섯 개와 네 권한 및 하나 이상의 활성 Secret version이 모두 출력되어야 합니다. 실행자와 build service account에는 앞 절의 권한이 있어야 합니다.
 
 작업 트리가 비어 있는지 확인하고 배포할 commit을 기록합니다.
 
@@ -93,7 +117,8 @@ gcloud run deploy http-api \
 	--concurrency 80 \
 	--timeout 60s \
 	--port 8080 \
-	--no-invoker-iam-check
+	--no-invoker-iam-check \
+	--set-secrets=GOOGLE_OAUTH_CONFIG=GOOGLE_OAUTH_CONFIG:latest
 
 unset RUNTIME_SERVICE_ACCOUNT BUILD_SERVICE_ACCOUNT
 ```
@@ -122,6 +147,22 @@ SERVICE_URL="$(gcloud run services describe http-api \
 	--project devlog-staging \
 	--region asia-northeast3 \
 	--format='value(status.url)')"
+
+curl -i -X POST \
+	-H 'Content-Type: application/json' \
+	-d '{}' \
+	"${SERVICE_URL}/api/auth/google/authorization-code/custom-token"
+
+curl -i -X POST \
+	-H 'Content-Type: application/json' \
+	-d '{"serverAuthCode":"invalid-server-auth-code"}' \
+	"${SERVICE_URL}/api/auth/google/authorization-code/custom-token"
+
+curl -i -X DELETE \
+	"${SERVICE_URL}/api/auth/google/account-link"
+
+curl -i -X DELETE \
+	"${SERVICE_URL}/api/auth/google/access-token"
 
 curl -i -X POST \
 	"${SERVICE_URL}/api/todos/${TODO_ID}/deletion-request"
@@ -161,11 +202,29 @@ unset FIREBASE_ID_TOKEN TODO_ID WEB_PAGE_ID PUSH_NOTIFICATION_ID SERVICE_URL
 
 응답을 다음 순서로 확인합니다.
 
-1. Token이 없는 Todo `POST`: `401`
-2. Token이 있는 Todo `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
-3. Token이 있는 WebPage `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
-4. Token이 있는 PushNotification `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
-5. 각 `DELETE` 뒤 Todo와 연결 알림, WebPage 및 PushNotification의 삭제 상태 복구
+1. body가 빈 Google custom token `POST`: `400`, `invalid-argument`
+2. 잘못된 `serverAuthCode`를 전달한 Google custom token `POST`: `401`, `invalid-google-proof`
+3. Token이 없는 Google account-link와 access-token `DELETE`: 각각 `401`
+4. Token이 없는 Todo `POST`: `401`
+5. Token이 있는 Todo `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
+6. Token이 있는 WebPage `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
+7. Token이 있는 PushNotification `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
+8. 각 `DELETE` 뒤 Todo와 연결 알림, WebPage 및 PushNotification의 삭제 상태 복구
+
+유효한 Firebase ID Token과 일회용 `serverAuthCode`가 필요한 Google custom token, account-link, account-link 해제, access-token 폐기의 성공 경로는 Staging 앱에서 별도로 확인합니다. Token과 인증 코드는 로그와 shell history에 남기지 않습니다.
+
+오류 로그가 한 항목의 `jsonPayload`로 수집되는지 확인합니다.
+
+```bash
+gcloud logging read \
+	'resource.type="cloud_run_revision" AND resource.labels.service_name="http-api"' \
+	--project devlog-staging \
+	--freshness=10m \
+	--limit=50 \
+	--format=json
+```
+
+각 오류는 물리적인 줄바꿈과 ANSI 제어 문자 없이 하나의 로그 항목에 수집되어야 합니다. 스택에 포함된 줄바꿈은 `errorStack` 문자열 내부에 보존되어야 합니다.
 
 하나라도 실패하면 Firebase Hosting 라우팅을 진행하지 않습니다. 첫 배포에서 Token이 없는 Todo `POST`가 `401`이 아니면 Cloud Run Invoker IAM 검사를 즉시 다시 활성화해 직접 주소의 무인증 호출을 차단합니다.
 

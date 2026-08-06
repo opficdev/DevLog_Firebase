@@ -8,6 +8,7 @@
 - Todo 경로: `/api/todos/**`
 - WebPage 경로: `/api/web-pages/**`
 - PushNotification 경로: `/api/push-notifications/**`
+- Google 인증 경로: `/api/auth/google/**`
 - 제외: `devlog-auth-prod`, Functions 배포, Firestore rules와 index, Cloud Run 배포와 revision 변경
 
 이 문서는 Staging Hosting 단독 배포와 검증 및 복구 절차를 기록합니다.
@@ -25,11 +26,14 @@ gcloud run services describe http-api \
 
 [Cloud Run Staging 수동 배포 절차](./cloud-run-staging.md)의 직접 호출 검증에서 다음 결과가 모두 확인되어야 합니다.
 
-1. Token이 없는 Todo `POST`: `401`
-2. Token이 있는 Todo `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
-3. Token이 있는 WebPage `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
-4. Token이 있는 PushNotification `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
-5. 각 `DELETE` 뒤 Todo와 연결 알림, WebPage 및 PushNotification의 삭제 상태 복구
+1. body가 빈 Google custom token `POST`: `400`, `invalid-argument`
+2. 잘못된 `serverAuthCode`를 전달한 Google custom token `POST`: `401`, `invalid-google-proof`
+3. Token이 없는 Google account-link와 access-token `DELETE`: 각각 `401`
+4. Token이 없는 Todo `POST`: `401`
+5. Token이 있는 Todo `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
+6. Token이 있는 WebPage `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
+7. Token이 있는 PushNotification `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
+8. 각 `DELETE` 뒤 Todo와 연결 알림, WebPage 및 PushNotification의 삭제 상태 복구
 
 하나라도 확인되지 않으면 Hosting 라우팅을 배포하지 않습니다.
 
@@ -49,8 +53,9 @@ cd ..
 1. `/api/todos/**` → Cloud Run `http-api`
 2. `/api/web-pages/**` → Cloud Run `http-api`
 3. `/api/push-notifications/**` → Cloud Run `http-api`
-4. `/api/auth/github/callback` → Functions `api`
-5. `/api/**` → Functions `api`
+4. `/api/auth/google/**` → Cloud Run `http-api`
+5. `/api/auth/github/callback` → Functions `api`
+6. `/api/**` → Functions `api`
 
 Cloud Run rewrite에는 `pinTag`가 없어야 합니다. `devlog-auth-prod` 블록은 변경하지 않습니다.
 
@@ -129,6 +134,22 @@ curl -i -X DELETE \
 	"${HOSTING_URL}/api/push-notifications/${PUSH_NOTIFICATION_ID}/deletion-request" \
 	<<<"Authorization: Bearer ${FIREBASE_ID_TOKEN}"
 
+curl -i -X POST \
+	-H 'Content-Type: application/json' \
+	-d '{}' \
+	"${HOSTING_URL}/api/auth/google/authorization-code/custom-token"
+
+curl -i -X POST \
+	-H 'Content-Type: application/json' \
+	-d '{"serverAuthCode":"invalid-server-auth-code"}' \
+	"${HOSTING_URL}/api/auth/google/authorization-code/custom-token"
+
+curl -i -X DELETE \
+	"${HOSTING_URL}/api/auth/google/account-link"
+
+curl -i -X DELETE \
+	"${HOSTING_URL}/api/auth/google/access-token"
+
 curl -i \
 	"${HOSTING_URL}/api/auth/github/callback"
 
@@ -144,8 +165,11 @@ unset FIREBASE_ID_TOKEN TODO_ID WEB_PAGE_ID PUSH_NOTIFICATION_ID HOSTING_URL
 5. Token이 있는 WebPage `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
 6. Token이 없는 PushNotification `POST`: Cloud Run `http-api`의 `401`
 7. Token이 있는 PushNotification `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
-8. GitHub callback `GET`: Functions `api`의 redirect 응답
-9. 각 `DELETE` 뒤 Todo와 연결 알림, WebPage 및 PushNotification의 삭제 상태 복구
+8. body가 빈 Google custom token `POST`: Cloud Run `http-api`의 `400`, `invalid-argument`
+9. 잘못된 `serverAuthCode`를 전달한 Google custom token `POST`: Cloud Run `http-api`의 `401`, `invalid-google-proof`
+10. Token이 없는 Google account-link와 access-token `DELETE`: Cloud Run `http-api`의 `401`
+11. GitHub callback `GET`: Functions `api`의 redirect 응답
+12. 각 `DELETE` 뒤 Todo와 연결 알림, WebPage 및 PushNotification의 삭제 상태 복구
 
 Todo와 기존 API의 응답만으로 실행 주체를 구분하기 어려우므로 Cloud Run과 Functions 로그도 함께 확인합니다.
 
@@ -161,7 +185,7 @@ firebase functions:log \
 	--lines 50
 ```
 
-Todo, WebPage와 PushNotification 요청은 `http-api`, GitHub callback 요청은 Functions `api`에서 확인되어야 합니다.
+Todo, WebPage, PushNotification과 Google 인증 요청은 `http-api`, GitHub callback 요청은 Functions `api`에서 확인되어야 합니다.
 
 ## WebPage와 PushNotification 라우팅 복구
 
@@ -169,13 +193,14 @@ Functions `api`가 WebPage와 PushNotification route 제거가 포함된 소스�
 
 ### 기존 Functions route가 배포된 기간
 
-이 변경에서는 Functions를 배포하지 않으므로 WebPage와 PushNotification route 제거가 포함된 소스로 Functions `api`를 배포하기 전까지는 기존 route가 배포된 상태입니다. 이 기간에만 `firebase.json`의 `devlog-staging` 블록에서 `/api/web-pages/**`, `/api/push-notifications/**` Cloud Run rewrite를 제거해 기존 Functions로 되돌릴 수 있습니다. Todo, GitHub callback과 `/api/**` rewrite는 유지합니다.
+이 변경에서는 Functions를 배포하지 않으므로 WebPage와 PushNotification route 제거가 포함된 소스로 Functions `api`를 배포하기 전까지는 기존 route가 배포된 상태입니다. 이 기간에만 `firebase.json`의 `devlog-staging` 블록에서 `/api/web-pages/**`, `/api/push-notifications/**` Cloud Run rewrite를 제거해 기존 Functions로 되돌릴 수 있습니다. Todo, Google 인증, GitHub callback과 `/api/**` rewrite는 유지합니다.
 
 복구 설정은 별도 변경과 커밋으로 남기고 `functions/test/firebase-hosting.test.js`의 Staging 기대값도 다음 순서에 맞게 변경합니다.
 
 1. `/api/todos/**` → Cloud Run `http-api`
-2. `/api/auth/github/callback` → Functions `api`
-3. `/api/**` → Functions `api`
+2. `/api/auth/google/**` → Cloud Run `http-api`
+3. `/api/auth/github/callback` → Functions `api`
+4. `/api/**` → Functions `api`
 
 라우팅 계약 시험을 통과한 뒤 Staging Hosting만 다시 배포합니다.
 

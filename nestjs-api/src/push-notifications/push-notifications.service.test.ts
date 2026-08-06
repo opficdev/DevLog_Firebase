@@ -115,11 +115,13 @@ describe(PushNotificationsService.name, () => {
       'PushNotification 상태 재조회',
       'PushNotification 복구',
     ]);
-    expect(loggerError).toHaveBeenCalledWith(
-      '푸시 알림 삭제 요청 실패',
-      error,
-      { uid, notificationId },
-    );
+    expect(loggerError).toHaveBeenCalledWith({
+      message: '푸시 알림 삭제 요청 실패',
+      errorMessage: error.message,
+      errorStack: error.stack,
+      uid,
+      notificationId,
+    });
   });
 
   it('cleanup 실패를 기록하고 원래 삭제 요청 오류를 반환한다', async () => {
@@ -152,18 +154,20 @@ describe(PushNotificationsService.name, () => {
         message: '푸시 알림 삭제 요청에 실패했습니다.',
       },
     });
-    expect(loggerError).toHaveBeenNthCalledWith(
-      1,
-      '푸시 알림 삭제 요청 cleanup 실패',
-      cleanupError,
-      { uid, notificationId },
-    );
-    expect(loggerError).toHaveBeenNthCalledWith(
-      2,
-      '푸시 알림 삭제 요청 실패',
-      deletionError,
-      { uid, notificationId },
-    );
+    expect(loggerError).toHaveBeenNthCalledWith(1, {
+      message: '푸시 알림 삭제 요청 cleanup 실패',
+      errorMessage: cleanupError.message,
+      errorStack: cleanupError.stack,
+      uid,
+      notificationId,
+    });
+    expect(loggerError).toHaveBeenNthCalledWith(2, {
+      message: '푸시 알림 삭제 요청 실패',
+      errorMessage: deletionError.message,
+      errorStack: deletionError.stack,
+      uid,
+      notificationId,
+    });
   });
 
   it('삭제 상태인 PushNotification을 복구한다', async () => {
@@ -230,10 +234,12 @@ describe(PushNotificationsService.name, () => {
         message: '푸시 알림 삭제 취소에 실패했습니다.',
       },
     });
-    expect(loggerError).toHaveBeenCalledWith(
-      '푸시 알림 삭제 취소 실패',
-      error,
-      { uid, notificationId },
-    );
+    expect(loggerError).toHaveBeenCalledWith({
+      message: '푸시 알림 삭제 취소 실패',
+      errorMessage: error.message,
+      errorStack: error.stack,
+      uid,
+      notificationId,
+    });
   });
 });

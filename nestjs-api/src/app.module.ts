@@ -4,6 +4,7 @@ import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { FirebaseAuthGuard } from './auth/firebase-auth.guard';
 import { ApiExceptionFilter } from './common/api-exception.filter';
 import { FirebaseModule } from './firebase/firebase.module';
+import { GoogleAuthenticationModule } from './google/google-authentication.module';
 import { PushNotificationsModule } from './push-notifications/push-notifications.module';
 import { TodosModule } from './todos/todos.module';
 import { WebPagesModule } from './web-pages/web-pages.module';
@@ -12,6 +13,7 @@ import { WebPagesModule } from './web-pages/web-pages.module';
 @Module({
   imports: [
     FirebaseModule,
+    GoogleAuthenticationModule,
     PushNotificationsModule,
     TodosModule,
     WebPagesModule,

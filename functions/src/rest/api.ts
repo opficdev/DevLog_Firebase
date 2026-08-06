@@ -21,10 +21,6 @@ import {
     githubOAuthConfigurationSecret
 } from "./github/githubConfiguration";
 import {
-    googleConfiguration,
-    googleOAuthConfigurationSecret
-} from "./google/googleConfiguration";
-import {
     createGithubAccountLinkSession,
     createGithubSignInSession,
     githubCallbackFailureURL,
@@ -34,7 +30,6 @@ import {
     revokeGithubAccessToken,
     unlinkGithubAccount
 } from "./github/githubOAuth";
-import * as googleAuth from "./google/googleAuth";
 import {
     RestError,
     restErrorBodyFrom,
@@ -51,8 +46,7 @@ export const api = onRequest({
         region: LOCATION,
         secrets: [
             appleAuthenticationConfigurationSecret,
-            githubOAuthConfigurationSecret,
-            googleOAuthConfigurationSecret
+            githubOAuthConfigurationSecret
         ]
     },
     async (request, response) => {
@@ -194,29 +188,6 @@ async function handleRoute(
         );
     case "revokeGithubAccessToken":
         return revokeGithubAccessToken(
-            db,
-            requiredUID(uid)
-        );
-    case "requestGoogleCustomToken":
-        return googleAuth.requestGoogleCustomToken(
-            db,
-            googleConfiguration(),
-            requiredBodyString(body, "serverAuthCode")
-        );
-    case "linkGoogleAccount":
-        return googleAuth.linkGoogleAccount(
-            db,
-            googleConfiguration(),
-            requiredUID(uid),
-            requiredBodyString(body, "serverAuthCode")
-        );
-    case "unlinkGoogleAccount":
-        return googleAuth.unlinkGoogleAccount(
-            db,
-            requiredUID(uid)
-        );
-    case "revokeGoogleAccessToken":
-        return googleAuth.revokeGoogleAccessToken(
             db,
             requiredUID(uid)
         );
