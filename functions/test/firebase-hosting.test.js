@@ -45,28 +45,7 @@ assert.deepStrictEqual(staging.rewrites, [
         }
     },
     {
-        source: "/api/auth/github/sign-in-sessions",
-        run: {
-            serviceId: "http-api",
-            region: "asia-northeast3"
-        }
-    },
-    {
-        source: "/api/auth/github/callback",
-        run: {
-            serviceId: "http-api",
-            region: "asia-northeast3"
-        }
-    },
-    {
-        source: "/api/auth/github/custom-token",
-        run: {
-            serviceId: "http-api",
-            region: "asia-northeast3"
-        }
-    },
-    {
-        source: "/api/auth/github/account-link-sessions",
+        source: "/api/auth/github/**",
         run: {
             serviceId: "http-api",
             region: "asia-northeast3"
@@ -80,15 +59,9 @@ assert.deepStrictEqual(staging.rewrites, [
         }
     }
 ]);
-assert.strictEqual("pinTag" in staging.rewrites[0].run, false);
-assert.strictEqual("pinTag" in staging.rewrites[1].run, false);
-assert.strictEqual("pinTag" in staging.rewrites[2].run, false);
-assert.strictEqual("pinTag" in staging.rewrites[3].run, false);
-assert.strictEqual("pinTag" in staging.rewrites[4].run, false);
-assert.strictEqual("pinTag" in staging.rewrites[5].run, false);
-assert.strictEqual("pinTag" in staging.rewrites[6].run, false);
-assert.strictEqual("pinTag" in staging.rewrites[7].run, false);
-assert.strictEqual("pinTag" in staging.rewrites[8].run, false);
+for (const rewrite of staging.rewrites.filter(({ run }) => run)) {
+    assert.strictEqual("pinTag" in rewrite.run, false);
+}
 
 assert.ok(production);
 assert.deepStrictEqual(production.rewrites, [
