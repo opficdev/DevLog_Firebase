@@ -25,10 +25,6 @@ assert.deepStrictEqual(
 );
 
 const githubOAuthRoutes = [
-    ["POST", ["auth", "github", "sign-in-sessions"], "createGithubSignInSession", false],
-    ["GET", ["auth", "github", "callback"], "githubCallback", false],
-    ["POST", ["auth", "github", "custom-token"], "requestGithubCustomToken", false],
-    ["POST", ["auth", "github", "account-link-sessions"], "createGithubAccountLinkSession", true],
     ["PUT", ["auth", "github", "account-link"], "linkGithubAccount", true],
     ["DELETE", ["auth", "github", "account-link"], "unlinkGithubAccount", true]
 ];
@@ -41,6 +37,10 @@ for (const [method, segments, action, requiresAuth] of githubOAuthRoutes) {
 }
 
 for (const [method, segments] of [
+    ["POST", ["auth", "github", "sign-in-sessions"]],
+    ["GET", ["auth", "github", "callback"]],
+    ["POST", ["auth", "github", "custom-token"]],
+    ["POST", ["auth", "github", "account-link-sessions"]],
     ["POST", ["auth", "apple", "challenges"]],
     ["POST", ["auth", "apple", "custom-token"]],
     ["PUT", ["auth", "apple", "account-link"]],
@@ -112,10 +112,6 @@ assert.deepStrictEqual(
 );
 
 const oauthErrors = [
-    ["invalid_app_challenge", 400, "invalid-app-challenge"],
-    ["invalid_oauth_session", 400, "invalid-oauth-session"],
-    ["expired_oauth_session", 410, "expired-oauth-session"],
-    ["consumed_oauth_session", 409, "consumed-oauth-session"],
     ["invalid_oauth_ticket", 400, "invalid-oauth-ticket"],
     ["expired_oauth_ticket", 410, "expired-oauth-ticket"],
     ["consumed_oauth_ticket", 409, "consumed-oauth-ticket"],

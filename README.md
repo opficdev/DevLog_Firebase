@@ -17,8 +17,8 @@ DevLog의 Firebase Cloud Functions와 Firestore index 설정을 관리하는 저
 ```mermaid
 flowchart LR
 	Client["API Client"] --> Hosting["Firebase Hosting"]
-	Hosting -->|"/api/todos/**<br/>/api/web-pages/**<br/>/api/push-notifications/**<br/>/api/auth/google/**<br/>/api/auth/apple/**"| CloudRun["Cloud Run<br/>http-api"]
-	Hosting -->|"/api/auth/github/callback<br/>나머지 /api/**"| Functions["Cloud Functions<br/>api"]
+	Hosting -->|"/api/todos/**<br/>/api/web-pages/**<br/>/api/push-notifications/**<br/>/api/auth/google/**<br/>/api/auth/apple/**<br/>GitHub session·callback·custom token"| CloudRun["Cloud Run<br/>http-api"]
+	Hosting -->|"나머지 /api/**"| Functions["Cloud Functions<br/>api"]
 	CloudRun --> Auth["Firebase Auth"]
 	Functions --> Auth
 	CloudRun --> Firestore["Firestore"]
@@ -28,13 +28,13 @@ flowchart LR
 | 실행 구성 | 소스 | 책임 |
 | --- | --- | --- |
 | Firebase Hosting | `firebase.json` | 공개 요청 진입점과 경로별 rewrite 순서 관리 |
-| Cloud Run `http-api` | `nestjs-api` | Todo, WebPage, PushNotification 요청의 Firebase ID Token 검증과 삭제, Google 인증, Apple 인증, 계정, token 관리 |
+| Cloud Run `http-api` | `nestjs-api` | Todo, WebPage, PushNotification 요청의 Firebase ID Token 검증과 삭제, Google·Apple 인증, GitHub session·callback·custom token 관리 |
 | Cloud Functions `api` | `functions` | 기존 REST API와 OAuth 처리 |
 | Cloud Functions 개별 함수 | `functions` | trigger, Scheduler, Cloud Tasks, FCM 처리 |
 | Firebase Auth | — | 인증이 필요한 경로에 전달된 Bearer token 검증 |
 | Firestore | — | 검증된 사용자 UID 범위의 공통 데이터 저장 |
 
-Staging Hosting에서는 `/api/todos/**`, `/api/web-pages/**`, `/api/push-notifications/**`, `/api/auth/google/**`, `/api/auth/apple/**`를 Cloud Run `http-api`가 우선 처리하고 GitHub callback과 나머지 `/api/**`는 기존 Functions `api`가 계속 처리합니다.
+Staging Hosting에서는 `/api/todos/**`, `/api/web-pages/**`, `/api/push-notifications/**`, `/api/auth/google/**`, `/api/auth/apple/**`와 GitHub의 `/sign-in-sessions`, `/callback`, `/custom-token`, `/account-link-sessions`를 Cloud Run `http-api`가 우선 처리합니다. GitHub 계정 연결 해제·access token 제거를 포함한 나머지 `/api/**`는 기존 Functions `api`가 계속 처리합니다.
 
 기존 Functions를 한 번에 교체하지 않고 요청 계약을 유지하면서 경로 단위로 NestJS API에 이전하는 구조입니다. 최종적으로 Cloud Functions `api`가 담당하는 HTTP API 전체를 Cloud Run 기반 `http-api`로 이전하는 것을 목표로 합니다.
 
@@ -61,7 +61,7 @@ iOS Google Sign-In 설정은 환경별 Firebase Secret과 다음과 같이 일�
 - staging `GIDServerClientID` = staging `GOOGLE_OAUTH_CONFIG.clientId`
 - production `GIDServerClientID` = production `GOOGLE_OAUTH_CONFIG.clientId`
 
-Google 인증은 서버 callback route를 사용하지 않으며 Staging에서는 `/api/auth/google/**` Hosting rewrite로 Cloud Run에 전달됩니다. Apple 인증은 Staging의 `/api/auth/apple/**` Hosting rewrite로 Cloud Run에 전달됩니다. GitHub 인증은 기존 `callbackURL`과 Hosting rewrite를 계속 사용합니다.
+Google 인증은 서버 callback route를 사용하지 않으며 Staging에서는 `/api/auth/google/**` Hosting rewrite로 Cloud Run에 전달됩니다. Apple 인증은 Staging의 `/api/auth/apple/**` Hosting rewrite로 Cloud Run에 전달됩니다. GitHub 인증은 기존 `callbackURL`을 유지하며 Staging에서는 이전한 네 경로만 개별 Hosting rewrite로 Cloud Run에 전달됩니다.
 
 Apple JSON에는 `teamId`, `clientId`, `keyId`, `privateKey` 필드를 모두 포함합니다.
 

@@ -5,17 +5,9 @@ import type { Request } from "firebase-functions/v2/https";
 import type { Response } from "express";
 import * as logger from "firebase-functions/logger";
 import { toError } from "../common/error";
+import { githubOAuthConfigurationSecret } from "./github/githubConfiguration";
 import {
-    githubConfiguration,
-    githubOAuthConfigurationSecret
-} from "./github/githubConfiguration";
-import {
-    createGithubAccountLinkSession,
-    createGithubSignInSession,
-    githubCallbackFailureURL,
-    githubCallbackURL,
     linkGithubAccount,
-    requestGithubCustomToken,
     revokeGithubAccessToken,
     unlinkGithubAccount
 } from "./github/githubOAuth";
@@ -52,26 +44,6 @@ export const api = onRequest({
 
             const db = getFirestore();
             const uid = route.requiresAuth ? await authenticatedUID(request) : undefined;
-            if (route.action === "githubCallback") {
-                let configuration;
-                try {
-                    configuration = githubConfiguration();
-                } catch (error) {
-                    logger.error("GitHub OAuth callback 환경 설정 확인 실패", {
-                        error: toError(error).message
-                    });
-                    response.redirect(302, githubCallbackFailureURL());
-                    return;
-                }
-                const redirectURL = await githubCallbackURL(
-                    db,
-                    configuration,
-                    optionalQueryString(request.query.state),
-                    optionalQueryString(request.query.code)
-                );
-                response.redirect(302, redirectURL);
-                return;
-            }
             const result = await handleRoute(
                 route,
                 db,
@@ -98,27 +70,6 @@ async function handleRoute(
     uid?: string
 ): Promise<unknown> {
     switch (route.action) {
-    case "githubCallback":
-        return undefined;
-    case "createGithubSignInSession":
-        return createGithubSignInSession(
-            db,
-            githubConfiguration(),
-            requiredBodyString(body, "appChallenge")
-        );
-    case "requestGithubCustomToken":
-        return requestGithubCustomToken(
-            db,
-            requiredBodyString(body, "ticket"),
-            requiredBodyString(body, "appVerifier")
-        );
-    case "createGithubAccountLinkSession":
-        return createGithubAccountLinkSession(
-            db,
-            githubConfiguration(),
-            requiredUID(uid),
-            requiredBodyString(body, "appChallenge")
-        );
     case "linkGithubAccount":
         return linkGithubAccount(
             db,
@@ -137,11 +88,6 @@ async function handleRoute(
             requiredUID(uid)
         );
     }
-}
-
-// query parameter에서 하나의 필수 문자열을 반환합니다.
-function optionalQueryString(value: unknown): string | undefined {
-    return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 async function authenticatedUID(request: Request): Promise<string> {

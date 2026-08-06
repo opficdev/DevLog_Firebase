@@ -1,9 +1,5 @@
 // REST route가 실행할 처리 종류를 나타냅니다.
 export type RestAction =
-    "createGithubSignInSession" |
-    "githubCallback" |
-    "requestGithubCustomToken" |
-    "createGithubAccountLinkSession" |
     "linkGithubAccount" |
     "unlinkGithubAccount" |
     "revokeGithubAccessToken";
@@ -24,37 +20,6 @@ export function parseRestRouteSegments(pathSegments: string[]): string[] | undef
 
 export function matchRestRoute(method: string, routeSegments: string[]): RestRoute | undefined {
     const normalizedMethod = method.toUpperCase();
-
-    if (routeSegments.join("/") === "auth/github/sign-in-sessions" && normalizedMethod === "POST") {
-        return {
-            action: "createGithubSignInSession",
-            requiresAuth: false
-        };
-    }
-
-    if (routeSegments.join("/") === "auth/github/callback" && normalizedMethod === "GET") {
-        return {
-            action: "githubCallback",
-            requiresAuth: false
-        };
-    }
-
-    if (routeSegments.join("/") === "auth/github/custom-token" && normalizedMethod === "POST") {
-        return {
-            action: "requestGithubCustomToken",
-            requiresAuth: false
-        };
-    }
-
-    if (
-        routeSegments.join("/") === "auth/github/account-link-sessions" &&
-        normalizedMethod === "POST"
-    ) {
-        return {
-            action: "createGithubAccountLinkSession",
-            requiresAuth: true
-        };
-    }
 
     if (routeSegments.join("/") === "auth/github/account-link" && normalizedMethod === "PUT") {
         return {

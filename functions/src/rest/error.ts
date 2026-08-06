@@ -37,26 +37,6 @@ const restErrorByReason: Record<string, RestErrorDefinition> = {
         code: "github-provider-failed",
         message: "GitHub 인증 서버 요청에 실패했습니다."
     },
-    invalid_app_challenge: {
-        status: 400,
-        code: "invalid-app-challenge",
-        message: "app challenge가 유효하지 않습니다."
-    },
-    invalid_oauth_session: {
-        status: 400,
-        code: "invalid-oauth-session",
-        message: "OAuth session이 유효하지 않습니다."
-    },
-    expired_oauth_session: {
-        status: 410,
-        code: "expired-oauth-session",
-        message: "OAuth session이 만료되었습니다."
-    },
-    consumed_oauth_session: {
-        status: 409,
-        code: "consumed-oauth-session",
-        message: "OAuth session이 이미 처리되었습니다."
-    },
     invalid_oauth_ticket: {
         status: 400,
         code: "invalid-oauth-ticket",

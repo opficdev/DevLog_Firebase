@@ -2,18 +2,6 @@ import axios from "axios";
 import * as logger from "firebase-functions/logger";
 import { HttpsError } from "firebase-functions/v2/https";
 
-// GitHub authorization code 교환 응답을 나타냅니다.
-interface GitHubOAuthResponse {
-    // 발급된 사용자 access token을 저장합니다.
-    access_token: string;
-    // 발급 token 종류를 저장합니다.
-    token_type: string;
-    // 승인된 OAuth scope를 저장합니다.
-    scope: string;
-    // GitHub token 교환 오류 코드를 저장합니다.
-    error?: string;
-}
-
 // GitHub 사용자 API에서 인증 판단에 사용하는 프로필을 나타냅니다.
 export interface GitHubUser {
     // GitHub 계정의 숫자 식별자를 저장합니다.
@@ -42,40 +30,6 @@ const ACCEPT = "application/vnd.github+json";
 const USER_AGENT = "DevLog-Firebase";
 const NOT_FOUND_STATUS = 404;
 const VALIDATION_FAILED_STATUS = 422;
-
-// GitHub OAuth code를 access token으로 교환합니다.
-export async function requestGitHubAccessToken(
-    code: string,
-    clientId: string,
-    clientSecret: string,
-    redirectURL?: string,
-    codeVerifier?: string
-): Promise<string> {
-    const tokenRequest: Record<string, string> = {
-        client_id: clientId,
-        client_secret: clientSecret,
-        code
-    };
-    if (redirectURL) {
-        tokenRequest.redirect_uri = redirectURL;
-    }
-    if (codeVerifier) {
-        tokenRequest.code_verifier = codeVerifier;
-    }
-    const tokenResponse = await requestGitHubAPI(() =>
-        axios.post<GitHubOAuthResponse>
-        ("https://github.com/login/oauth/access_token", tokenRequest, {
-            headers: { "Accept": "application/json" }
-        })
-    );
-
-    const tokenData = tokenResponse.data;
-    if (tokenData.error) {
-        throw new HttpsError("invalid-argument", `GitHub OAuth 오류: ${tokenData.error}`);
-    }
-
-    return tokenData.access_token;
-}
 
 // GitHub API에서 로그인 계정의 프로필을 조회합니다.
 export async function requestGitHubUser(accessToken: string): Promise<GitHubUser> {
