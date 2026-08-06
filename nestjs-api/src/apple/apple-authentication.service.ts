@@ -205,7 +205,7 @@ export class AppleAuthenticationService {
     const refreshToken = await this.credentialRepository.find(uid);
     const requestedAccessToken =
       typeof legacyAccessToken === 'string' ? legacyAccessToken.trim() : '';
-    const token = refreshToken ?? requestedAccessToken;
+    const token = refreshToken || requestedAccessToken;
     if (!token) {
       return;
     }

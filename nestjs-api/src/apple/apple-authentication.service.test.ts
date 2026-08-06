@@ -632,6 +632,19 @@ describe(AppleAuthenticationService.name, () => {
     expect(deleteCredential).not.toHaveBeenCalled();
   });
 
+  it('저장된 refresh token이 빈 문자열이면 기존 access token grant를 폐기한다', async () => {
+    find.mockResolvedValue('');
+
+    await expect(
+      service.revokeAccessToken('user-1', ' legacy-access-token '),
+    ).resolves.toBeUndefined();
+    expect(revokeAppleGrant).toHaveBeenCalledWith(
+      'legacy-access-token',
+      'access_token',
+    );
+    expect(deleteCredential).not.toHaveBeenCalled();
+  });
+
   it('폐기할 Apple token이 없으면 성공으로 처리한다', async () => {
     find.mockResolvedValue(undefined);
 
