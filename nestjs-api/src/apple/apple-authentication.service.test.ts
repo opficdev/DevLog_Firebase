@@ -14,6 +14,7 @@ import { AppleProviderRepository } from './apple-provider.repository';
 
 describe(AppleAuthenticationService.name, () => {
   const createCustomToken = jest.fn();
+  const createChallenge = jest.fn();
   const consume = jest.fn();
   const exchangeAuthorizationCode = jest.fn();
   const verifyIdToken = jest.fn();
@@ -31,7 +32,7 @@ describe(AppleAuthenticationService.name, () => {
       requiredRefreshToken,
       revokeExchangedTokens,
     } as unknown as AppleAuthenticationClient,
-    { consume } as unknown as AppleChallengeRepository,
+    { create: createChallenge, consume } as unknown as AppleChallengeRepository,
     { resolveUid, ensureProvider } as unknown as AppleProviderRepository,
     { update } as unknown as AppleProfileRepository,
     { save } as unknown as AppleCredentialRepository,
@@ -39,6 +40,11 @@ describe(AppleAuthenticationService.name, () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
+    createChallenge.mockResolvedValue({
+      challengeId: 'challenge-1',
+      hashedNonce: 'hashed-nonce',
+      expiresAt: '2026-08-06T00:05:00.000Z',
+    });
     consume.mockResolvedValue('hashed-nonce');
     exchangeAuthorizationCode.mockResolvedValue(oauthTokens());
     verifyIdToken.mockResolvedValue(tokenPayload());
@@ -49,6 +55,15 @@ describe(AppleAuthenticationService.name, () => {
     update.mockResolvedValue(undefined);
     save.mockResolvedValue(undefined);
     createCustomToken.mockResolvedValue('custom-token');
+  });
+
+  it('새 Apple 인증 challenge를 반환한다', async () => {
+    await expect(service.createChallenge()).resolves.toEqual({
+      challengeId: 'challenge-1',
+      hashedNonce: 'hashed-nonce',
+      expiresAt: '2026-08-06T00:05:00.000Z',
+    });
+    expect(createChallenge).toHaveBeenCalledWith();
   });
 
   it('challenge 증명 처리 순서를 유지해 Firebase custom token을 반환한다', async () => {

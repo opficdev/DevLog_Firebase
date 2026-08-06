@@ -10,7 +10,10 @@ import { ApiException } from '../common/api.exception';
 import { FIREBASE_AUTH_TOKEN } from '../firebase/firebase.tokens';
 import { AppleAuthenticationClient } from './apple-authentication.client';
 import { type AppleTokenPayload } from './apple-authentication.types';
-import { AppleChallengeRepository } from './apple-challenge.repository';
+import {
+  type AppleChallengeResponse,
+  AppleChallengeRepository,
+} from './apple-challenge.repository';
 import { AppleCredentialRepository } from './apple-credential.repository';
 import { AppleProfileRepository } from './apple-profile.repository';
 import { AppleProviderRepository } from './apple-provider.repository';
@@ -35,6 +38,11 @@ export class AppleAuthenticationService {
     private readonly profileRepository: AppleProfileRepository,
     private readonly credentialRepository: AppleCredentialRepository,
   ) {}
+
+  // 새 Apple 인증 challenge를 생성합니다.
+  async createChallenge(): Promise<AppleChallengeResponse> {
+    return this.challengeRepository.create();
+  }
 
   // challenge 기반 Apple 인증 증명으로 Firebase custom token을 생성합니다.
   // prettier-ignore
