@@ -1,7 +1,5 @@
 // REST route가 실행할 처리 종류를 나타냅니다.
 export type RestAction =
-    "createAppleChallenge" |
-    "requestAppleCustomToken" |
     "linkAppleProvider" |
     "unlinkAppleProvider" |
     "requestAppleRefreshToken" |
@@ -31,20 +29,6 @@ export function parseRestRouteSegments(pathSegments: string[]): string[] | undef
 
 export function matchRestRoute(method: string, routeSegments: string[]): RestRoute | undefined {
     const normalizedMethod = method.toUpperCase();
-
-    if (routeSegments.join("/") === "auth/apple/custom-token" && normalizedMethod === "POST") {
-        return {
-            action: "requestAppleCustomToken",
-            requiresAuth: false
-        };
-    }
-
-    if (routeSegments.join("/") === "auth/apple/challenges" && normalizedMethod === "POST") {
-        return {
-            action: "createAppleChallenge",
-            requiresAuth: false
-        };
-    }
 
     if (routeSegments.join("/") === "auth/apple/account-link" && normalizedMethod === "PUT") {
         return {

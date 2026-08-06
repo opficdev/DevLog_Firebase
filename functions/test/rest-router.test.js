@@ -11,22 +11,6 @@ assert.deepStrictEqual(
 assert.strictEqual(parseRestRouteSegments(["staging", "todos"]), undefined);
 
 assert.deepStrictEqual(
-    matchRestRoute("POST", ["auth", "apple", "challenges"]),
-    {
-        action: "createAppleChallenge",
-        requiresAuth: false
-    }
-);
-
-assert.deepStrictEqual(
-    matchRestRoute("POST", ["auth", "apple", "custom-token"]),
-    {
-        action: "requestAppleCustomToken",
-        requiresAuth: false
-    }
-);
-
-assert.deepStrictEqual(
     matchRestRoute("PUT", ["auth", "apple", "account-link"]),
     {
         action: "linkAppleProvider",
@@ -97,6 +81,8 @@ for (const [method, segments, action, requiresAuth] of githubOAuthRoutes) {
 }
 
 for (const [method, segments] of [
+    ["POST", ["auth", "apple", "challenges"]],
+    ["POST", ["auth", "apple", "custom-token"]],
     ["POST", ["auth", "google", "authorization-code", "custom-token"]],
     ["PUT", ["auth", "google", "authorization-code", "account-link"]],
     ["DELETE", ["auth", "google", "account-link"]],
