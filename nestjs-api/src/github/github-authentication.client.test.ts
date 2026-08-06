@@ -230,6 +230,20 @@ describe(GitHubAuthenticationClient.name, () => {
       },
     });
   });
+
+  it('예상하지 않은 GitHub grant 폐기 응답을 기존 계약 오류로 변환한다', async () => {
+    mockedAxios.request.mockResolvedValue({ status: HttpStatus.OK });
+
+    await expect(
+      client.revokeOAuthGrant('user-1', 'access-token', configuration),
+    ).rejects.toMatchObject({
+      status: HttpStatus.BAD_GATEWAY,
+      response: {
+        code: 'github-revoke-failed',
+        message: 'GitHub OAuth App grant 제거에 실패했습니다.',
+      },
+    });
+  });
 });
 
 // Axios 오류 대역을 구성합니다.
