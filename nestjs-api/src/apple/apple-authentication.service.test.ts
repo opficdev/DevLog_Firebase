@@ -21,12 +21,14 @@ describe(AppleAuthenticationService.name, () => {
   const requiredRefreshToken = jest.fn();
   const revokeExchangedTokens = jest.fn();
   const requestAccessToken = jest.fn();
+  const revokeAppleGrant = jest.fn();
   const resolveUid = jest.fn();
   const ensureProvider = jest.fn();
   const link = jest.fn();
   const update = jest.fn();
   const save = jest.fn();
   const find = jest.fn();
+  const deleteCredential = jest.fn();
   const service = new AppleAuthenticationService(
     { createCustomToken } as unknown as Auth,
     {
@@ -35,11 +37,16 @@ describe(AppleAuthenticationService.name, () => {
       requiredRefreshToken,
       revokeExchangedTokens,
       requestAccessToken,
+      revokeAppleGrant,
     } as unknown as AppleAuthenticationClient,
     { create: createChallenge, consume } as unknown as AppleChallengeRepository,
     { resolveUid, ensureProvider, link } as unknown as AppleProviderRepository,
     { update } as unknown as AppleProfileRepository,
-    { save, find } as unknown as AppleCredentialRepository,
+    {
+      save,
+      find,
+      delete: deleteCredential,
+    } as unknown as AppleCredentialRepository,
   );
 
   beforeEach(() => {
@@ -55,12 +62,14 @@ describe(AppleAuthenticationService.name, () => {
     requiredRefreshToken.mockResolvedValue('refresh-token');
     revokeExchangedTokens.mockResolvedValue(undefined);
     requestAccessToken.mockResolvedValue('access-token');
+    revokeAppleGrant.mockResolvedValue(undefined);
     resolveUid.mockResolvedValue('user-1');
     ensureProvider.mockResolvedValue(undefined);
     link.mockResolvedValue(undefined);
     update.mockResolvedValue(undefined);
     save.mockResolvedValue(undefined);
     find.mockResolvedValue('refresh-token');
+    deleteCredential.mockResolvedValue(undefined);
     createCustomToken.mockResolvedValue('custom-token');
   });
 
@@ -590,6 +599,46 @@ describe(AppleAuthenticationService.name, () => {
       },
     });
     expect(requestAccessToken).not.toHaveBeenCalled();
+  });
+
+  it('저장된 refresh token grant를 폐기한 뒤 credential을 삭제한다', async () => {
+    await expect(service.revokeAccessToken('user-1')).resolves.toBeUndefined();
+    expect(revokeAppleGrant).toHaveBeenCalledWith(
+      'refresh-token',
+      'refresh_token',
+    );
+    expect(deleteCredential).toHaveBeenCalledWith('user-1');
+  });
+
+  it('저장된 credential이 없으면 기존 access token grant만 폐기한다', async () => {
+    find.mockResolvedValue(undefined);
+
+    await expect(
+      service.revokeAccessToken('user-1', ' legacy-access-token '),
+    ).resolves.toBeUndefined();
+    expect(revokeAppleGrant).toHaveBeenCalledWith(
+      'legacy-access-token',
+      'access_token',
+    );
+    expect(deleteCredential).not.toHaveBeenCalled();
+  });
+
+  it('폐기할 Apple token이 없으면 성공으로 처리한다', async () => {
+    find.mockResolvedValue(undefined);
+
+    await expect(
+      service.revokeAccessToken('user-1', 1),
+    ).resolves.toBeUndefined();
+    expect(revokeAppleGrant).not.toHaveBeenCalled();
+    expect(deleteCredential).not.toHaveBeenCalled();
+  });
+
+  it('Apple grant 폐기 실패 시 credential을 보존한다', async () => {
+    const error = new Error('Apple grant 폐기 실패');
+    revokeAppleGrant.mockRejectedValue(error);
+
+    await expect(service.revokeAccessToken('user-1')).rejects.toBe(error);
+    expect(deleteCredential).not.toHaveBeenCalled();
   });
 });
 

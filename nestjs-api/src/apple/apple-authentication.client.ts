@@ -145,7 +145,7 @@ export class AppleAuthenticationClient {
   }
 
   // Apple grant를 폐기하고 이미 무효화된 상태는 완료로 처리합니다.
-  private async revokeAppleGrant(
+  async revokeAppleGrant(
     token: string,
     tokenTypeHint: 'access_token' | 'refresh_token',
   ): Promise<void> {

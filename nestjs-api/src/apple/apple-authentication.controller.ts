@@ -2,6 +2,7 @@
 import {
   Body,
   Controller,
+  Delete,
   HttpCode,
   HttpStatus,
   Post,
@@ -105,6 +106,21 @@ export class AppleAuthenticationController {
         requiredAuthenticatedUid(request),
       ),
     };
+  }
+
+  // 인증된 사용자의 Apple grant와 credential을 폐기합니다.
+  @Delete('access-token')
+  @HttpCode(HttpStatus.OK)
+  async revokeAccessToken(
+    @Req() request: FirebaseAuthenticatedRequest,
+    @Body() body: unknown,
+  ): Promise<{ success: true }> {
+    const value = bodyRecord(body);
+    await this.service.revokeAccessToken(
+      requiredAuthenticatedUid(request),
+      value.token,
+    );
+    return { success: true };
   }
 }
 

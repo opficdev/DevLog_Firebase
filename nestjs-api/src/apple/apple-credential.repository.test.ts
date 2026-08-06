@@ -10,6 +10,7 @@ describe(AppleCredentialRepository.name, () => {
     [unknown, Record<string, unknown>, { merge: boolean }]
   >();
   const update = jest.fn<void, [unknown, Record<string, unknown>]>();
+  const deleteDocument = jest.fn<void, [unknown]>();
   const rootReference = { path: 'authCredentials/user-1' };
   const credentialReference = {
     path: 'authCredentials/user-1/providers/apple',
@@ -39,8 +40,15 @@ describe(AppleCredentialRepository.name, () => {
           get: typeof transactionGet;
           set: typeof set;
           update: typeof update;
+          delete: typeof deleteDocument;
         }) => Promise<unknown>,
-      ) => callback({ get: transactionGet, set, update }),
+      ) =>
+        callback({
+          get: transactionGet,
+          set,
+          update,
+          delete: deleteDocument,
+        }),
     );
   });
 
@@ -216,6 +224,32 @@ describe(AppleCredentialRepository.name, () => {
 
     await expect(repository.find('user-1')).resolves.toBeUndefined();
     expect(set).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('Apple credential과 기존 refresh token 필드를 삭제한다', async () => {
+    transactionGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ appleRefreshToken: 'legacy-refresh-token' }),
+    });
+
+    await repository.delete('user-1');
+
+    expect(deleteDocument).toHaveBeenCalledWith(credentialReference);
+    expect(update).toHaveBeenCalledWith(legacyReference, {
+      appleRefreshToken: FieldValue.delete(),
+    });
+  });
+
+  it('기존 refresh token 필드가 없어도 Apple credential을 삭제한다', async () => {
+    transactionGet.mockResolvedValue({
+      exists: true,
+      data: () => ({}),
+    });
+
+    await repository.delete('user-1');
+
+    expect(deleteDocument).toHaveBeenCalledWith(credentialReference);
     expect(update).not.toHaveBeenCalled();
   });
 });

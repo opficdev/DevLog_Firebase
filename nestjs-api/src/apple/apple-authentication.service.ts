@@ -189,4 +189,27 @@ export class AppleAuthenticationService {
     }
     return this.client.requestAccessToken(refreshToken);
   }
+
+  // Apple grant를 폐기한 뒤 저장된 credential을 삭제합니다.
+  // prettier-ignore
+  async revokeAccessToken(
+    uid: string,
+    legacyAccessToken?: unknown,
+  ): Promise<void> {
+    const refreshToken = await this.credentialRepository.find(uid);
+    const requestedAccessToken =
+      typeof legacyAccessToken === 'string' ? legacyAccessToken.trim() : '';
+    const token = refreshToken ?? requestedAccessToken;
+    if (!token) {
+      return;
+    }
+
+    await this.client.revokeAppleGrant(
+      token,
+      refreshToken ? 'refresh_token' : 'access_token',
+    );
+    if (refreshToken) {
+      await this.credentialRepository.delete(uid);
+    }
+  }
 }

@@ -10,6 +10,7 @@ describe(AppleAuthenticationController.name, () => {
   const linkProvider = jest.fn();
   const requestRefreshToken = jest.fn();
   const refreshAccessToken = jest.fn();
+  const revokeAccessToken = jest.fn();
   const controller = new AppleAuthenticationController({
     createChallenge,
     requestCustomTokenWithChallenge,
@@ -17,6 +18,7 @@ describe(AppleAuthenticationController.name, () => {
     linkProvider,
     requestRefreshToken,
     refreshAccessToken,
+    revokeAccessToken,
   } as unknown as AppleAuthenticationService);
 
   beforeEach(() => {
@@ -217,5 +219,20 @@ describe(AppleAuthenticationController.name, () => {
       controller.accessToken({ headers: {}, uid: 'user-1' }),
     ).resolves.toEqual({ token: 'access-token' });
     expect(refreshAccessToken).toHaveBeenCalledWith('user-1');
+  });
+
+  it('인증된 uid의 Apple access token을 폐기한다', async () => {
+    revokeAccessToken.mockResolvedValue(undefined);
+
+    await expect(
+      controller.revokeAccessToken(
+        { headers: {}, uid: 'user-1' },
+        { token: ' legacy-access-token ' },
+      ),
+    ).resolves.toEqual({ success: true });
+    expect(revokeAccessToken).toHaveBeenCalledWith(
+      'user-1',
+      ' legacy-access-token ',
+    );
   });
 });

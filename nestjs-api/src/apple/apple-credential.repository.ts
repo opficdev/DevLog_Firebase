@@ -110,4 +110,27 @@ export class AppleCredentialRepository {
       return refreshToken;
     });
   }
+
+  // 서버 전용 Apple credential과 남아 있는 기존 token 필드를 삭제합니다.
+  async delete(uid: string): Promise<void> {
+    const reference = this.firestore.doc(
+      `authCredentials/${uid}/providers/apple`,
+    );
+    const legacyReference = this.firestore.doc(`users/${uid}/userData/tokens`);
+    await this.firestore.runTransaction(async (transaction) => {
+      const legacySnapshot = await transaction.get(legacyReference);
+      const legacyData: Record<string, unknown> | undefined =
+        legacySnapshot.data();
+      transaction.delete(reference);
+      if (
+        legacySnapshot.exists &&
+        legacyData &&
+        'appleRefreshToken' in legacyData
+      ) {
+        transaction.update(legacyReference, {
+          appleRefreshToken: FieldValue.delete(),
+        });
+      }
+    });
+  }
 }
