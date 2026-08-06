@@ -9,6 +9,7 @@
 - 자원: request-based billing, 1 vCPU, 512 MiB, min instances 0, max instances 3, concurrency 80, timeout 60초, port 8080
 - 제외: Production, Firebase Hosting, 실제 배포 자동화
 - Apple 인증 경로: `/api/auth/apple/**`
+- GitHub 인증 경로: `/api/auth/github/sign-in-sessions`, `/api/auth/github/callback`, `/api/auth/github/custom-token`, `/api/auth/github/account-link-sessions`
 
 ## 권한과 인증
 
@@ -16,6 +17,7 @@
 - Firebase Admin SDK가 ADC로 custom token을 서명할 수 있도록 런타임 service account 자신에 대해 `roles/iam.serviceAccountTokenCreator`를 부여합니다.
 - `GOOGLE_OAUTH_CONFIG` Secret에 대해 런타임 service account에 `roles/secretmanager.secretAccessor`를 부여합니다.
 - `APPLE_AUTH_CONFIG` Secret에 대해 런타임 service account에 `roles/secretmanager.secretAccessor`를 부여합니다.
+- `GITHUB_OAUTH_CONFIG` Secret에 대해 런타임 service account에 `roles/secretmanager.secretAccessor`를 부여합니다.
 - 배포 실행자에는 `roles/run.sourceDeveloper`, `roles/serviceusage.serviceUsageConsumer`, 런타임 및 build service account 각각에 대한 `roles/iam.serviceAccountUser`가 필요합니다.
 - build service account에는 `roles/run.builder`가 필요합니다.
 - 최초 공개 설정에는 `run.services.create`, `run.services.update`, `run.services.setIamPolicy` 권한이 필요하며 `roles/run.admin`에 포함됩니다.
@@ -69,6 +71,12 @@ gcloud secrets get-iam-policy APPLE_AUTH_CONFIG \
 	--filter="bindings.members:serviceAccount:${RUNTIME_SERVICE_ACCOUNT} AND bindings.role:roles/secretmanager.secretAccessor" \
 	--format='value(bindings.role)'
 
+gcloud secrets get-iam-policy GITHUB_OAUTH_CONFIG \
+	--project devlog-staging \
+	--flatten='bindings[].members' \
+	--filter="bindings.members:serviceAccount:${RUNTIME_SERVICE_ACCOUNT} AND bindings.role:roles/secretmanager.secretAccessor" \
+	--format='value(bindings.role)'
+
 gcloud secrets versions list GOOGLE_OAUTH_CONFIG \
 	--project devlog-staging \
 	--filter='state=ENABLED' \
@@ -78,9 +86,14 @@ gcloud secrets versions list APPLE_AUTH_CONFIG \
 	--project devlog-staging \
 	--filter='state=ENABLED' \
 	--format='value(name)'
+
+gcloud secrets versions list GITHUB_OAUTH_CONFIG \
+	--project devlog-staging \
+	--filter='state=ENABLED' \
+	--format='value(name)'
 ```
 
-결제는 `True`, 두 service account의 비활성 상태는 각각 `False`, 필수 API 여섯 개, 앞 절에서 확인한 권한과 `GOOGLE_OAUTH_CONFIG`, `APPLE_AUTH_CONFIG`의 활성 version 조회가 모두 출력되어야 합니다. 실행자와 build service account에는 앞 절의 권한이 있어야 합니다.
+결제는 `True`, 두 service account의 비활성 상태는 각각 `False`, 필수 API 여섯 개, 앞 절에서 확인한 권한과 `GOOGLE_OAUTH_CONFIG`, `APPLE_AUTH_CONFIG`, `GITHUB_OAUTH_CONFIG`의 활성 version 조회가 모두 출력되어야 합니다. 실행자와 build service account에는 앞 절의 권한이 있어야 합니다.
 
 작업 트리가 비어 있는지 확인하고 배포할 commit을 기록합니다.
 
@@ -130,7 +143,7 @@ gcloud run deploy http-api \
 	--timeout 60s \
 	--port 8080 \
 	--no-invoker-iam-check \
-	--set-secrets=GOOGLE_OAUTH_CONFIG=GOOGLE_OAUTH_CONFIG:latest,APPLE_AUTH_CONFIG=APPLE_AUTH_CONFIG:latest
+	--set-secrets=GOOGLE_OAUTH_CONFIG=GOOGLE_OAUTH_CONFIG:latest,APPLE_AUTH_CONFIG=APPLE_AUTH_CONFIG:latest,GITHUB_OAUTH_CONFIG=GITHUB_OAUTH_CONFIG:latest
 
 unset RUNTIME_SERVICE_ACCOUNT BUILD_SERVICE_ACCOUNT
 ```
@@ -200,6 +213,24 @@ curl -i -X DELETE \
 	"${SERVICE_URL}/api/auth/google/access-token"
 
 curl -i -X POST \
+	-H 'Content-Type: application/json' \
+	-d '{}' \
+	"${SERVICE_URL}/api/auth/github/sign-in-sessions"
+
+curl -i \
+	"${SERVICE_URL}/api/auth/github/callback"
+
+curl -i -X POST \
+	-H 'Content-Type: application/json' \
+	-d '{}' \
+	"${SERVICE_URL}/api/auth/github/custom-token"
+
+curl -i -X POST \
+	-H 'Content-Type: application/json' \
+	-d '{"appChallenge":"route-check"}' \
+	"${SERVICE_URL}/api/auth/github/account-link-sessions"
+
+curl -i -X POST \
 	"${SERVICE_URL}/api/todos/${TODO_ID}/deletion-request"
 
 curl -i -X POST \
@@ -243,13 +274,17 @@ unset FIREBASE_ID_TOKEN TODO_ID WEB_PAGE_ID PUSH_NOTIFICATION_ID SERVICE_URL
 4. Apple custom token `POST`에서 `challengeId`/`idToken` 식별 값이 비어 있을 경우: `400`, `invalid-argument`
 5. Token이 없는 Apple account-link `PUT`/`DELETE`, access-token `POST`/`DELETE`, refresh-token `POST`: 각각 `401`
 6. Token이 없는 Google account-link와 access-token `DELETE`: 각각 `401`
-7. Token이 없는 Todo `POST`: `401`
-8. Token이 있는 Todo `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
-9. Token이 있는 WebPage `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
-10. Token이 있는 PushNotification `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
-11. 각 `DELETE` 뒤 Todo와 연결 알림, WebPage 및 PushNotification의 삭제 상태 복구
+7. body가 빈 GitHub 로그인 session `POST`: `400`, `invalid-argument`
+8. query가 빈 GitHub callback `GET`: `302`, `devlog://oauth-callback?error=oauth-failed`
+9. body가 빈 GitHub custom token `POST`: `400`, `invalid-argument`
+10. Token이 없는 GitHub 계정 연결 session `POST`: `401`, `unauthenticated`
+11. Token이 없는 Todo `POST`: `401`
+12. Token이 있는 Todo `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
+13. Token이 있는 WebPage `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
+14. Token이 있는 PushNotification `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
+15. 각 `DELETE` 뒤 Todo와 연결 알림, WebPage 및 PushNotification의 삭제 상태 복구
 
-유효한 Firebase ID Token과 일회용 인증 값이 필요한 Google custom token, account-link, account-link 해제, access-token 폐기와 Apple challenge, custom token, account-link, account-link 해제, access-token 갱신·폐기 및 refresh-token 성공 경로는 Staging 앱에서 별도로 확인합니다. Token과 인증 코드는 로그와 shell history에 남기지 않습니다.
+유효한 Firebase ID Token과 일회용 인증 값이 필요한 Google custom token, account-link, account-link 해제, access-token 폐기와 Apple challenge, custom token, account-link, account-link 해제, access-token 갱신·폐기 및 refresh-token 성공 경로, GitHub 로그인·계정 연결 성공 경로는 Staging 앱에서 별도로 확인합니다. Token과 인증 코드는 로그와 shell history에 남기지 않습니다.
 
 오류 로그가 한 항목의 `jsonPayload`로 수집되는지 확인합니다.
 
@@ -277,9 +312,9 @@ unset LATEST_REVISION
 
 `http-api` 변경은 다음 순서로만 확정합니다.
 
-1. 로컬 검증을 통과한 commit을 Cloud Run `http-api`에 배포하고 두 Secret을 연결합니다.
+1. 로컬 검증을 통과한 commit을 Cloud Run `http-api`에 배포하고 세 Secret을 연결합니다.
 2. 최신 revision이 `Ready`이고 트래픽 100%를 받는지 확인합니다.
-3. Cloud Run 직접 호출에서 Google 인증과 모든 Apple 인증 경로 검증이 통과하는지 확인합니다.
+3. Cloud Run 직접 호출에서 Google·Apple 인증과 이전한 네 GitHub 인증 경로 검증이 통과하는지 확인합니다.
 4. `firebase-hosting-staging.md`에 따라 Staging Hosting만 배포합니다.
 5. Hosting 경유 요청이 최신 revision과 Functions `api`에 의도한 경계대로 기록되는지 확인합니다.
 
