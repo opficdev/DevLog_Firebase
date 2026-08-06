@@ -46,12 +46,13 @@ export class AppleAuthenticationClient {
   async exchangeAuthorizationCode(
     authorizationCode: string,
   ): Promise<AppleOAuthToken> {
+    const clientSecret = this.createClientSecret();
     try {
       const response = await axios.post<AppleOAuthResponse>(
         appleTokenUrl,
         new URLSearchParams({
           client_id: this.configuration.clientId,
-          client_secret: this.createClientSecret(),
+          client_secret: clientSecret,
           code: authorizationCode,
           grant_type: 'authorization_code',
         }).toString(),
@@ -113,12 +114,13 @@ export class AppleAuthenticationClient {
     token: string,
     tokenTypeHint: 'access_token' | 'refresh_token',
   ): Promise<void> {
+    const clientSecret = this.createClientSecret();
     try {
       await axios.post(
         appleRevokeUrl,
         new URLSearchParams({
           client_id: this.configuration.clientId,
-          client_secret: this.createClientSecret(),
+          client_secret: clientSecret,
           token,
           token_type_hint: tokenTypeHint,
         }).toString(),

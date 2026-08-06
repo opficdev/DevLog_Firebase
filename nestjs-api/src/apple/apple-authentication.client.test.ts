@@ -100,6 +100,18 @@ describe(AppleAuthenticationClient.name, () => {
     });
   });
 
+  it('client secret 생성 실패를 authorization code 오류로 변환하지 않는다', async () => {
+    const error = new Error('client secret 생성 실패');
+    mockedJwt.sign.mockImplementation(() => {
+      throw error;
+    });
+
+    await expect(
+      client.exchangeAuthorizationCode('authorization-code'),
+    ).rejects.toBe(error);
+    expect(mockedAxios.post.mock.calls).toHaveLength(0);
+  });
+
   it('Apple JWKS와 필수 claim으로 ID token payload를 반환한다', async () => {
     let signingKeyError: Error | null | undefined;
     let signingKey: jwt.Secret | jwt.PublicKey;
@@ -251,6 +263,18 @@ describe(AppleAuthenticationClient.name, () => {
         message: 'Apple grant 폐기에 실패했습니다.',
       },
     });
+  });
+
+  it('client secret 생성 실패를 Apple grant 폐기 오류로 변환하지 않는다', async () => {
+    const error = new Error('client secret 생성 실패');
+    mockedJwt.sign.mockImplementation(() => {
+      throw error;
+    });
+
+    await expect(
+      client.revokeExchangedTokens({ refreshToken: 'refresh-token' }),
+    ).rejects.toBe(error);
+    expect(mockedAxios.post.mock.calls).toHaveLength(0);
   });
 });
 
