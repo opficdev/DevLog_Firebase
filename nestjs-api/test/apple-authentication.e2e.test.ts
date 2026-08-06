@@ -132,6 +132,52 @@ describe('Apple 로그인 API', () => {
     );
   });
 
+  it('text/plain JSON challenge 요청의 custom token을 반환한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .post('/api/auth/apple/custom-token')
+      .set('Content-Type', 'text/plain')
+      .send(
+        JSON.stringify({
+          challengeId: ' challenge-1 ',
+          authorizationCode: ' authorization-code ',
+          displayName: ' Apple User ',
+        }),
+      )
+      .expect(HttpStatus.OK)
+      .expect({ customToken: 'custom-token' });
+
+    expect(requestCustomTokenWithChallenge).toHaveBeenCalledWith(
+      'challenge-1',
+      'authorization-code',
+      'Apple User',
+    );
+  });
+
+  it('Buffer JSON 기존 요청의 custom token을 반환한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .post('/api/auth/apple/custom-token')
+      .set('Content-Type', 'application/octet-stream')
+      .send(
+        Buffer.from(
+          JSON.stringify({
+            idToken: ' legacy-id-token ',
+            authorizationCode: ' authorization-code ',
+          }),
+        ),
+      )
+      .expect(HttpStatus.OK)
+      .expect({ customToken: 'custom-token' });
+
+    expect(requestCustomTokenWithIdToken).toHaveBeenCalledWith(
+      'legacy-id-token',
+      'authorization-code',
+    );
+  });
+
   it('요청 형식 식별 값이 없으면 idToken 오류를 반환한다', async () => {
     const server = app.getHttpServer() as Server;
 

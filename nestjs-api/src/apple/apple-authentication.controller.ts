@@ -12,6 +12,13 @@ import { ApiException } from '../common/api.exception';
 import { AppleAuthenticationService } from './apple-authentication.service';
 import { type AppleChallengeResponse } from './apple-challenge.repository';
 
+// JSON 요청 body 형식이 올바르지 않을 때 반환할 오류입니다.
+const invalidJsonBodyException = new ApiException(
+  HttpStatus.BAD_REQUEST,
+  'invalid-argument',
+  'JSON body 형식이 올바르지 않습니다.',
+);
+
 // Apple 로그인 HTTP 요청과 응답 경계를 제공합니다.
 @Controller('auth/apple')
 export class AppleAuthenticationController {
@@ -53,10 +60,35 @@ export class AppleAuthenticationController {
 
 // 요청 body를 문자열 필드 조회가 가능한 객체로 변환합니다.
 function bodyRecord(body: unknown): Record<string, unknown> {
+  if (Buffer.isBuffer(body)) {
+    return jsonBodyRecord(body.toString('utf8'));
+  }
+  if (typeof body === 'string') {
+    return jsonBodyRecord(body);
+  }
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return {};
   }
   return body as Record<string, unknown>;
+}
+
+// 문자열 JSON body를 문자열 필드 조회가 가능한 객체로 변환합니다.
+function jsonBodyRecord(body: string): Record<string, unknown> {
+  if (!body) {
+    return {};
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body) as unknown;
+  } catch {
+    throw invalidJsonBodyException;
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return {};
+  }
+  return parsed as Record<string, unknown>;
 }
 
 // 요청 body의 필수 문자열을 공백을 제거해 반환합니다.
