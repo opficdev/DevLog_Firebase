@@ -6,10 +6,7 @@ import type { Response } from "express";
 import * as logger from "firebase-functions/logger";
 import { toError } from "../common/error";
 import {
-    createAppleChallengeWithDatabase,
     linkAppleProviderWithDatabase,
-    requestAppleCustomTokenWithDatabase,
-    requestLegacyAppleCustomTokenWithDatabase,
     requestAppleRefreshTokenWithDatabase,
     refreshAppleAccessTokenWithDatabase,
     revokeAppleAccessTokenWithDatabase,
@@ -112,22 +109,6 @@ async function handleRoute(
     switch (route.action) {
     case "githubCallback":
         return undefined;
-    case "createAppleChallenge":
-        return createAppleChallengeWithDatabase(db);
-    case "requestAppleCustomToken":
-        if ("challengeId" in body) {
-            return requestAppleCustomTokenWithDatabase(
-                db,
-                requiredBodyString(body, "challengeId"),
-                requiredBodyString(body, "authorizationCode"),
-                optionalBodyString(body, "displayName")
-            );
-        }
-        return requestLegacyAppleCustomTokenWithDatabase(
-            db,
-            requiredBodyString(body, "idToken"),
-            requiredBodyString(body, "authorizationCode")
-        );
     case "linkAppleProvider":
         return linkAppleProviderWithDatabase(
             db,

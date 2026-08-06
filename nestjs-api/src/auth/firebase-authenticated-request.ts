@@ -8,7 +8,6 @@ export interface FirebaseAuthenticationHeaders {
 export interface FirebaseAuthenticatedRequest {
   /** Authorization을 포함한 HTTP header를 저장합니다. */
   headers: FirebaseAuthenticationHeaders;
-
   /** Firebase ID Token에서 검증된 사용자 식별자를 저장합니다. */
   uid?: string;
 }

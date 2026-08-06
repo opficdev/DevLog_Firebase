@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 
+import { AppleAuthenticationModule } from './apple/apple-authentication.module';
 import { FirebaseAuthGuard } from './auth/firebase-auth.guard';
 import { ApiExceptionFilter } from './common/api-exception.filter';
 import { FirebaseModule } from './firebase/firebase.module';
@@ -12,6 +13,7 @@ import { WebPagesModule } from './web-pages/web-pages.module';
 /** 애플리케이션의 최상위 의존성 경계를 구성하는 모듈입니다. */
 @Module({
   imports: [
+    AppleAuthenticationModule,
     FirebaseModule,
     GoogleAuthenticationModule,
     PushNotificationsModule,

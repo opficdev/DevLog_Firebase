@@ -12,6 +12,8 @@ import {
 import { type Auth, getAuth } from 'firebase-admin/auth';
 import { type Firestore, getFirestore } from 'firebase-admin/firestore';
 
+import { APPLE_AUTHENTICATION_CONFIGURATION_TOKEN } from './apple/apple-authentication.configuration';
+import { AppleAuthenticationModule } from './apple/apple-authentication.module';
 import { FirebaseAuthGuard } from './auth/firebase-auth.guard';
 import { ApiExceptionFilter } from './common/api-exception.filter';
 import { AppModule } from './app.module';
@@ -55,6 +57,13 @@ describe(AppModule.name, () => {
     const module = await Test.createTestingModule({
       imports: [AppModule],
     })
+      .overrideProvider(APPLE_AUTHENTICATION_CONFIGURATION_TOKEN)
+      .useValue({
+        teamId: 'team-id',
+        clientId: 'client-id',
+        keyId: 'key-id',
+        privateKey: 'private-key',
+      })
       .overrideProvider(GOOGLE_AUTHENTICATION_CONFIGURATION_TOKEN)
       .useValue({ clientId: 'client-id', clientSecret: 'client-secret' })
       .compile();
@@ -86,6 +95,15 @@ describe(AppModule.name, () => {
     ) as unknown[];
 
     expect(imports).toContain(TodosModule);
+  });
+
+  it('AppleAuthenticationModule을 애플리케이션에 연결한다', () => {
+    const imports = Reflect.getMetadata(
+      MODULE_METADATA.IMPORTS,
+      AppModule,
+    ) as unknown[];
+
+    expect(imports).toContain(AppleAuthenticationModule);
   });
 
   it('GoogleAuthenticationModule을 애플리케이션에 연결한다', () => {
@@ -127,7 +145,17 @@ describe(AppModule.name, () => {
     await expect(
       Test.createTestingModule({
         imports: [AppModule],
-      }).compile(),
+      })
+        .overrideProvider(APPLE_AUTHENTICATION_CONFIGURATION_TOKEN)
+        .useValue({
+          teamId: 'team-id',
+          clientId: 'client-id',
+          keyId: 'key-id',
+          privateKey: 'private-key',
+        })
+        .overrideProvider(GOOGLE_AUTHENTICATION_CONFIGURATION_TOKEN)
+        .useValue({ clientId: 'client-id', clientSecret: 'client-secret' })
+        .compile(),
     ).rejects.toBe(error);
   });
 });

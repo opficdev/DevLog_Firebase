@@ -30,10 +30,8 @@ const googleJwksClient = jwksClient({
 interface GoogleOAuthResponse {
   // 발급된 사용자 access token을 저장합니다.
   access_token?: string;
-
   // 검증할 OpenID Connect ID token을 저장합니다.
   id_token?: string;
-
   // 장기 grant 폐기에 사용할 refresh token을 저장합니다.
   refresh_token?: string;
 }

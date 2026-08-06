@@ -104,15 +104,25 @@ describe(GoogleProviderRepository.name, () => {
     expect(deleteUser).not.toHaveBeenCalled();
   });
 
-  it('provider 연결이 실패해도 생성 사용자를 삭제하지 않는다', async () => {
+  it('provider 연결이 실패하면 다음 요청에서 생성 사용자를 재사용한다', async () => {
     const linkError = new Error('link-failed');
     getUserByProviderUid.mockRejectedValue(authError('auth/user-not-found'));
-    getUserByEmail.mockRejectedValue(authError('auth/user-not-found'));
+    getUserByEmail
+      .mockRejectedValueOnce(authError('auth/user-not-found'))
+      .mockResolvedValueOnce(userRecord('new-uid'));
     createUser.mockResolvedValue(userRecord('new-uid'));
-    updateUser.mockRejectedValue(linkError);
+    updateUser.mockRejectedValueOnce(linkError);
 
     await expect(repository.resolveUid(payload())).rejects.toBe(linkError);
     expect(deleteUser).not.toHaveBeenCalled();
+
+    await expect(repository.resolveUid(payload())).resolves.toBe('new-uid');
+    expect(createUser).toHaveBeenCalledTimes(1);
+    expect(updateUser).toHaveBeenLastCalledWith('new-uid', {
+      displayName: 'User',
+      photoURL: 'https://example.com/photo.png',
+      providerToLink: googleProvider('user@example.com'),
+    });
   });
 
   it('미검증 이메일의 자동 연결을 거부한다', async () => {

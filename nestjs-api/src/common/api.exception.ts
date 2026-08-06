@@ -4,7 +4,6 @@ import { HttpException } from '@nestjs/common';
 export interface ApiErrorResponse {
   /** 클라이언트가 오류를 구분하는 code를 저장합니다. */
   code: string;
-
   /** 오류 내용을 설명하는 message를 저장합니다. */
   message: string;
 }
