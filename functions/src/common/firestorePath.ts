@@ -6,7 +6,6 @@ export namespace FirestorePath {
         notifications = "notifications",
         notificationDispatches = "notificationDispatches",
         webPages = "webPages",
-        authChallenges = "authChallenges",
         authCredentials = "authCredentials",
         providers = "providers",
         oauthSessions = "oauthSessions",
@@ -65,14 +64,6 @@ export namespace FirestorePath {
         return `${webPages(userId)}/${documentId}`;
     }
 
-    // Apple 인증 challenge 컬렉션 경로를 저장합니다.
-    export const authChallenges = Collection.authChallenges;
-
-    // 지정한 Apple 인증 challenge 문서 경로를 반환합니다.
-    export function authChallenge(challengeId: string): string {
-        return `${authChallenges}/${challengeId}`;
-    }
-
     // 지정한 사용자의 서버 전용 인증 자격 증명 루트 경로를 반환합니다.
     export function authCredential(userId: string): string {
         return `${Collection.authCredentials}/${userId}`;
@@ -81,11 +72,6 @@ export namespace FirestorePath {
     // 지정한 사용자의 서버 전용 provider credential 컬렉션 경로를 반환합니다.
     export function authCredentialProviders(userId: string): string {
         return `${authCredential(userId)}/${Collection.providers}`;
-    }
-
-    // 지정한 사용자의 서버 전용 Apple 자격 증명 문서 경로를 반환합니다.
-    export function appleCredential(userId: string): string {
-        return `${authCredential(userId)}/${Collection.providers}/apple`;
     }
 
     // 지정한 사용자의 서버 전용 GitHub 자격 증명 문서 경로를 반환합니다.

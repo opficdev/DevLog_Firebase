@@ -111,17 +111,6 @@ assert.deepStrictEqual(
     }
 );
 
-const appleErrors = [
-    ["invalid_apple_challenge", 400, "invalid-apple-challenge"],
-    ["expired_apple_challenge", 410, "expired-apple-challenge"],
-    ["consumed_apple_challenge", 409, "consumed-apple-challenge"],
-    ["invalid_apple_proof", 401, "invalid-apple-proof"],
-    ["apple_provider_link_conflict", 409, "apple-provider-link-conflict"],
-    ["last_provider", 412, "last-provider"],
-    ["apple_credential_not_found", 404, "apple-credential-not-found"],
-    ["apple_revoke_failed", 502, "apple-revoke-failed"]
-];
-
 const oauthErrors = [
     ["invalid_app_challenge", 400, "invalid-app-challenge"],
     ["invalid_oauth_session", 400, "invalid-oauth-session"],
@@ -136,7 +125,8 @@ const oauthErrors = [
 
 const githubErrors = [
     ["github_provider_failed", 502, "github-provider-failed"],
-    ["github_revoke_failed", 502, "github-revoke-failed"]
+    ["github_revoke_failed", 502, "github-revoke-failed"],
+    ["last_provider", 412, "last-provider"]
 ];
 
 for (const [reason, status, code] of oauthErrors) {
@@ -155,18 +145,9 @@ const aborted = restErrorFrom(new HttpsError("aborted", "transaction 충돌"));
 assert.strictEqual(aborted.status, 409);
 assert.strictEqual(aborted.code, "aborted");
 
-for (const [reason, status, code] of appleErrors) {
-    const restError = restErrorFrom(
-        new HttpsError("failed-precondition", "Apple 인증 처리 실패", { reason })
-    );
-    assert.strictEqual(restError.status, status);
-    assert.strictEqual(restError.code, code);
-}
-
 const hyphenatedReasons = [
     ["email-not-found", 400, "email-not-found"],
-    ["github-email-changed-account-conflict", 409, "github-email-changed-account-conflict"],
-    ["expired-apple-challenge", 410, "expired-apple-challenge"]
+    ["github-email-changed-account-conflict", 409, "github-email-changed-account-conflict"]
 ];
 
 for (const [reason, status, code] of hyphenatedReasons) {

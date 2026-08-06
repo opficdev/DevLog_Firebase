@@ -82,45 +82,10 @@ const restErrorByReason: Record<string, RestErrorDefinition> = {
         code: "invalid-app-verifier",
         message: "app verifier가 유효하지 않습니다."
     },
-    invalid_apple_challenge: {
-        status: 400,
-        code: "invalid-apple-challenge",
-        message: "Apple 인증 challenge가 유효하지 않습니다."
-    },
-    expired_apple_challenge: {
-        status: 410,
-        code: "expired-apple-challenge",
-        message: "Apple 인증 challenge가 만료되었습니다."
-    },
-    consumed_apple_challenge: {
-        status: 409,
-        code: "consumed-apple-challenge",
-        message: "Apple 인증 challenge가 이미 사용되었습니다."
-    },
-    invalid_apple_proof: {
-        status: 401,
-        code: "invalid-apple-proof",
-        message: "Apple 인증 증명이 유효하지 않습니다."
-    },
-    apple_provider_link_conflict: {
-        status: 409,
-        code: "apple-provider-link-conflict",
-        message: "Apple provider가 다른 계정에 연결되어 있습니다."
-    },
     last_provider: {
         status: 412,
         code: "last-provider",
         message: "마지막 로그인 provider는 해제할 수 없습니다."
-    },
-    apple_credential_not_found: {
-        status: 404,
-        code: "apple-credential-not-found",
-        message: "Apple credential을 찾을 수 없습니다."
-    },
-    apple_revoke_failed: {
-        status: 502,
-        code: "apple-revoke-failed",
-        message: "Apple grant 폐기에 실패했습니다."
     }
 };
 
