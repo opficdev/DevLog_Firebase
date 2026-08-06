@@ -21,3 +21,11 @@ export interface GitHubUser {
   // 공개 프로필 이미지 주소를 저장합니다.
   avatar_url?: string;
 }
+
+// 서버에서 보관하는 GitHub OAuth credential입니다.
+export interface GitHubCredential {
+  // GitHub 사용자 access token을 저장합니다.
+  accessToken: string;
+  // access token을 발급한 OAuth App client id를 저장합니다.
+  clientId: string;
+}
