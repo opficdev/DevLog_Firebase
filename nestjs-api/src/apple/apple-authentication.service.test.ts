@@ -513,6 +513,58 @@ describe(AppleAuthenticationService.name, () => {
     expect(link).toHaveBeenCalledWith('user-1', tokenPayload(), undefined);
     expect(revokeExchangedTokens).toHaveBeenCalledWith(oauthTokens());
   });
+
+  it('authorization code를 교환해 Apple refresh token을 저장하고 반환한다', async () => {
+    const sequence: string[] = [];
+    exchangeAuthorizationCode.mockImplementation(() => {
+      sequence.push('authorization code 교환');
+      return Promise.resolve(oauthTokens());
+    });
+    requiredRefreshToken.mockImplementation(() => {
+      sequence.push('refresh token 확인');
+      return Promise.resolve('refresh-token');
+    });
+    save.mockImplementation(() => {
+      sequence.push('Apple credential 저장');
+      return Promise.resolve();
+    });
+
+    await expect(
+      service.requestRefreshToken('user-1', 'authorization-code'),
+    ).resolves.toBe('refresh-token');
+    expect(exchangeAuthorizationCode).toHaveBeenCalledWith(
+      'authorization-code',
+    );
+    expect(requiredRefreshToken).toHaveBeenCalledWith(oauthTokens());
+    expect(save).toHaveBeenCalledWith('user-1', 'refresh-token');
+    expect(revokeExchangedTokens).not.toHaveBeenCalled();
+    expect(sequence).toEqual([
+      'authorization code 교환',
+      'refresh token 확인',
+      'Apple credential 저장',
+    ]);
+  });
+
+  it('refresh token 저장 실패 시 교환 token을 폐기한다', async () => {
+    const error = new Error('Apple credential 저장 실패');
+    save.mockRejectedValue(error);
+
+    await expect(
+      service.requestRefreshToken('user-1', 'authorization-code'),
+    ).rejects.toBe(error);
+    expect(revokeExchangedTokens).toHaveBeenCalledWith(oauthTokens());
+  });
+
+  it('authorization code 교환 실패 시 보상 폐기를 시도하지 않는다', async () => {
+    const error = new Error('authorization code 교환 실패');
+    exchangeAuthorizationCode.mockRejectedValue(error);
+
+    await expect(
+      service.requestRefreshToken('user-1', 'authorization-code'),
+    ).rejects.toBe(error);
+    expect(requiredRefreshToken).not.toHaveBeenCalled();
+    expect(revokeExchangedTokens).not.toHaveBeenCalled();
+  });
 });
 
 // Apple OAuth token 대역을 구성합니다.

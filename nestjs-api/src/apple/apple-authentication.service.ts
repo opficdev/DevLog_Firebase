@@ -156,4 +156,23 @@ export class AppleAuthenticationService {
       throw error;
     }
   }
+
+  // authorization code를 Apple refresh token으로 교환해 credential에 저장합니다.
+  // prettier-ignore
+  async requestRefreshToken(
+    uid: string,
+    authorizationCode: string,
+  ): Promise<string> {
+    const tokens = await this.client.exchangeAuthorizationCode(
+      authorizationCode,
+    );
+    const refreshToken = await this.client.requiredRefreshToken(tokens);
+    try {
+      await this.credentialRepository.save(uid, refreshToken);
+    } catch (error) {
+      await this.client.revokeExchangedTokens(tokens);
+      throw error;
+    }
+    return refreshToken;
+  }
 }

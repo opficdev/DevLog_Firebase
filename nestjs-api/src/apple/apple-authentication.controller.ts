@@ -77,6 +77,22 @@ export class AppleAuthenticationController {
     );
     return { success: true };
   }
+
+  // authorization code로 Apple refresh token을 저장하고 반환합니다.
+  @Post('refresh-token')
+  @HttpCode(HttpStatus.OK)
+  async refreshToken(
+    @Req() request: FirebaseAuthenticatedRequest,
+    @Body() body: unknown,
+  ): Promise<{ success: true; refreshToken: string }> {
+    const uid = requiredAuthenticatedUid(request);
+    const value = bodyRecord(body);
+    const refreshToken = await this.service.requestRefreshToken(
+      uid,
+      requiredBodyString(value, 'authorizationCode'),
+    );
+    return { success: true, refreshToken };
+  }
 }
 
 // 인증 경계에서 검증한 사용자 식별자를 반환합니다.

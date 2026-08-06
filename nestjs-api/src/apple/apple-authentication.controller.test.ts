@@ -8,11 +8,13 @@ describe(AppleAuthenticationController.name, () => {
   const requestCustomTokenWithChallenge = jest.fn();
   const requestCustomTokenWithIdToken = jest.fn();
   const linkProvider = jest.fn();
+  const requestRefreshToken = jest.fn();
   const controller = new AppleAuthenticationController({
     createChallenge,
     requestCustomTokenWithChallenge,
     requestCustomTokenWithIdToken,
     linkProvider,
+    requestRefreshToken,
   } as unknown as AppleAuthenticationService);
 
   beforeEach(() => {
@@ -176,5 +178,33 @@ describe(AppleAuthenticationController.name, () => {
       response: { code: 'invalid-argument', message },
     });
     expect(linkProvider).not.toHaveBeenCalled();
+  });
+
+  it('인증된 uid와 authorization code로 Apple refresh token을 반환한다', async () => {
+    requestRefreshToken.mockResolvedValue('refresh-token');
+
+    await expect(
+      controller.refreshToken(
+        { headers: {}, uid: 'user-1' },
+        { authorizationCode: ' authorization-code ' },
+      ),
+    ).resolves.toEqual({ success: true, refreshToken: 'refresh-token' });
+    expect(requestRefreshToken).toHaveBeenCalledWith(
+      'user-1',
+      'authorization-code',
+    );
+  });
+
+  it('authorization code가 없으면 refresh token 요청을 거부한다', async () => {
+    await expect(
+      controller.refreshToken({ headers: {}, uid: 'user-1' }, {}),
+    ).rejects.toMatchObject({
+      status: HttpStatus.BAD_REQUEST,
+      response: {
+        code: 'invalid-argument',
+        message: 'authorizationCode가 필요합니다.',
+      },
+    });
+    expect(requestRefreshToken).not.toHaveBeenCalled();
   });
 });
