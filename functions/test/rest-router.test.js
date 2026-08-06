@@ -112,10 +112,6 @@ assert.deepStrictEqual(
 );
 
 const oauthErrors = [
-    ["invalid_app_challenge", 400, "invalid-app-challenge"],
-    ["invalid_oauth_session", 400, "invalid-oauth-session"],
-    ["expired_oauth_session", 410, "expired-oauth-session"],
-    ["consumed_oauth_session", 409, "consumed-oauth-session"],
     ["invalid_oauth_ticket", 400, "invalid-oauth-ticket"],
     ["expired_oauth_ticket", 410, "expired-oauth-ticket"],
     ["consumed_oauth_ticket", 409, "consumed-oauth-ticket"],
