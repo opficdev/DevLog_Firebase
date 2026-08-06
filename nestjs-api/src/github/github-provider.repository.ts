@@ -1,8 +1,9 @@
-import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import {
   type Auth,
   type UpdateRequest,
   type UserProvider,
+  type UserRecord,
 } from 'firebase-admin/auth';
 
 import { ApiException } from '../common/api.exception';
@@ -15,9 +16,6 @@ const providerId = 'github.com';
 // Firebase Auth의 GitHub provider 사용자 처리를 담당합니다.
 @Injectable()
 export class GitHubProviderRepository {
-  // 신규 사용자 연결 보상 실패를 기록하는 로그 기능을 저장합니다.
-  private readonly logger = new Logger(GitHubProviderRepository.name);
-
   // Firebase Auth 저장 기능과 GitHub 사용자 조회 기능을 주입받습니다.
   constructor(
     @Inject(FIREBASE_AUTH_TOKEN) private readonly auth: Auth,
@@ -67,42 +65,47 @@ export class GitHubProviderRepository {
       throw emailNotFoundException;
     }
     const providerToLink = githubProvider(providerUid, email, user);
+    let firebaseUser: UserRecord;
     try {
-      const emailUser = await this.auth.getUserByEmail(email);
-      await this.auth.updateUser(emailUser.uid, {
-        displayName: user.name || user.login,
-        photoURL: user.avatar_url ?? null,
-        providerToLink,
-      });
-      return emailUser.uid;
+      firebaseUser = await this.auth.getUserByEmail(email);
     } catch (error) {
       if (firebaseAuthErrorCode(error) !== 'auth/user-not-found') {
         throw error;
       }
+      try {
+        firebaseUser = await this.auth.createUser({
+          displayName: user.name || user.login,
+          email,
+          photoURL: user.avatar_url,
+        });
+      } catch (createError) {
+        if (
+          firebaseAuthErrorCode(createError) !== 'auth/email-already-exists'
+        ) {
+          throw createError;
+        }
+        firebaseUser = await this.auth.getUserByEmail(email);
+      }
     }
 
-    const createdUser = await this.auth.createUser({
-      displayName: user.name || user.login,
-      email,
-      photoURL: user.avatar_url,
-    });
     try {
-      await this.auth.updateUser(createdUser.uid, { providerToLink });
-      return createdUser.uid;
+      await this.auth.updateUser(firebaseUser.uid, {
+        displayName: user.name || user.login,
+        photoURL: user.avatar_url ?? null,
+        providerToLink,
+      });
+      return firebaseUser.uid;
     } catch (error) {
       try {
-        await this.auth.deleteUser(createdUser.uid);
-      } catch (cleanupError) {
-        this.logger.error({
-          message: 'GitHub provider 연결 실패 사용자 정리 실패',
-          errorMessage:
-            cleanupError instanceof Error
-              ? cleanupError.message
-              : '알 수 없는 오류',
-          errorStack:
-            cleanupError instanceof Error ? cleanupError.stack : undefined,
-          uid: createdUser.uid,
-        });
+        const providerUser = await this.auth.getUserByProviderUid(
+          providerId,
+          providerUid,
+        );
+        return providerUser.uid;
+      } catch (providerError) {
+        if (firebaseAuthErrorCode(providerError) !== 'auth/user-not-found') {
+          throw providerError;
+        }
       }
       throw error;
     }

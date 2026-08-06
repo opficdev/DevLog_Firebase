@@ -1,4 +1,4 @@
-import { HttpStatus, Logger } from '@nestjs/common';
+import { HttpStatus } from '@nestjs/common';
 import { type Auth, type UserRecord } from 'firebase-admin/auth';
 
 import { GitHubAuthenticationClient } from './github-authentication.client';
@@ -24,19 +24,12 @@ describe(GitHubProviderRepository.name, () => {
     user,
     verifiedEmail,
   } as unknown as GitHubAuthenticationClient;
-  const loggerError = jest
-    .spyOn(Logger.prototype, 'error')
-    .mockImplementation();
   const repository = new GitHubProviderRepository(auth, client);
 
   beforeEach(() => {
     jest.resetAllMocks();
     user.mockResolvedValue(githubUser());
     verifiedEmail.mockResolvedValue('user@example.com');
-  });
-
-  afterAll(() => {
-    jest.restoreAllMocks();
   });
 
   it('verified email이 없어도 기존 GitHub provider uid로 로그인한다', async () => {
@@ -135,37 +128,67 @@ describe(GitHubProviderRepository.name, () => {
       photoURL: 'https://example.com/avatar.png',
     });
     expect(updateUser).toHaveBeenCalledWith('new-uid', {
+      displayName: 'GitHub User',
+      photoURL: 'https://example.com/avatar.png',
       providerToLink: githubProvider(),
     });
     expect(deleteUser).not.toHaveBeenCalled();
   });
 
-  it('신규 사용자 provider 연결 실패 시 생성한 사용자를 삭제한다', async () => {
-    const error = new Error('provider 연결 실패');
+  it('동시 요청이 같은 이메일 사용자를 생성하면 생성된 사용자에 연결한다', async () => {
     getUserByProviderUid.mockRejectedValue(authError('auth/user-not-found'));
-    getUserByEmail.mockRejectedValue(authError('auth/user-not-found'));
-    createUser.mockResolvedValue(userRecord('new-uid'));
-    updateUser.mockRejectedValue(error);
+    getUserByEmail
+      .mockRejectedValueOnce(authError('auth/user-not-found'))
+      .mockResolvedValueOnce(userRecord('concurrent-uid'));
+    createUser.mockRejectedValue(authError('auth/email-already-exists'));
 
-    await expect(repository.resolveUid('access-token')).rejects.toBe(error);
-    expect(deleteUser).toHaveBeenCalledWith('new-uid');
+    await expect(repository.resolveUid('access-token')).resolves.toBe(
+      'concurrent-uid',
+    );
+    expect(updateUser).toHaveBeenCalledWith('concurrent-uid', {
+      displayName: 'GitHub User',
+      photoURL: 'https://example.com/avatar.png',
+      providerToLink: githubProvider(),
+    });
+    expect(deleteUser).not.toHaveBeenCalled();
   });
 
-  it('신규 사용자 삭제 실패가 provider 연결 오류를 덮지 않는다', async () => {
-    const error = new Error('provider 연결 실패');
-    const cleanupError = new Error('사용자 삭제 실패');
-    getUserByProviderUid.mockRejectedValue(authError('auth/user-not-found'));
+  it('동시 요청이 provider 연결을 완료하면 연결된 uid를 반환한다', async () => {
+    getUserByProviderUid
+      .mockRejectedValueOnce(authError('auth/user-not-found'))
+      .mockResolvedValueOnce(
+        userRecord('new-uid', [githubProvider('user@example.com')]),
+      );
     getUserByEmail.mockRejectedValue(authError('auth/user-not-found'));
     createUser.mockResolvedValue(userRecord('new-uid'));
-    updateUser.mockRejectedValue(error);
-    deleteUser.mockRejectedValue(cleanupError);
+    updateUser.mockRejectedValue(authError('auth/provider-already-linked'));
 
-    await expect(repository.resolveUid('access-token')).rejects.toBe(error);
-    expect(loggerError).toHaveBeenCalledWith({
-      message: 'GitHub provider 연결 실패 사용자 정리 실패',
-      errorMessage: cleanupError.message,
-      errorStack: cleanupError.stack,
-      uid: 'new-uid',
+    await expect(repository.resolveUid('access-token')).resolves.toBe(
+      'new-uid',
+    );
+    expect(deleteUser).not.toHaveBeenCalled();
+  });
+
+  it('provider 연결이 실패하면 다음 요청에서 생성 사용자를 재사용한다', async () => {
+    const linkError = new Error('link-failed');
+    getUserByProviderUid.mockRejectedValue(authError('auth/user-not-found'));
+    getUserByEmail
+      .mockRejectedValueOnce(authError('auth/user-not-found'))
+      .mockResolvedValueOnce(userRecord('new-uid'));
+    createUser.mockResolvedValue(userRecord('new-uid'));
+    updateUser.mockRejectedValueOnce(linkError);
+
+    await expect(repository.resolveUid('access-token')).rejects.toBe(linkError);
+    expect(deleteUser).not.toHaveBeenCalled();
+
+    await expect(repository.resolveUid('access-token')).resolves.toBe(
+      'new-uid',
+    );
+    expect(createUser).toHaveBeenCalledTimes(1);
+    expect(updateUser).toHaveBeenLastCalledWith('new-uid', {
+      displayName: 'GitHub User',
+      photoURL: 'https://example.com/avatar.png',
+      providerToLink: githubProvider(),
     });
   });
 
