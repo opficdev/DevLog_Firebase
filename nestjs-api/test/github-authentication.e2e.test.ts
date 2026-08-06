@@ -34,6 +34,7 @@ describe('GitHub 인증 API', () => {
   const createSignInSession = jest.fn();
   const createAccountLinkSession = jest.fn();
   const callback = jest.fn();
+  const customToken = jest.fn();
   let app: INestApplication;
 
   beforeAll(async () => {
@@ -47,7 +48,12 @@ describe('GitHub 인증 API', () => {
       .overrideProvider(FIREBASE_FIRESTORE_TOKEN)
       .useValue({})
       .overrideProvider(GitHubAuthenticationService)
-      .useValue({ createSignInSession, createAccountLinkSession, callback })
+      .useValue({
+        createSignInSession,
+        createAccountLinkSession,
+        callback,
+        customToken,
+      })
       .compile();
 
     app = module.createNestApplication();
@@ -66,6 +72,7 @@ describe('GitHub 인증 API', () => {
     callback
       .mockReset()
       .mockResolvedValue('devlog://oauth-callback?ticket=ticket-1');
+    customToken.mockReset().mockResolvedValue('custom-token');
   });
 
   afterAll(async () => {
@@ -160,5 +167,34 @@ describe('GitHub 인증 API', () => {
       .expect('Location', 'devlog://oauth-callback?error=oauth-failed');
 
     expect(callback).toHaveBeenCalledWith(undefined, undefined);
+  });
+
+  it('인증 token 없이 ticket으로 custom token을 반환한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .post('/api/auth/github/custom-token')
+      .send({ ticket: ' ticket-1 ', appVerifier: ' app-verifier ' })
+      .expect(HttpStatus.OK)
+      .expect({ customToken: 'custom-token' });
+
+    expect(verifyIdToken).not.toHaveBeenCalled();
+    expect(customToken).toHaveBeenCalledWith('ticket-1', 'app-verifier');
+  });
+
+  it('ticket이 없으면 custom token 요청을 거부한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .post('/api/auth/github/custom-token')
+      .send({ appVerifier: 'app-verifier' })
+      .expect(HttpStatus.BAD_REQUEST)
+      .expect({
+        code: 'invalid-argument',
+        message: 'ticket가 필요합니다.',
+      });
+
+    expect(verifyIdToken).not.toHaveBeenCalled();
+    expect(customToken).not.toHaveBeenCalled();
   });
 });

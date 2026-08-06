@@ -8,10 +8,12 @@ describe(GitHubAuthenticationController.name, () => {
   const createSignInSession = jest.fn();
   const createAccountLinkSession = jest.fn();
   const callback = jest.fn();
+  const customToken = jest.fn();
   const controller = new GitHubAuthenticationController({
     createSignInSession,
     createAccountLinkSession,
     callback,
+    customToken,
   } as unknown as GitHubAuthenticationService);
 
   beforeEach(() => {
@@ -109,5 +111,33 @@ describe(GitHubAuthenticationController.name, () => {
     await controller.callback(['state'], undefined);
 
     expect(callback).toHaveBeenCalledWith(undefined, undefined);
+  });
+
+  it('공백을 제거한 ticket과 appVerifier로 custom token을 요청한다', async () => {
+    customToken.mockResolvedValue('custom-token');
+
+    await expect(
+      controller.customToken({
+        ticket: ' ticket-1 ',
+        appVerifier: ' app-verifier ',
+      }),
+    ).resolves.toEqual({ customToken: 'custom-token' });
+    expect(customToken).toHaveBeenCalledWith('ticket-1', 'app-verifier');
+  });
+
+  it.each([
+    [{ appVerifier: 'app-verifier' }, 'ticket'],
+    [{ ticket: 'ticket-1' }, 'appVerifier'],
+    [{ ticket: ' ', appVerifier: 'app-verifier' }, 'ticket'],
+    [{ ticket: 'ticket-1', appVerifier: 1 }, 'appVerifier'],
+  ])('필수 %s 값이 없는 custom token 요청을 거부한다', async (body, key) => {
+    await expect(controller.customToken(body)).rejects.toMatchObject({
+      status: HttpStatus.BAD_REQUEST,
+      response: {
+        code: 'invalid-argument',
+        message: `${key}가 필요합니다.`,
+      },
+    });
+    expect(customToken).not.toHaveBeenCalled();
   });
 });

@@ -1,18 +1,25 @@
-import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
+import { type Auth } from 'firebase-admin/auth';
 
 import { ApiException } from '../common/api.exception';
+import { FIREBASE_AUTH_TOKEN } from '../firebase/firebase.tokens';
 import { createOAuthVerifier } from '../oauth/oauth-proof';
 import { OAuthSessionRepository } from '../oauth/oauth-session.repository';
+import { OAuthTicketRepository } from '../oauth/oauth-ticket.repository';
 import {
   type ClaimedOAuthSession,
+  type ClaimedOAuthTicket,
   type OAuthPurpose,
 } from '../oauth/oauth.types';
 import { GitHubAuthenticationClient } from './github-authentication.client';
 import { GitHubAuthenticationConfigurationProvider } from './github-authentication.configuration';
 import {
   type GitHubAuthenticationConfiguration,
+  type GitHubCredential,
   type GitHubOAuthSessionResponse,
 } from './github-authentication.types';
+import { GitHubCredentialRepository } from './github-credential.repository';
+import { GitHubProviderRepository } from './github-provider.repository';
 
 const authorizationEndpoint = 'https://github.com/login/oauth/authorize';
 const appCallbackURL = 'DevLog://oauth-callback';
@@ -25,9 +32,13 @@ export class GitHubAuthenticationService {
 
   // GitHub 인증 처리에 필요한 의존성을 주입받습니다.
   constructor(
+    @Inject(FIREBASE_AUTH_TOKEN) private readonly auth: Auth,
     private readonly configurationProvider: GitHubAuthenticationConfigurationProvider,
     private readonly client: GitHubAuthenticationClient,
+    private readonly credentialRepository: GitHubCredentialRepository,
+    private readonly providerRepository: GitHubProviderRepository,
     private readonly sessionRepository: OAuthSessionRepository,
+    private readonly ticketRepository: OAuthTicketRepository,
   ) {}
 
   // 로그인 목적 GitHub OAuth session과 authorization 주소를 생성합니다.
@@ -112,6 +123,30 @@ export class GitHubAuthenticationService {
     }
   }
 
+  // 로그인 ticket을 검증하고 Firebase custom token을 반환합니다.
+  async customToken(ticket: string, appVerifier: string): Promise<string> {
+    const claimed = await this.ticketRepository.claim(
+      ticket,
+      appVerifier,
+      'github',
+      'signIn',
+    );
+    try {
+      const credential = credentialFrom(claimed);
+      const uid = await this.providerRepository.resolveUid(
+        credential.accessToken,
+      );
+      await this.credentialRepository.save(uid, credential);
+      await this.revokePendingCredentials(uid);
+      const customToken = await this.auth.createCustomToken(uid);
+      await this.ticketRepository.consume(claimed);
+      return customToken;
+    } catch (error) {
+      await this.ticketRepository.release(claimed);
+      throw error;
+    }
+  }
+
   // 목적과 UID에 결합된 GitHub OAuth session과 authorization 주소를 생성합니다.
   private async createSession(
     purpose: OAuthPurpose,
@@ -143,6 +178,23 @@ export class GitHubAuthenticationService {
     authorizationURL.searchParams.set('code_challenge_method', 'S256');
     return { authorizationURL: authorizationURL.toString() };
   }
+
+  // 같은 OAuth App에서 교체된 이전 access token을 차례로 폐기합니다.
+  private async revokePendingCredentials(uid: string): Promise<void> {
+    const pending = await this.credentialRepository.pendingRevocations(uid);
+    for (const credential of pending) {
+      const configuration = this.configurationProvider.configuration();
+      if (credential.clientId !== configuration.clientId) {
+        throw credentialConfigurationException;
+      }
+      await this.client.revokeOAuthToken(
+        uid,
+        credential.accessToken,
+        configuration,
+      );
+      await this.credentialRepository.removePending(uid, credential);
+    }
+  }
 }
 
 // 앱 callback 주소에 ticket 또는 안전한 오류 값만 추가합니다.
@@ -170,9 +222,37 @@ function callbackErrorMetadata(error: unknown): {
   };
 }
 
+// ticket의 서버 전용 payload에서 GitHub credential을 반환합니다.
+function credentialFrom(ticket: ClaimedOAuthTicket): GitHubCredential {
+  const accessToken = ticket.payload.accessToken;
+  if (typeof accessToken !== 'string' || !accessToken) {
+    throw new ApiException(
+      HttpStatus.BAD_REQUEST,
+      'invalid-oauth-ticket',
+      'OAuth ticket에 GitHub access token이 없습니다.',
+    );
+  }
+  const clientId = ticket.payload.clientId;
+  if (typeof clientId !== 'string' || !clientId) {
+    throw new ApiException(
+      HttpStatus.BAD_REQUEST,
+      'invalid-oauth-ticket',
+      'OAuth ticket에 GitHub OAuth App 정보가 없습니다.',
+    );
+  }
+  return { accessToken, clientId };
+}
+
 // GitHub callback 필수 query 누락 오류입니다.
 const missingCallbackParametersException = new ApiException(
   HttpStatus.BAD_REQUEST,
   'invalid-argument',
   'GitHub callback state와 code가 필요합니다.',
+);
+
+// credential 발급 App과 현재 환경 설정 불일치 오류입니다.
+const credentialConfigurationException = new ApiException(
+  HttpStatus.INTERNAL_SERVER_ERROR,
+  'internal',
+  'GitHub credential을 발급한 OAuth App 설정을 찾을 수 없습니다.',
 );

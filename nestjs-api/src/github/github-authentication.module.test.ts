@@ -3,11 +3,14 @@ import { MODULE_METADATA } from '@nestjs/common/constants';
 
 import { FirebaseModule } from '../firebase/firebase.module';
 import { OAuthSessionRepository } from '../oauth/oauth-session.repository';
+import { OAuthTicketRepository } from '../oauth/oauth-ticket.repository';
 import { GitHubAuthenticationClient } from './github-authentication.client';
 import { GitHubAuthenticationConfigurationProvider } from './github-authentication.configuration';
 import { GitHubAuthenticationController } from './github-authentication.controller';
 import { GitHubAuthenticationModule } from './github-authentication.module';
 import { GitHubAuthenticationService } from './github-authentication.service';
+import { GitHubCredentialRepository } from './github-credential.repository';
+import { GitHubProviderRepository } from './github-provider.repository';
 
 jest.mock('firebase-admin/app', () => ({
   applicationDefault: jest.fn(),
@@ -43,7 +46,10 @@ describe(GitHubAuthenticationModule.name, () => {
         GitHubAuthenticationClient,
         GitHubAuthenticationConfigurationProvider,
         GitHubAuthenticationService,
+        GitHubCredentialRepository,
+        GitHubProviderRepository,
         OAuthSessionRepository,
+        OAuthTicketRepository,
       ]),
     );
   });

@@ -63,6 +63,19 @@ export class GitHubAuthenticationController {
       statusCode: HttpStatus.FOUND,
     };
   }
+
+  // 로그인 ticket을 검증해 Firebase custom token을 반환합니다.
+  @Public()
+  @Post('custom-token')
+  @HttpCode(HttpStatus.OK)
+  async customToken(@Body() body: unknown): Promise<{ customToken: string }> {
+    return {
+      customToken: await this.service.customToken(
+        requiredBodyString(body, 'ticket'),
+        requiredBodyString(body, 'appVerifier'),
+      ),
+    };
+  }
 }
 
 // 인증 경계에서 검증한 사용자 식별자를 반환합니다.
