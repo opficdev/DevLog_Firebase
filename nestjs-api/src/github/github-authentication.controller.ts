@@ -1,9 +1,12 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
+  Query,
+  Redirect,
   Req,
 } from '@nestjs/common';
 
@@ -43,6 +46,23 @@ export class GitHubAuthenticationController {
       requiredBodyString(body, 'appChallenge'),
     );
   }
+
+  // GitHub callback 결과를 앱 callback 주소로 전달합니다.
+  @Public()
+  @Get('callback')
+  @Redirect(undefined, HttpStatus.FOUND)
+  async callback(
+    @Query('state') state: unknown,
+    @Query('code') code: unknown,
+  ): Promise<{ url: string; statusCode: number }> {
+    return {
+      url: await this.service.callback(
+        optionalQueryString(state),
+        optionalQueryString(code),
+      ),
+      statusCode: HttpStatus.FOUND,
+    };
+  }
 }
 
 // 인증 경계에서 검증한 사용자 식별자를 반환합니다.
@@ -73,4 +93,9 @@ function requiredBodyString(body: unknown, key: string): string {
     );
   }
   return value.trim();
+}
+
+// query parameter에서 하나의 선택 문자열을 공백을 제거해 반환합니다.
+function optionalQueryString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { FirebaseModule } from '../firebase/firebase.module';
 import { OAuthSessionRepository } from '../oauth/oauth-session.repository';
+import { GitHubAuthenticationClient } from './github-authentication.client';
 import { GitHubAuthenticationConfigurationProvider } from './github-authentication.configuration';
 import { GitHubAuthenticationController } from './github-authentication.controller';
 import { GitHubAuthenticationService } from './github-authentication.service';
@@ -11,6 +12,7 @@ import { GitHubAuthenticationService } from './github-authentication.service';
   imports: [FirebaseModule],
   controllers: [GitHubAuthenticationController],
   providers: [
+    GitHubAuthenticationClient,
     GitHubAuthenticationConfigurationProvider,
     GitHubAuthenticationService,
     OAuthSessionRepository,

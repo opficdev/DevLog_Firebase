@@ -3,6 +3,7 @@ import { MODULE_METADATA } from '@nestjs/common/constants';
 
 import { FirebaseModule } from '../firebase/firebase.module';
 import { OAuthSessionRepository } from '../oauth/oauth-session.repository';
+import { GitHubAuthenticationClient } from './github-authentication.client';
 import { GitHubAuthenticationConfigurationProvider } from './github-authentication.configuration';
 import { GitHubAuthenticationController } from './github-authentication.controller';
 import { GitHubAuthenticationModule } from './github-authentication.module';
@@ -39,6 +40,7 @@ describe(GitHubAuthenticationModule.name, () => {
     expect(controllers).toContain(GitHubAuthenticationController);
     expect(providers).toEqual(
       expect.arrayContaining([
+        GitHubAuthenticationClient,
         GitHubAuthenticationConfigurationProvider,
         GitHubAuthenticationService,
         OAuthSessionRepository,

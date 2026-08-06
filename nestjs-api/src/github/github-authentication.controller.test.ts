@@ -7,9 +7,11 @@ import { GitHubAuthenticationService } from './github-authentication.service';
 describe(GitHubAuthenticationController.name, () => {
   const createSignInSession = jest.fn();
   const createAccountLinkSession = jest.fn();
+  const callback = jest.fn();
   const controller = new GitHubAuthenticationController({
     createSignInSession,
     createAccountLinkSession,
+    callback,
   } as unknown as GitHubAuthenticationService);
 
   beforeEach(() => {
@@ -87,5 +89,25 @@ describe(GitHubAuthenticationController.name, () => {
       response: { code: 'invalid-argument' },
     });
     expect(createAccountLinkSession).not.toHaveBeenCalled();
+  });
+
+  it('공백을 제거한 callback query로 앱 redirect 정보를 반환한다', async () => {
+    callback.mockResolvedValue('devlog://oauth-callback?ticket=ticket-1');
+
+    await expect(controller.callback(' state-1 ', ' code-1 ')).resolves.toEqual(
+      {
+        url: 'devlog://oauth-callback?ticket=ticket-1',
+        statusCode: HttpStatus.FOUND,
+      },
+    );
+    expect(callback).toHaveBeenCalledWith('state-1', 'code-1');
+  });
+
+  it('문자열이 아닌 callback query를 전달하지 않는다', async () => {
+    callback.mockResolvedValue('devlog://oauth-callback?error=oauth-failed');
+
+    await controller.callback(['state'], undefined);
+
+    expect(callback).toHaveBeenCalledWith(undefined, undefined);
   });
 });

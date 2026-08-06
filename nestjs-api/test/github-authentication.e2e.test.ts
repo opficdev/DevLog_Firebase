@@ -33,6 +33,7 @@ describe('GitHub 인증 API', () => {
   const verifyIdToken = jest.fn();
   const createSignInSession = jest.fn();
   const createAccountLinkSession = jest.fn();
+  const callback = jest.fn();
   let app: INestApplication;
 
   beforeAll(async () => {
@@ -46,7 +47,7 @@ describe('GitHub 인증 API', () => {
       .overrideProvider(FIREBASE_FIRESTORE_TOKEN)
       .useValue({})
       .overrideProvider(GitHubAuthenticationService)
-      .useValue({ createSignInSession, createAccountLinkSession })
+      .useValue({ createSignInSession, createAccountLinkSession, callback })
       .compile();
 
     app = module.createNestApplication();
@@ -62,6 +63,9 @@ describe('GitHub 인증 API', () => {
     createAccountLinkSession.mockReset().mockResolvedValue({
       authorizationURL: 'https://github.com/login/oauth/authorize',
     });
+    callback
+      .mockReset()
+      .mockResolvedValue('devlog://oauth-callback?ticket=ticket-1');
   });
 
   afterAll(async () => {
@@ -132,5 +136,29 @@ describe('GitHub 인증 API', () => {
 
     expect(verifyIdToken).not.toHaveBeenCalled();
     expect(createAccountLinkSession).not.toHaveBeenCalled();
+  });
+
+  it('인증 token 없이 callback 결과를 앱 주소로 redirect한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .get('/api/auth/github/callback?state=state-1&code=code-1')
+      .expect(HttpStatus.FOUND)
+      .expect('Location', 'devlog://oauth-callback?ticket=ticket-1');
+
+    expect(verifyIdToken).not.toHaveBeenCalled();
+    expect(callback).toHaveBeenCalledWith('state-1', 'code-1');
+  });
+
+  it('callback 실패도 안전한 앱 주소로 redirect한다', async () => {
+    const server = app.getHttpServer() as Server;
+    callback.mockResolvedValue('devlog://oauth-callback?error=oauth-failed');
+
+    await request(server)
+      .get('/api/auth/github/callback')
+      .expect(HttpStatus.FOUND)
+      .expect('Location', 'devlog://oauth-callback?error=oauth-failed');
+
+    expect(callback).toHaveBeenCalledWith(undefined, undefined);
   });
 });
