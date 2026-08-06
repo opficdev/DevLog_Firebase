@@ -59,14 +59,7 @@
           }
         },
         {
-          "source": "/api/auth/apple/challenges",
-          "run": {
-            "serviceId": "http-api",
-            "region": "asia-northeast3"
-          }
-        },
-        {
-          "source": "/api/auth/apple/custom-token",
+          "source": "/api/auth/apple/**",
           "run": {
             "serviceId": "http-api",
             "region": "asia-northeast3"

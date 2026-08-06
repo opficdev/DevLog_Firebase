@@ -38,14 +38,7 @@ assert.deepStrictEqual(staging.rewrites, [
         }
     },
     {
-        source: "/api/auth/apple/challenges",
-        run: {
-            serviceId: "http-api",
-            region: "asia-northeast3"
-        }
-    },
-    {
-        source: "/api/auth/apple/custom-token",
+        source: "/api/auth/apple/**",
         run: {
             serviceId: "http-api",
             region: "asia-northeast3"
@@ -71,7 +64,6 @@ assert.strictEqual("pinTag" in staging.rewrites[1].run, false);
 assert.strictEqual("pinTag" in staging.rewrites[2].run, false);
 assert.strictEqual("pinTag" in staging.rewrites[3].run, false);
 assert.strictEqual("pinTag" in staging.rewrites[4].run, false);
-assert.strictEqual("pinTag" in staging.rewrites[5].run, false);
 
 assert.ok(production);
 assert.deepStrictEqual(production.rewrites, [
