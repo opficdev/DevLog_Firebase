@@ -16,31 +16,14 @@ assert.strictEqual(matchRestRoute("POST", ["auth", "apple", "account-link"]), un
 assert.strictEqual(matchRestRoute("POST", ["auth", "github", "tokens"]), undefined);
 assert.strictEqual(matchRestRoute("POST", ["auth", "github", "link"]), undefined);
 
-assert.deepStrictEqual(
-    matchRestRoute("DELETE", ["auth", "github", "access-token"]),
-    {
-        action: "revokeGithubAccessToken",
-        requiresAuth: true
-    }
-);
-
-const githubOAuthRoutes = [
-    ["PUT", ["auth", "github", "account-link"], "linkGithubAccount", true],
-    ["DELETE", ["auth", "github", "account-link"], "unlinkGithubAccount", true]
-];
-
-for (const [method, segments, action, requiresAuth] of githubOAuthRoutes) {
-    assert.deepStrictEqual(
-        matchRestRoute(method, segments),
-        { action, requiresAuth }
-    );
-}
-
 for (const [method, segments] of [
     ["POST", ["auth", "github", "sign-in-sessions"]],
     ["GET", ["auth", "github", "callback"]],
     ["POST", ["auth", "github", "custom-token"]],
     ["POST", ["auth", "github", "account-link-sessions"]],
+    ["PUT", ["auth", "github", "account-link"]],
+    ["DELETE", ["auth", "github", "account-link"]],
+    ["DELETE", ["auth", "github", "access-token"]],
     ["POST", ["auth", "apple", "challenges"]],
     ["POST", ["auth", "apple", "custom-token"]],
     ["PUT", ["auth", "apple", "account-link"]],
