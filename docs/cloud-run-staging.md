@@ -9,7 +9,7 @@
 - 자원: request-based billing, 1 vCPU, 512 MiB, min instances 0, max instances 3, concurrency 80, timeout 60초, port 8080
 - 제외: Production, Firebase Hosting, 실제 배포 자동화
 - Apple 인증 경로: `/api/auth/apple/**`
-- GitHub 인증 경로: `/api/auth/github/sign-in-sessions`, `/api/auth/github/callback`, `/api/auth/github/custom-token`, `/api/auth/github/account-link-sessions`
+- GitHub 인증 경로: `/api/auth/github/**`
 
 ## 권한과 인증
 
@@ -230,6 +230,15 @@ curl -i -X POST \
 	-d '{"appChallenge":"route-check"}' \
 	"${SERVICE_URL}/api/auth/github/account-link-sessions"
 
+curl -i -X PUT \
+	"${SERVICE_URL}/api/auth/github/account-link"
+
+curl -i -X DELETE \
+	"${SERVICE_URL}/api/auth/github/account-link"
+
+curl -i -X DELETE \
+	"${SERVICE_URL}/api/auth/github/access-token"
+
 curl -i -X POST \
 	"${SERVICE_URL}/api/todos/${TODO_ID}/deletion-request"
 
@@ -278,13 +287,16 @@ unset FIREBASE_ID_TOKEN TODO_ID WEB_PAGE_ID PUSH_NOTIFICATION_ID SERVICE_URL
 8. query가 빈 GitHub callback `GET`: `302`, `devlog://oauth-callback?error=oauth-failed`
 9. body가 빈 GitHub custom token `POST`: `400`, `invalid-argument`
 10. Token이 없는 GitHub 계정 연결 session `POST`: `401`, `unauthenticated`
-11. Token이 없는 Todo `POST`: `401`
-12. Token이 있는 Todo `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
-13. Token이 있는 WebPage `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
-14. Token이 있는 PushNotification `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
-15. 각 `DELETE` 뒤 Todo와 연결 알림, WebPage 및 PushNotification의 삭제 상태 복구
+11. Token이 없는 GitHub account-link `PUT`: `401`, `unauthenticated`
+12. Token이 없는 GitHub account-link `DELETE`: `401`, `unauthenticated`
+13. Token이 없는 GitHub access-token `DELETE`: `401`, `unauthenticated`
+14. Token이 없는 Todo `POST`: `401`
+15. Token이 있는 Todo `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
+16. Token이 있는 WebPage `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
+17. Token이 있는 PushNotification `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
+18. 각 `DELETE` 뒤 Todo와 연결 알림, WebPage 및 PushNotification의 삭제 상태 복구
 
-유효한 Firebase ID Token과 일회용 인증 값이 필요한 Google custom token, account-link, account-link 해제, access-token 폐기와 Apple challenge, custom token, account-link, account-link 해제, access-token 갱신·폐기 및 refresh-token 성공 경로, GitHub 로그인·계정 연결 성공 경로는 Staging 앱에서 별도로 확인합니다. Token과 인증 코드는 로그와 shell history에 남기지 않습니다.
+유효한 Firebase ID Token과 일회용 인증 값이 필요한 Google custom token, account-link, account-link 해제, access-token 폐기와 Apple challenge, custom token, account-link, account-link 해제, access-token 갱신·폐기 및 refresh-token 성공 경로, GitHub 로그인·계정 연결·연결 해제·grant 폐기 성공 경로는 Staging 앱에서 별도로 확인합니다. Token과 인증 코드는 로그와 shell history에 남기지 않습니다.
 
 오류 로그가 한 항목의 `jsonPayload`로 수집되는지 확인합니다.
 
@@ -314,7 +326,7 @@ unset LATEST_REVISION
 
 1. 로컬 검증을 통과한 commit을 Cloud Run `http-api`에 배포하고 세 Secret을 연결합니다.
 2. 최신 revision이 `Ready`이고 트래픽 100%를 받는지 확인합니다.
-3. Cloud Run 직접 호출에서 Google·Apple 인증과 이전한 네 GitHub 인증 경로 검증이 통과하는지 확인합니다.
+3. Cloud Run 직접 호출에서 Google·Apple·GitHub 인증 경로 검증이 통과하는지 확인합니다.
 4. `firebase-hosting-staging.md`에 따라 Staging Hosting만 배포합니다.
 5. Hosting 경유 요청이 최신 revision과 Functions `api`에 의도한 경계대로 기록되는지 확인합니다.
 
