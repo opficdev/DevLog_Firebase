@@ -18,6 +18,7 @@ import { FirebaseAuthGuard } from './auth/firebase-auth.guard';
 import { ApiExceptionFilter } from './common/api-exception.filter';
 import { AppModule } from './app.module';
 import { GOOGLE_AUTHENTICATION_CONFIGURATION_TOKEN } from './google/google-authentication.configuration';
+import { GitHubAuthenticationModule } from './github/github-authentication.module';
 import { GoogleAuthenticationModule } from './google/google-authentication.module';
 import { PushNotificationsModule } from './push-notifications/push-notifications.module';
 import { TodosModule } from './todos/todos.module';
@@ -113,6 +114,15 @@ describe(AppModule.name, () => {
     ) as unknown[];
 
     expect(imports).toContain(GoogleAuthenticationModule);
+  });
+
+  it('GitHubAuthenticationModule을 애플리케이션에 연결한다', () => {
+    const imports = Reflect.getMetadata(
+      MODULE_METADATA.IMPORTS,
+      AppModule,
+    ) as unknown[];
+
+    expect(imports).toContain(GitHubAuthenticationModule);
   });
 
   it('PushNotificationsModule을 애플리케이션에 연결한다', () => {

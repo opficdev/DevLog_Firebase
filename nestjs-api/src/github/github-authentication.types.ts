@@ -29,3 +29,9 @@ export interface GitHubCredential {
   // access token을 발급한 OAuth App client id를 저장합니다.
   clientId: string;
 }
+
+// GitHub OAuth session 생성 응답입니다.
+export interface GitHubOAuthSessionResponse {
+  // 앱이 열 GitHub authorization 주소를 저장합니다.
+  authorizationURL: string;
+}
