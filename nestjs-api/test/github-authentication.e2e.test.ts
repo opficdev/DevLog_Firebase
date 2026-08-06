@@ -5,6 +5,7 @@ import request from 'supertest';
 
 import { configureApplication } from '../src/app.config';
 import { AppModule } from '../src/app.module';
+import { ApiException } from '../src/common/api.exception';
 import {
   FIREBASE_APP_TOKEN,
   FIREBASE_AUTH_TOKEN,
@@ -235,6 +236,33 @@ describe('GitHub 인증 API', () => {
     expect(link).not.toHaveBeenCalled();
   });
 
+  it.each([
+    [
+      HttpStatus.FORBIDDEN,
+      'mismatched-oauth-ticket',
+      'OAuth ticket 결합 정보가 일치하지 않습니다.',
+    ],
+    [
+      HttpStatus.CONFLICT,
+      'github-email-changed-account-conflict',
+      'GitHub provider가 다른 계정에 연결되어 있습니다.',
+    ],
+    [HttpStatus.BAD_REQUEST, 'email-mismatch', '이메일이 일치하지 않습니다.'],
+  ])(
+    'GitHub 계정 연결 오류 %s %s 계약을 반환한다',
+    async (status, code, message) => {
+      const server = app.getHttpServer() as Server;
+      link.mockRejectedValueOnce(new ApiException(status, code, message));
+
+      await request(server)
+        .put('/api/auth/github/account-link')
+        .set('Authorization', 'Bearer Firebase-ID-Token')
+        .send({ ticket: 'ticket-1', appVerifier: 'app-verifier' })
+        .expect(status)
+        .expect({ code, message });
+    },
+  );
+
   it('인증된 UID의 GitHub grant와 credential을 폐기한다', async () => {
     const server = app.getHttpServer() as Server;
 
@@ -259,6 +287,26 @@ describe('GitHub 인증 API', () => {
       });
 
     expect(revoke).not.toHaveBeenCalled();
+  });
+
+  it('GitHub grant 폐기 실패의 기존 오류 계약을 반환한다', async () => {
+    const server = app.getHttpServer() as Server;
+    revoke.mockRejectedValueOnce(
+      new ApiException(
+        HttpStatus.BAD_GATEWAY,
+        'github-revoke-failed',
+        'GitHub OAuth App grant 제거에 실패했습니다.',
+      ),
+    );
+
+    await request(server)
+      .delete('/api/auth/github/access-token')
+      .set('Authorization', 'Bearer Firebase-ID-Token')
+      .expect(HttpStatus.BAD_GATEWAY)
+      .expect({
+        code: 'github-revoke-failed',
+        message: 'GitHub OAuth App grant 제거에 실패했습니다.',
+      });
   });
 
   it('인증된 UID의 GitHub provider 연결을 해제한다', async () => {

@@ -124,9 +124,9 @@ export class GitHubAuthenticationClient {
         message: 'GitHub OAuth token 폐기에 실패했습니다.',
         ...errorMetadata(error),
       });
-      throw githubRevocationException;
+      throw githubGrantRevocationException;
     }
-    throw githubRevocationException;
+    throw githubTokenRevocationException;
   }
 
   // GitHub OAuth App의 사용자 grant를 폐기합니다.
@@ -159,9 +159,9 @@ export class GitHubAuthenticationClient {
         message: 'GitHub OAuth App grant 제거에 실패했습니다.',
         ...errorMetadata(error),
       });
-      throw githubRevocationException;
+      throw githubGrantRevocationException;
     }
-    throw githubRevocationException;
+    throw githubGrantRevocationException;
   }
 
   // GitHub token 조회 결과로 이미 무효화된 token인지 확인합니다.
@@ -269,8 +269,13 @@ const githubProviderException = new ApiException(
   'github-provider-failed',
   'GitHub 인증 서버 요청에 실패했습니다.',
 );
-const githubRevocationException = new ApiException(
+const githubGrantRevocationException = new ApiException(
   HttpStatus.BAD_GATEWAY,
   'github-revoke-failed',
-  'GitHub grant 폐기에 실패했습니다.',
+  'GitHub OAuth App grant 제거에 실패했습니다.',
+);
+const githubTokenRevocationException = new ApiException(
+  HttpStatus.BAD_GATEWAY,
+  'github-revoke-failed',
+  'GitHub OAuth token 폐기에 실패했습니다.',
 );
