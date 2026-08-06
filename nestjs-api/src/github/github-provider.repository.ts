@@ -1,4 +1,4 @@
-import { HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import {
   type Auth,
   type UpdateRequest,
@@ -15,6 +15,9 @@ const providerId = 'github.com';
 // Firebase Auth의 GitHub provider 사용자 처리를 담당합니다.
 @Injectable()
 export class GitHubProviderRepository {
+  // 신규 사용자 연결 보상 실패를 기록하는 로그 기능을 저장합니다.
+  private readonly logger = new Logger(GitHubProviderRepository.name);
+
   // Firebase Auth 저장 기능과 GitHub 사용자 조회 기능을 주입받습니다.
   constructor(
     @Inject(FIREBASE_AUTH_TOKEN) private readonly auth: Auth,
@@ -83,8 +86,26 @@ export class GitHubProviderRepository {
       email,
       photoURL: user.avatar_url,
     });
-    await this.auth.updateUser(createdUser.uid, { providerToLink });
-    return createdUser.uid;
+    try {
+      await this.auth.updateUser(createdUser.uid, { providerToLink });
+      return createdUser.uid;
+    } catch (error) {
+      try {
+        await this.auth.deleteUser(createdUser.uid);
+      } catch (cleanupError) {
+        this.logger.error({
+          message: 'GitHub provider 연결 실패 사용자 정리 실패',
+          errorMessage:
+            cleanupError instanceof Error
+              ? cleanupError.message
+              : '알 수 없는 오류',
+          errorStack:
+            cleanupError instanceof Error ? cleanupError.stack : undefined,
+          uid: createdUser.uid,
+        });
+      }
+      throw error;
+    }
   }
 }
 

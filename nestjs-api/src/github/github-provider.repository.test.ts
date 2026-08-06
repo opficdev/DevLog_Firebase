@@ -1,4 +1,4 @@
-import { HttpStatus } from '@nestjs/common';
+import { HttpStatus, Logger } from '@nestjs/common';
 import { type Auth, type UserRecord } from 'firebase-admin/auth';
 
 import { GitHubAuthenticationClient } from './github-authentication.client';
@@ -10,11 +10,13 @@ describe(GitHubProviderRepository.name, () => {
   const getUserByEmail = jest.fn();
   const updateUser = jest.fn();
   const createUser = jest.fn();
+  const deleteUser = jest.fn();
   const auth = {
     getUserByProviderUid,
     getUserByEmail,
     updateUser,
     createUser,
+    deleteUser,
   } as unknown as Auth;
   const user = jest.fn();
   const verifiedEmail = jest.fn();
@@ -22,12 +24,19 @@ describe(GitHubProviderRepository.name, () => {
     user,
     verifiedEmail,
   } as unknown as GitHubAuthenticationClient;
+  const loggerError = jest
+    .spyOn(Logger.prototype, 'error')
+    .mockImplementation();
   const repository = new GitHubProviderRepository(auth, client);
 
   beforeEach(() => {
     jest.resetAllMocks();
     user.mockResolvedValue(githubUser());
     verifiedEmail.mockResolvedValue('user@example.com');
+  });
+
+  afterAll(() => {
+    jest.restoreAllMocks();
   });
 
   it('verified email이 없어도 기존 GitHub provider uid로 로그인한다', async () => {
@@ -127,6 +136,36 @@ describe(GitHubProviderRepository.name, () => {
     });
     expect(updateUser).toHaveBeenCalledWith('new-uid', {
       providerToLink: githubProvider(),
+    });
+    expect(deleteUser).not.toHaveBeenCalled();
+  });
+
+  it('신규 사용자 provider 연결 실패 시 생성한 사용자를 삭제한다', async () => {
+    const error = new Error('provider 연결 실패');
+    getUserByProviderUid.mockRejectedValue(authError('auth/user-not-found'));
+    getUserByEmail.mockRejectedValue(authError('auth/user-not-found'));
+    createUser.mockResolvedValue(userRecord('new-uid'));
+    updateUser.mockRejectedValue(error);
+
+    await expect(repository.resolveUid('access-token')).rejects.toBe(error);
+    expect(deleteUser).toHaveBeenCalledWith('new-uid');
+  });
+
+  it('신규 사용자 삭제 실패가 provider 연결 오류를 덮지 않는다', async () => {
+    const error = new Error('provider 연결 실패');
+    const cleanupError = new Error('사용자 삭제 실패');
+    getUserByProviderUid.mockRejectedValue(authError('auth/user-not-found'));
+    getUserByEmail.mockRejectedValue(authError('auth/user-not-found'));
+    createUser.mockResolvedValue(userRecord('new-uid'));
+    updateUser.mockRejectedValue(error);
+    deleteUser.mockRejectedValue(cleanupError);
+
+    await expect(repository.resolveUid('access-token')).rejects.toBe(error);
+    expect(loggerError).toHaveBeenCalledWith({
+      message: 'GitHub provider 연결 실패 사용자 정리 실패',
+      errorMessage: cleanupError.message,
+      errorStack: cleanupError.stack,
+      uid: 'new-uid',
     });
   });
 
