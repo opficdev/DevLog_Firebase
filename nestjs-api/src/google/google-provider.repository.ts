@@ -1,5 +1,9 @@
-import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
-import { type Auth, type UpdateRequest } from 'firebase-admin/auth';
+import { HttpStatus, Inject, Injectable } from '@nestjs/common';
+import {
+  type Auth,
+  type UpdateRequest,
+  type UserRecord,
+} from 'firebase-admin/auth';
 
 import { ApiException } from '../common/api.exception';
 import { FIREBASE_AUTH_TOKEN } from '../firebase/firebase.tokens';
@@ -17,14 +21,12 @@ const linkConflictException = new ApiException(
 // Firebase Auth의 Google provider 사용자 처리를 담당합니다.
 @Injectable()
 export class GoogleProviderRepository {
-  // 사용자 생성 보상 실패를 기록하는 로그 기능을 저장합니다.
-  private readonly logger = new Logger(GoogleProviderRepository.name);
-
   // Firebase Auth 저장 기능을 주입받습니다.
   constructor(@Inject(FIREBASE_AUTH_TOKEN) private readonly auth: Auth) {}
 
   // Google provider 또는 검증된 이메일로 Firebase uid를 결정합니다.
   async resolveUid(payload: GoogleTokenPayload): Promise<string> {
+    // 연결된 Google provider 사용자를 우선 조회합니다.
     try {
       const user = await this.auth.getUserByProviderUid(
         providerId,
@@ -42,6 +44,7 @@ export class GoogleProviderRepository {
           ? payload.email
           : undefined;
       if (googleOnly && email) {
+        // 검증된 이메일을 현재 사용자에게 갱신할 수 있는지 확인합니다.
         try {
           const emailUser = await this.auth.getUserByEmail(email);
           if (emailUser.uid === user.uid) {
@@ -88,14 +91,10 @@ export class GoogleProviderRepository {
       email,
       photoURL: payload.picture,
     };
+    let user: UserRecord;
+    // 검증된 이메일을 사용하는 기존 Firebase 사용자를 조회합니다.
     try {
-      const user = await this.auth.getUserByEmail(email);
-      await this.auth.updateUser(user.uid, {
-        displayName: payload.name ?? null,
-        photoURL: payload.picture ?? null,
-        providerToLink,
-      });
-      return user.uid;
+      user = await this.auth.getUserByEmail(email);
     } catch (error) {
       const code =
         error && typeof error === 'object'
@@ -104,34 +103,51 @@ export class GoogleProviderRepository {
       if (code !== 'auth/user-not-found') {
         throw error;
       }
-    }
-
-    const user = await this.auth.createUser({
-      displayName: payload.name,
-      email,
-      photoURL: payload.picture,
-    });
-    try {
-      await this.auth.updateUser(user.uid, { providerToLink });
-    } catch (error) {
+      // 기존 사용자가 없으면 새 Firebase 사용자를 생성합니다.
       try {
-        await this.auth.deleteUser(user.uid);
-      } catch (deleteError) {
-        let errorMessage = '알 수 없는 오류';
-        let errorStack: string | undefined;
-        if (deleteError instanceof Error) {
-          errorMessage = deleteError.message;
-          errorStack = deleteError.stack;
-        }
-        this.logger.error({
-          message: 'Google provider 연결 실패 사용자 정리 실패',
-          errorMessage,
-          errorStack,
+        user = await this.auth.createUser({
+          displayName: payload.name,
+          email,
+          photoURL: payload.picture,
         });
+      } catch (createError) {
+        const createCode =
+          createError && typeof createError === 'object'
+            ? (createError as Record<string, unknown>).code
+            : undefined;
+        if (createCode !== 'auth/email-already-exists') {
+          throw createError;
+        }
+        user = await this.auth.getUserByEmail(email);
+      }
+    }
+    // 결정한 Firebase 사용자에게 Google provider를 연결합니다.
+    try {
+      await this.auth.updateUser(user.uid, {
+        displayName: payload.name ?? null,
+        photoURL: payload.picture ?? null,
+        providerToLink,
+      });
+      return user.uid;
+    } catch (error) {
+      // 연결 실패 후 Google provider의 현재 소유자를 다시 조회합니다.
+      try {
+        const providerUser = await this.auth.getUserByProviderUid(
+          providerId,
+          payload.sub,
+        );
+        return providerUser.uid;
+      } catch (providerError) {
+        const providerCode =
+          providerError && typeof providerError === 'object'
+            ? (providerError as Record<string, unknown>).code
+            : undefined;
+        if (providerCode !== 'auth/user-not-found') {
+          throw providerError;
+        }
       }
       throw error;
     }
-    return user.uid;
   }
 
   // 현재 Firebase 사용자에게 Google provider를 연결합니다.

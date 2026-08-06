@@ -1,4 +1,4 @@
-import { HttpStatus, Logger } from '@nestjs/common';
+import { HttpStatus } from '@nestjs/common';
 import { type Auth, type UserRecord } from 'firebase-admin/auth';
 
 import { type GoogleTokenPayload } from './google-authentication.types';
@@ -54,7 +54,7 @@ describe(GoogleProviderRepository.name, () => {
     });
   });
 
-  it('사용자가 없으면 생성 후 Google provider를 연결한다', async () => {
+  it('사용자가 없으면 생성한 사용자에 Google provider를 연결한다', async () => {
     getUserByProviderUid.mockRejectedValue(authError('auth/user-not-found'));
     getUserByEmail.mockRejectedValue(authError('auth/user-not-found'));
     createUser.mockResolvedValue(userRecord('new-uid'));
@@ -66,41 +66,53 @@ describe(GoogleProviderRepository.name, () => {
       photoURL: 'https://example.com/photo.png',
     });
     expect(updateUser).toHaveBeenCalledWith('new-uid', {
+      displayName: 'User',
+      photoURL: 'https://example.com/photo.png',
       providerToLink: googleProvider('user@example.com'),
     });
   });
 
-  it('신규 사용자 provider 연결 실패 시 생성 사용자를 정리한다', async () => {
+  it('동시 요청이 같은 이메일 사용자를 생성하면 생성된 사용자에 연결한다', async () => {
     getUserByProviderUid.mockRejectedValue(authError('auth/user-not-found'));
-    getUserByEmail.mockRejectedValue(authError('auth/user-not-found'));
-    createUser.mockResolvedValue(userRecord('new-uid'));
-    updateUser.mockRejectedValue(new Error('link-failed'));
+    getUserByEmail
+      .mockRejectedValueOnce(authError('auth/user-not-found'))
+      .mockResolvedValueOnce(userRecord('concurrent-uid'));
+    createUser.mockRejectedValue(authError('auth/email-already-exists'));
 
-    await expect(repository.resolveUid(payload())).rejects.toThrow(
-      'link-failed',
+    await expect(repository.resolveUid(payload())).resolves.toBe(
+      'concurrent-uid',
     );
-    expect(deleteUser).toHaveBeenCalledWith('new-uid');
+    expect(updateUser).toHaveBeenCalledWith('concurrent-uid', {
+      displayName: 'User',
+      photoURL: 'https://example.com/photo.png',
+      providerToLink: googleProvider('user@example.com'),
+    });
+    expect(deleteUser).not.toHaveBeenCalled();
   });
 
-  it('신규 사용자 정리 실패를 단일 구조화 오류로 기록한다', async () => {
+  it('동시 요청이 provider 연결을 완료하면 연결된 uid를 반환한다', async () => {
+    getUserByProviderUid
+      .mockRejectedValueOnce(authError('auth/user-not-found'))
+      .mockResolvedValueOnce(
+        userRecord('new-uid', [googleProvider('user@example.com')]),
+      );
+    getUserByEmail.mockRejectedValue(authError('auth/user-not-found'));
+    createUser.mockResolvedValue(userRecord('new-uid'));
+    updateUser.mockRejectedValue(authError('auth/provider-already-linked'));
+
+    await expect(repository.resolveUid(payload())).resolves.toBe('new-uid');
+    expect(deleteUser).not.toHaveBeenCalled();
+  });
+
+  it('provider 연결이 실패해도 생성 사용자를 삭제하지 않는다', async () => {
     const linkError = new Error('link-failed');
-    const deleteError = new Error('delete-failed');
-    const loggerError = jest
-      .spyOn(Logger.prototype, 'error')
-      .mockImplementation();
     getUserByProviderUid.mockRejectedValue(authError('auth/user-not-found'));
     getUserByEmail.mockRejectedValue(authError('auth/user-not-found'));
     createUser.mockResolvedValue(userRecord('new-uid'));
     updateUser.mockRejectedValue(linkError);
-    deleteUser.mockRejectedValue(deleteError);
 
     await expect(repository.resolveUid(payload())).rejects.toBe(linkError);
-    expect(loggerError).toHaveBeenCalledWith({
-      message: 'Google provider 연결 실패 사용자 정리 실패',
-      errorMessage: deleteError.message,
-      errorStack: deleteError.stack,
-    });
-    loggerError.mockRestore();
+    expect(deleteUser).not.toHaveBeenCalled();
   });
 
   it('미검증 이메일의 자동 연결을 거부한다', async () => {
