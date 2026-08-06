@@ -117,6 +117,50 @@ describe(GitHubAuthenticationClient.name, () => {
     ]);
   });
 
+  it('GitHub OAuth App grant를 폐기한다', async () => {
+    mockedAxios.request.mockResolvedValue({ status: HttpStatus.NO_CONTENT });
+
+    await client.revokeOAuthGrant('user-1', 'access-token', configuration);
+
+    expect(mockedAxios.request.mock.calls).toContainEqual([
+      {
+        method: 'delete',
+        url: 'https://api.github.com/applications/client-id/grant',
+        auth: { username: 'client-id', password: 'client-secret' },
+        headers: {
+          Accept: 'application/vnd.github+json',
+          'User-Agent': 'DevLog-Firebase',
+        },
+        data: { access_token: 'access-token' },
+      },
+    ]);
+  });
+
+  it('이미 무효화된 GitHub token의 grant 폐기를 성공으로 처리한다', async () => {
+    const deletionError = axiosError(HttpStatus.UNPROCESSABLE_ENTITY, {});
+    const loggerWarn = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation();
+    mockedAxios.request
+      .mockRejectedValueOnce(deletionError)
+      .mockRejectedValueOnce(axiosError(HttpStatus.NOT_FOUND, {}));
+
+    await expect(
+      client.revokeOAuthGrant('user-1', 'access-token', configuration),
+    ).resolves.toBeUndefined();
+    expect(loggerWarn).toHaveBeenCalledWith({
+      message:
+        'GitHub OAuth App grant를 제거할 수 없지만 token이 이미 무효화되어 성공으로 처리합니다.',
+      uid: 'user-1',
+      github: {
+        status: HttpStatus.UNPROCESSABLE_ENTITY,
+        errorMessage: deletionError.message,
+        data: {},
+      },
+    });
+    loggerWarn.mockRestore();
+  });
+
   it('이미 무효화된 GitHub token 폐기를 성공으로 처리한다', async () => {
     const deletionError = axiosError(HttpStatus.NOT_FOUND, {});
     const loggerWarn = jest
@@ -148,6 +192,19 @@ describe(GitHubAuthenticationClient.name, () => {
 
     await expect(
       client.revokeOAuthToken('user-1', 'access-token', configuration),
+    ).rejects.toMatchObject({
+      status: HttpStatus.BAD_GATEWAY,
+      response: { code: 'github-revoke-failed' },
+    });
+  });
+
+  it('GitHub grant 폐기 실패를 계약 오류로 변환한다', async () => {
+    mockedAxios.request.mockRejectedValue(
+      axiosError(HttpStatus.INTERNAL_SERVER_ERROR, {}),
+    );
+
+    await expect(
+      client.revokeOAuthGrant('user-1', 'access-token', configuration),
     ).rejects.toMatchObject({
       status: HttpStatus.BAD_GATEWAY,
       response: { code: 'github-revoke-failed' },

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -60,6 +61,13 @@ export class GitHubAuthenticationController {
       requiredBodyString(body, 'ticket'),
       requiredBodyString(body, 'appVerifier'),
     );
+  }
+
+  // 인증된 사용자의 GitHub OAuth grant와 credential을 폐기합니다.
+  @Delete('access-token')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async revoke(@Req() request: FirebaseAuthenticatedRequest): Promise<void> {
+    await this.service.revoke(requiredAuthenticatedUid(request));
   }
 
   // GitHub callback 결과를 앱 callback 주소로 전달합니다.

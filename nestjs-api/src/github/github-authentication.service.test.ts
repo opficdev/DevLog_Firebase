@@ -19,10 +19,16 @@ describe(GitHubAuthenticationService.name, () => {
   const configuration = jest.fn<GitHubAuthenticationConfiguration, []>();
   const exchangeAuthorizationCode = jest.fn();
   const revokeOAuthToken = jest.fn();
+  const revokeOAuthGrant = jest.fn();
   const createCustomToken = jest.fn();
   const saveCredential = jest.fn();
   const pendingRevocations = jest.fn();
   const removePending = jest.fn();
+  const findCredential = jest.fn();
+  const claimRevocation = jest.fn();
+  const deleteRevoked = jest.fn();
+  const releaseRevocation = jest.fn();
+  const deleteEmpty = jest.fn();
   const resolveUid = jest.fn();
   const linkProvider = jest.fn();
   const create = jest.fn<Promise<OAuthSessionCreation>, [OAuthSessionInput]>();
@@ -39,11 +45,17 @@ describe(GitHubAuthenticationService.name, () => {
     {
       exchangeAuthorizationCode,
       revokeOAuthToken,
+      revokeOAuthGrant,
     } as unknown as GitHubAuthenticationClient,
     {
       save: saveCredential,
       pendingRevocations,
       removePending,
+      find: findCredential,
+      claimRevocation,
+      deleteRevoked,
+      releaseRevocation,
+      deleteEmpty,
     } as unknown as GitHubCredentialRepository,
     { resolveUid, link: linkProvider } as unknown as GitHubProviderRepository,
     {
@@ -80,6 +92,11 @@ describe(GitHubAuthenticationService.name, () => {
     claimTicket.mockResolvedValue(claimedTicket());
     resolveUid.mockResolvedValue('github-uid');
     pendingRevocations.mockResolvedValue([]);
+    findCredential.mockResolvedValue({
+      accessToken: 'access-token',
+      clientId: 'client-id',
+    });
+    claimRevocation.mockResolvedValue('revocation-claim');
     createCustomToken.mockResolvedValue('custom-token');
   });
 
@@ -385,6 +402,73 @@ describe(GitHubAuthenticationService.name, () => {
     expect(releaseTicket).toHaveBeenCalledWith(linkedTicket);
     expect(saveCredential).not.toHaveBeenCalled();
     expect(consumeTicket).not.toHaveBeenCalled();
+  });
+
+  it('이전 token 뒤 현재 GitHub grant와 credential을 폐기한다', async () => {
+    const sequence: string[] = [];
+    pendingRevocations.mockImplementation(() => {
+      sequence.push('이전 token 조회');
+      return Promise.resolve([]);
+    });
+    claimRevocation.mockImplementation(() => {
+      sequence.push('폐기 claim');
+      return Promise.resolve('revocation-claim');
+    });
+    revokeOAuthGrant.mockImplementation(() => {
+      sequence.push('grant 폐기');
+      return Promise.resolve();
+    });
+    deleteRevoked.mockImplementation(() => {
+      sequence.push('credential 삭제');
+      return Promise.resolve();
+    });
+
+    await service.revoke('user-1');
+
+    expect(findCredential).toHaveBeenCalledWith('user-1');
+    expect(claimRevocation).toHaveBeenCalledWith('user-1', {
+      accessToken: 'access-token',
+      clientId: 'client-id',
+    });
+    expect(revokeOAuthGrant).toHaveBeenCalledWith(
+      'user-1',
+      'access-token',
+      expect.objectContaining({ clientId: 'client-id' }),
+    );
+    expect(deleteRevoked).toHaveBeenCalledWith(
+      'user-1',
+      { accessToken: 'access-token', clientId: 'client-id' },
+      'revocation-claim',
+    );
+    expect(sequence).toEqual([
+      '이전 token 조회',
+      '폐기 claim',
+      'grant 폐기',
+      'credential 삭제',
+    ]);
+  });
+
+  it('GitHub credential이 없으면 빈 문서를 정리한다', async () => {
+    findCredential.mockResolvedValue(undefined);
+
+    await service.revoke('user-1');
+
+    expect(pendingRevocations).toHaveBeenCalledWith('user-1');
+    expect(deleteEmpty).toHaveBeenCalledWith('user-1');
+    expect(claimRevocation).not.toHaveBeenCalled();
+    expect(revokeOAuthGrant).not.toHaveBeenCalled();
+  });
+
+  it('GitHub grant 폐기 실패 뒤 claim을 해제한다', async () => {
+    const error = new Error('grant 폐기 실패');
+    revokeOAuthGrant.mockRejectedValue(error);
+
+    await expect(service.revoke('user-1')).rejects.toBe(error);
+    expect(releaseRevocation).toHaveBeenCalledWith(
+      'user-1',
+      'revocation-claim',
+    );
+    expect(deleteRevoked).not.toHaveBeenCalled();
   });
 });
 

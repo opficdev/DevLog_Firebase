@@ -36,6 +36,7 @@ describe('GitHub 인증 API', () => {
   const callback = jest.fn();
   const customToken = jest.fn();
   const link = jest.fn();
+  const revoke = jest.fn();
   let app: INestApplication;
 
   beforeAll(async () => {
@@ -55,6 +56,7 @@ describe('GitHub 인증 API', () => {
         callback,
         customToken,
         link,
+        revoke,
       })
       .compile();
 
@@ -76,6 +78,7 @@ describe('GitHub 인증 API', () => {
       .mockResolvedValue('devlog://oauth-callback?ticket=ticket-1');
     customToken.mockReset().mockResolvedValue('custom-token');
     link.mockReset().mockResolvedValue(undefined);
+    revoke.mockReset().mockResolvedValue(undefined);
   });
 
   afterAll(async () => {
@@ -227,5 +230,31 @@ describe('GitHub 인증 API', () => {
       });
 
     expect(link).not.toHaveBeenCalled();
+  });
+
+  it('인증된 UID의 GitHub grant와 credential을 폐기한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .delete('/api/auth/github/access-token')
+      .set('Authorization', 'Bearer Firebase-ID-Token')
+      .expect(HttpStatus.NO_CONTENT);
+
+    expect(verifyIdToken).toHaveBeenCalledWith('Firebase-ID-Token');
+    expect(revoke).toHaveBeenCalledWith('user-1');
+  });
+
+  it('GitHub grant 폐기 요청에 인증 token이 없으면 거부한다', async () => {
+    const server = app.getHttpServer() as Server;
+
+    await request(server)
+      .delete('/api/auth/github/access-token')
+      .expect(HttpStatus.UNAUTHORIZED)
+      .expect({
+        code: 'unauthenticated',
+        message: '인증 토큰이 필요합니다.',
+      });
+
+    expect(revoke).not.toHaveBeenCalled();
   });
 });
