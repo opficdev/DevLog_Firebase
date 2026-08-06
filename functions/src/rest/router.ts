@@ -1,10 +1,5 @@
 // REST route가 실행할 처리 종류를 나타냅니다.
 export type RestAction =
-    "linkAppleProvider" |
-    "unlinkAppleProvider" |
-    "requestAppleRefreshToken" |
-    "refreshAppleAccessToken" |
-    "revokeAppleAccessToken" |
     "createGithubSignInSession" |
     "githubCallback" |
     "requestGithubCustomToken" |
@@ -29,41 +24,6 @@ export function parseRestRouteSegments(pathSegments: string[]): string[] | undef
 
 export function matchRestRoute(method: string, routeSegments: string[]): RestRoute | undefined {
     const normalizedMethod = method.toUpperCase();
-
-    if (routeSegments.join("/") === "auth/apple/account-link" && normalizedMethod === "PUT") {
-        return {
-            action: "linkAppleProvider",
-            requiresAuth: true
-        };
-    }
-
-    if (routeSegments.join("/") === "auth/apple/account-link" && normalizedMethod === "DELETE") {
-        return {
-            action: "unlinkAppleProvider",
-            requiresAuth: true
-        };
-    }
-
-    if (routeSegments.join("/") === "auth/apple/access-token" && normalizedMethod === "POST") {
-        return {
-            action: "refreshAppleAccessToken",
-            requiresAuth: true
-        };
-    }
-
-    if (routeSegments.join("/") === "auth/apple/refresh-token" && normalizedMethod === "POST") {
-        return {
-            action: "requestAppleRefreshToken",
-            requiresAuth: true
-        };
-    }
-
-    if (routeSegments.join("/") === "auth/apple/access-token" && normalizedMethod === "DELETE") {
-        return {
-            action: "revokeAppleAccessToken",
-            requiresAuth: true
-        };
-    }
 
     if (routeSegments.join("/") === "auth/github/sign-in-sessions" && normalizedMethod === "POST") {
         return {

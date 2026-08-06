@@ -6,14 +6,6 @@ import type { Response } from "express";
 import * as logger from "firebase-functions/logger";
 import { toError } from "../common/error";
 import {
-    linkAppleProviderWithDatabase,
-    requestAppleRefreshTokenWithDatabase,
-    refreshAppleAccessTokenWithDatabase,
-    revokeAppleAccessTokenWithDatabase,
-    unlinkAppleProviderWithDatabase
-} from "./apple/auth";
-import { appleAuthenticationConfigurationSecret } from "./apple/AppleConfiguration";
-import {
     githubConfiguration,
     githubOAuthConfigurationSecret
 } from "./github/githubConfiguration";
@@ -42,7 +34,6 @@ export const api = onRequest({
         maxInstances: 3,
         region: LOCATION,
         secrets: [
-            appleAuthenticationConfigurationSecret,
             githubOAuthConfigurationSecret
         ]
     },
@@ -109,33 +100,6 @@ async function handleRoute(
     switch (route.action) {
     case "githubCallback":
         return undefined;
-    case "linkAppleProvider":
-        return linkAppleProviderWithDatabase(
-            db,
-            requiredUID(uid),
-            requiredBodyString(body, "challengeId"),
-            requiredBodyString(body, "authorizationCode"),
-            optionalBodyString(body, "credentialEmail")
-        );
-    case "unlinkAppleProvider":
-        return unlinkAppleProviderWithDatabase(
-            db,
-            requiredUID(uid)
-        );
-    case "requestAppleRefreshToken":
-        return requestAppleRefreshTokenWithDatabase(
-            db,
-            requiredUID(uid),
-            requiredBodyString(body, "authorizationCode")
-        );
-    case "refreshAppleAccessToken":
-        return refreshAppleAccessTokenWithDatabase(db, requiredUID(uid));
-    case "revokeAppleAccessToken":
-        return revokeAppleAccessTokenWithDatabase(
-            db,
-            requiredUID(uid),
-            body.token
-        );
     case "createGithubSignInSession":
         return createGithubSignInSession(
             db,
@@ -257,23 +221,6 @@ function requiredBodyString(body: Record<string, unknown>, key: string): string 
         throw new HttpsError("invalid-argument", `${key}가 필요합니다.`);
     }
     return value.trim();
-}
-
-// 요청 body의 선택 문자열을 공백을 제거해 반환합니다.
-function optionalBodyString(
-    body: Record<string, unknown>,
-    key: string
-): string | undefined {
-    const value = body[key];
-    if (value === undefined || value === null) {
-        return undefined;
-    }
-    if (typeof value !== "string") {
-        throw new HttpsError("invalid-argument", `${key} 형식이 올바르지 않습니다.`);
-    }
-
-    const trimmedValue = value.trim();
-    return trimmedValue || undefined;
 }
 
 // REST 오류 응답 body와 같은 내용을 Cloud Logging에 남긴 뒤 클라이언트에 반환합니다.
