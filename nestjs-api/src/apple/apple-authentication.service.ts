@@ -24,6 +24,17 @@ const missingIdTokenException = new ApiException(
   'invalid-apple-proof',
   'Apple 교환 응답에 ID token이 없습니다.',
 );
+const appleCredentialNotFoundException = new ApiException(
+  HttpStatus.NOT_FOUND,
+  'apple-credential-not-found',
+  'Apple credential을 찾을 수 없습니다.',
+);
+const lastProviderException = new ApiException(
+  HttpStatus.PRECONDITION_FAILED,
+  'last-provider',
+  '마지막 로그인 provider는 해제할 수 없습니다.',
+);
+const appleProviderId = 'apple.com';
 
 // Apple 인증과 Firebase 사용자 연결, credential 처리를 조정합니다.
 @Injectable()
@@ -115,5 +126,115 @@ export class AppleAuthenticationService {
     }
 
     return this.auth.createCustomToken(uid);
+  }
+
+  // challenge로 증명한 Apple provider와 credential을 현재 사용자에게 연결합니다.
+  // prettier-ignore
+  async linkProvider(
+    uid: string,
+    challengeId: string,
+    authorizationCode: string,
+    credentialEmail?: string,
+  ): Promise<void> {
+    const expectedHashedNonce = await this.challengeRepository.consume(
+      challengeId,
+    );
+    const tokens = await this.client.exchangeAuthorizationCode(
+      authorizationCode,
+    );
+    if (!tokens.idToken) {
+      await this.client.revokeExchangedTokens(tokens);
+      throw missingIdTokenException;
+    }
+
+    let payload: AppleTokenPayload;
+    try {
+      payload = await this.client.verifyIdToken(
+        tokens.idToken,
+        expectedHashedNonce,
+      );
+    } catch (error) {
+      await this.client.revokeExchangedTokens(tokens);
+      throw error;
+    }
+
+    const refreshToken = await this.client.requiredRefreshToken(tokens);
+    try {
+      await this.providerRepository.link(uid, payload, credentialEmail);
+      await this.credentialRepository.save(uid, refreshToken);
+    } catch (error) {
+      await this.client.revokeExchangedTokens(tokens);
+      throw error;
+    }
+  }
+
+  // authorization code를 Apple refresh token으로 교환해 credential에 저장합니다.
+  // prettier-ignore
+  async requestRefreshToken(
+    uid: string,
+    authorizationCode: string,
+  ): Promise<string> {
+    const tokens = await this.client.exchangeAuthorizationCode(
+      authorizationCode,
+    );
+    const refreshToken = await this.client.requiredRefreshToken(tokens);
+    try {
+      await this.credentialRepository.save(uid, refreshToken);
+    } catch (error) {
+      await this.client.revokeExchangedTokens(tokens);
+      throw error;
+    }
+    return refreshToken;
+  }
+
+  // 저장된 Apple credential로 새 access token을 발급합니다.
+  async refreshAccessToken(uid: string): Promise<string> {
+    const refreshToken = await this.credentialRepository.find(uid);
+    if (!refreshToken) {
+      throw appleCredentialNotFoundException;
+    }
+    return this.client.requestAccessToken(refreshToken);
+  }
+
+  // Apple grant를 폐기한 뒤 저장된 credential을 삭제합니다.
+  // prettier-ignore
+  async revokeAccessToken(
+    uid: string,
+    legacyAccessToken?: unknown,
+  ): Promise<void> {
+    const refreshToken = await this.credentialRepository.find(uid);
+    const requestedAccessToken =
+      typeof legacyAccessToken === 'string' ? legacyAccessToken.trim() : '';
+    const token = refreshToken || requestedAccessToken;
+    if (!token) {
+      return;
+    }
+
+    await this.client.revokeAppleGrant(
+      token,
+      refreshToken ? 'refresh_token' : 'access_token',
+    );
+    if (refreshToken) {
+      await this.credentialRepository.delete(uid);
+    }
+  }
+
+  // Apple grant와 credential을 정리한 뒤 provider 연결을 해제합니다.
+  async unlinkProvider(uid: string): Promise<void> {
+    const user = await this.auth.getUser(uid);
+    const providers = user.providerData ?? [];
+    const hasAppleProvider = providers.some(
+      (provider) => provider.providerId === appleProviderId,
+    );
+    if (hasAppleProvider && providers.length <= 1) {
+      throw lastProviderException;
+    }
+
+    await this.revokeAccessToken(uid);
+    if (hasAppleProvider) {
+      await this.auth.updateUser(uid, {
+        providersToUnlink: [appleProviderId],
+      });
+    }
   }
 }

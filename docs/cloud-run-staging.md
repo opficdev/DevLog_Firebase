@@ -8,7 +8,7 @@
 - 런타임 service account: `http-api-runtime`
 - 자원: request-based billing, 1 vCPU, 512 MiB, min instances 0, max instances 3, concurrency 80, timeout 60초, port 8080
 - 제외: Production, Firebase Hosting, 실제 배포 자동화
-- Apple 계정·토큰 관리 API(`/api/auth/apple/account-link`, `/api/auth/apple/access-token`, `/api/auth/apple/refresh-token`)는 `#88` 범위이므로 Cloud Run 1차 이전 대상에서 제외
+- Apple 인증 경로: `/api/auth/apple/**`
 
 ## 권한과 인증
 
@@ -98,7 +98,6 @@ npm run lint
 npm run build
 npm test -- --runInBand
 npm run test:e2e -- --runInBand
-npm run docker:build
 cd ..
 ```
 
@@ -179,6 +178,21 @@ curl -i -X POST \
 	-d '{}' \
 	"${SERVICE_URL}/api/auth/apple/custom-token"
 
+curl -i -X PUT \
+	"${SERVICE_URL}/api/auth/apple/account-link"
+
+curl -i -X DELETE \
+	"${SERVICE_URL}/api/auth/apple/account-link"
+
+curl -i -X POST \
+	"${SERVICE_URL}/api/auth/apple/access-token"
+
+curl -i -X POST \
+	"${SERVICE_URL}/api/auth/apple/refresh-token"
+
+curl -i -X DELETE \
+	"${SERVICE_URL}/api/auth/apple/access-token"
+
 curl -i -X DELETE \
 	"${SERVICE_URL}/api/auth/google/account-link"
 
@@ -227,14 +241,15 @@ unset FIREBASE_ID_TOKEN TODO_ID WEB_PAGE_ID PUSH_NOTIFICATION_ID SERVICE_URL
 2. 잘못된 `serverAuthCode`를 전달한 Google custom token `POST`: `401`, `invalid-google-proof`
 3. Apple challenge `POST`: `200`, `challengeId`, `hashedNonce`, `expiresAt` 필드가 존재
 4. Apple custom token `POST`에서 `challengeId`/`idToken` 식별 값이 비어 있을 경우: `400`, `invalid-argument`
-5. Token이 없는 Google account-link와 access-token `DELETE`: 각각 `401`
-6. Token이 없는 Todo `POST`: `401`
-7. Token이 있는 Todo `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
-8. Token이 있는 WebPage `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
-9. Token이 있는 PushNotification `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
-10. 각 `DELETE` 뒤 Todo와 연결 알림, WebPage 및 PushNotification의 삭제 상태 복구
+5. Token이 없는 Apple account-link `PUT`/`DELETE`, access-token `POST`/`DELETE`, refresh-token `POST`: 각각 `401`
+6. Token이 없는 Google account-link와 access-token `DELETE`: 각각 `401`
+7. Token이 없는 Todo `POST`: `401`
+8. Token이 있는 Todo `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
+9. Token이 있는 WebPage `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
+10. Token이 있는 PushNotification `POST`와 `DELETE`: 각각 `200`, `{"success":true}`
+11. 각 `DELETE` 뒤 Todo와 연결 알림, WebPage 및 PushNotification의 삭제 상태 복구
 
-유효한 Firebase ID Token과 일회용 인증 값이 필요한 Google custom token, account-link, account-link 해제, access-token 폐기와 Apple challenge 및 기존 요청 형식의 custom token 성공 경로는 Staging 앱에서 별도로 확인합니다. Token과 인증 코드는 로그와 shell history에 남기지 않습니다.
+유효한 Firebase ID Token과 일회용 인증 값이 필요한 Google custom token, account-link, account-link 해제, access-token 폐기와 Apple challenge, custom token, account-link, account-link 해제, access-token 갱신·폐기 및 refresh-token 성공 경로는 Staging 앱에서 별도로 확인합니다. Token과 인증 코드는 로그와 shell history에 남기지 않습니다.
 
 오류 로그가 한 항목의 `jsonPayload`로 수집되는지 확인합니다.
 
@@ -264,11 +279,11 @@ unset LATEST_REVISION
 
 1. 로컬 검증을 통과한 commit을 Cloud Run `http-api`에 배포하고 두 Secret을 연결합니다.
 2. 최신 revision이 `Ready`이고 트래픽 100%를 받는지 확인합니다.
-3. Cloud Run 직접 호출에서 Google 인증과 Apple `challenges`, `custom-token` 검증이 모두 통과하는지 확인합니다.
+3. Cloud Run 직접 호출에서 Google 인증과 모든 Apple 인증 경로 검증이 통과하는지 확인합니다.
 4. `firebase-hosting-staging.md`에 따라 Staging Hosting만 배포합니다.
 5. Hosting 경유 요청이 최신 revision과 Functions `api`에 의도한 경계대로 기록되는지 확인합니다.
 
-Apple account-link/access-token/refresh-token 경로, Functions `api`, Production은 이 순서의 배포 범위에 포함하지 않습니다. Hosting 배포 전 실패하면 Cloud Run revision만 스테이징 `http-api` 범위에서 되돌립니다.
+Functions `api`와 Production은 이 순서의 배포 범위에 포함하지 않습니다. Hosting 배포 전 실패하면 Cloud Run revision만 스테이징 `http-api` 범위에서 되돌립니다.
 
 ```bash
 gcloud run services update http-api \

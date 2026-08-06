@@ -75,6 +75,36 @@ export class AppleAuthenticationClient {
     }
   }
 
+  // Apple refresh token을 새 access token으로 교환합니다.
+  async requestAccessToken(refreshToken: string): Promise<string> {
+    const clientSecret = this.createClientSecret();
+    let response;
+    try {
+      response = await axios.post<AppleOAuthResponse>(
+        appleTokenUrl,
+        new URLSearchParams({
+          client_id: this.configuration.clientId,
+          client_secret: clientSecret,
+          grant_type: 'refresh_token',
+          refresh_token: refreshToken,
+        }).toString(),
+        {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        },
+      );
+    } catch (error) {
+      if (appleErrorCode(error) === 'invalid_grant') {
+        throw invalidAppleRefreshTokenException;
+      }
+      throw appleAccessTokenRequestException;
+    }
+
+    if (!response.data.access_token) {
+      throw missingAppleAccessTokenException;
+    }
+    return response.data.access_token;
+  }
+
   // Apple 공개키와 필수 claim으로 ID token을 검증합니다.
   async verifyIdToken(
     idToken: string,
@@ -115,7 +145,7 @@ export class AppleAuthenticationClient {
   }
 
   // Apple grant를 폐기하고 이미 무효화된 상태는 완료로 처리합니다.
-  private async revokeAppleGrant(
+  async revokeAppleGrant(
     token: string,
     tokenTypeHint: 'access_token' | 'refresh_token',
   ): Promise<void> {
@@ -254,6 +284,21 @@ const appleCodeExchangeException = new ApiException(
   HttpStatus.UNAUTHORIZED,
   'invalid-apple-proof',
   'Apple authorization code 교환에 실패했습니다.',
+);
+const invalidAppleRefreshTokenException = new ApiException(
+  HttpStatus.UNAUTHORIZED,
+  'unauthenticated',
+  'Apple refresh token이 만료되었거나 유효하지 않습니다.',
+);
+const appleAccessTokenRequestException = new ApiException(
+  HttpStatus.INTERNAL_SERVER_ERROR,
+  'internal',
+  'Apple access token 발급에 실패했습니다.',
+);
+const missingAppleAccessTokenException = new ApiException(
+  HttpStatus.INTERNAL_SERVER_ERROR,
+  'internal',
+  'Apple 응답에 access token이 없습니다.',
 );
 const invalidAppleProofException = new ApiException(
   HttpStatus.UNAUTHORIZED,

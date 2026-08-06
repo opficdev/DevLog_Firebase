@@ -7,10 +7,20 @@ describe(AppleAuthenticationController.name, () => {
   const createChallenge = jest.fn();
   const requestCustomTokenWithChallenge = jest.fn();
   const requestCustomTokenWithIdToken = jest.fn();
+  const linkProvider = jest.fn();
+  const requestRefreshToken = jest.fn();
+  const refreshAccessToken = jest.fn();
+  const revokeAccessToken = jest.fn();
+  const unlinkProvider = jest.fn();
   const controller = new AppleAuthenticationController({
     createChallenge,
     requestCustomTokenWithChallenge,
     requestCustomTokenWithIdToken,
+    linkProvider,
+    requestRefreshToken,
+    refreshAccessToken,
+    revokeAccessToken,
+    unlinkProvider,
   } as unknown as AppleAuthenticationService);
 
   beforeEach(() => {
@@ -113,5 +123,127 @@ describe(AppleAuthenticationController.name, () => {
       },
     });
     expect(requestCustomTokenWithChallenge).not.toHaveBeenCalled();
+  });
+
+  it('인증된 uid와 정리한 입력으로 Apple provider를 연결한다', async () => {
+    linkProvider.mockResolvedValue(undefined);
+
+    await expect(
+      controller.link(
+        { headers: {}, uid: 'user-1' },
+        {
+          challengeId: ' challenge-1 ',
+          authorizationCode: ' authorization-code ',
+          credentialEmail: ' user@example.com ',
+        },
+      ),
+    ).resolves.toEqual({ success: true });
+    expect(linkProvider).toHaveBeenCalledWith(
+      'user-1',
+      'challenge-1',
+      'authorization-code',
+      'user@example.com',
+    );
+  });
+
+  it('인증된 uid가 없으면 Apple provider 연결을 거부한다', async () => {
+    await expect(
+      controller.link(
+        { headers: {} },
+        {
+          challengeId: 'challenge-1',
+          authorizationCode: 'authorization-code',
+        },
+      ),
+    ).rejects.toMatchObject({
+      status: HttpStatus.UNAUTHORIZED,
+      response: {
+        code: 'unauthenticated',
+        message: '인증된 사용자가 아닙니다.',
+      },
+    });
+    expect(linkProvider).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ authorizationCode: 'code' }, 'challengeId가 필요합니다.'],
+    [{ challengeId: 'challenge-1' }, 'authorizationCode가 필요합니다.'],
+    [
+      {
+        challengeId: 'challenge-1',
+        authorizationCode: 'code',
+        credentialEmail: 1,
+      },
+      'credentialEmail 형식이 올바르지 않습니다.',
+    ],
+  ])('유효하지 않은 account link 요청을 거부한다', async (body, message) => {
+    await expect(
+      controller.link({ headers: {}, uid: 'user-1' }, body),
+    ).rejects.toMatchObject({
+      status: HttpStatus.BAD_REQUEST,
+      response: { code: 'invalid-argument', message },
+    });
+    expect(linkProvider).not.toHaveBeenCalled();
+  });
+
+  it('인증된 uid와 authorization code로 Apple refresh token을 반환한다', async () => {
+    requestRefreshToken.mockResolvedValue('refresh-token');
+
+    await expect(
+      controller.refreshToken(
+        { headers: {}, uid: 'user-1' },
+        { authorizationCode: ' authorization-code ' },
+      ),
+    ).resolves.toEqual({ success: true, refreshToken: 'refresh-token' });
+    expect(requestRefreshToken).toHaveBeenCalledWith(
+      'user-1',
+      'authorization-code',
+    );
+  });
+
+  it('authorization code가 없으면 refresh token 요청을 거부한다', async () => {
+    await expect(
+      controller.refreshToken({ headers: {}, uid: 'user-1' }, {}),
+    ).rejects.toMatchObject({
+      status: HttpStatus.BAD_REQUEST,
+      response: {
+        code: 'invalid-argument',
+        message: 'authorizationCode가 필요합니다.',
+      },
+    });
+    expect(requestRefreshToken).not.toHaveBeenCalled();
+  });
+
+  it('인증된 uid의 Apple access token을 반환한다', async () => {
+    refreshAccessToken.mockResolvedValue('access-token');
+
+    await expect(
+      controller.accessToken({ headers: {}, uid: 'user-1' }),
+    ).resolves.toEqual({ token: 'access-token' });
+    expect(refreshAccessToken).toHaveBeenCalledWith('user-1');
+  });
+
+  it('인증된 uid의 Apple access token을 폐기한다', async () => {
+    revokeAccessToken.mockResolvedValue(undefined);
+
+    await expect(
+      controller.revokeAccessToken(
+        { headers: {}, uid: 'user-1' },
+        { token: ' legacy-access-token ' },
+      ),
+    ).resolves.toEqual({ success: true });
+    expect(revokeAccessToken).toHaveBeenCalledWith(
+      'user-1',
+      ' legacy-access-token ',
+    );
+  });
+
+  it('인증된 uid의 Apple provider를 해제한다', async () => {
+    unlinkProvider.mockResolvedValue(undefined);
+
+    await expect(
+      controller.unlink({ headers: {}, uid: 'user-1' }),
+    ).resolves.toEqual({ success: true });
+    expect(unlinkProvider).toHaveBeenCalledWith('user-1');
   });
 });

@@ -7,12 +7,14 @@ import { AppleProviderRepository } from './apple-provider.repository';
 describe(AppleProviderRepository.name, () => {
   const getUserByProviderUid = jest.fn();
   const getUserByEmail = jest.fn();
+  const getUser = jest.fn();
   const updateUser = jest.fn();
   const createUser = jest.fn();
   const deleteUser = jest.fn();
   const auth = {
     getUserByProviderUid,
     getUserByEmail,
+    getUser,
     updateUser,
     createUser,
     deleteUser,
@@ -164,6 +166,116 @@ describe(AppleProviderRepository.name, () => {
       providerToLink: appleProvider(),
     });
   });
+
+  it('검증된 이메일로 현재 사용자에게 Apple provider를 연결한다', async () => {
+    getUser.mockResolvedValue(userRecord('current-uid'));
+    getUserByProviderUid.mockRejectedValue(authError('auth/user-not-found'));
+
+    await expect(
+      repository.link('current-uid', payload()),
+    ).resolves.toBeUndefined();
+    expect(updateUser).toHaveBeenCalledWith('current-uid', {
+      providerToLink: appleProvider(),
+    });
+  });
+
+  it('provider 소유자 조회 실패를 이메일 검증보다 먼저 전달한다', async () => {
+    const error = new Error('provider 소유자 조회 실패');
+    getUser.mockResolvedValue(userRecord('current-uid', [], ''));
+    getUserByProviderUid.mockRejectedValue(error);
+
+    await expect(repository.link('current-uid', payload())).rejects.toBe(error);
+    expect(getUserByProviderUid).toHaveBeenCalledWith(
+      'apple.com',
+      'apple-subject',
+    );
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it('검증된 이메일이 없으면 credentialEmail로 Apple provider를 연결한다', async () => {
+    getUser.mockResolvedValue(userRecord('current-uid'));
+    getUserByProviderUid.mockRejectedValue(authError('auth/user-not-found'));
+
+    await expect(
+      repository.link(
+        'current-uid',
+        payload({ email: undefined, email_verified: undefined }),
+        'user@example.com',
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it('사용자 이메일과 Apple 이메일의 대소문자 차이를 허용한다', async () => {
+    getUser.mockResolvedValue(
+      userRecord('current-uid', [], 'USER@example.com'),
+    );
+    getUserByProviderUid.mockRejectedValue(authError('auth/user-not-found'));
+
+    await expect(
+      repository.link('current-uid', payload()),
+    ).resolves.toBeUndefined();
+  });
+
+  it('Apple 이메일을 확인할 수 없으면 연결을 거부한다', async () => {
+    getUser.mockResolvedValue(userRecord('current-uid'));
+    getUserByProviderUid.mockRejectedValue(authError('auth/user-not-found'));
+
+    await expect(
+      repository.link(
+        'current-uid',
+        payload({ email: undefined, email_verified: undefined }),
+      ),
+    ).rejects.toMatchObject({
+      status: HttpStatus.BAD_REQUEST,
+      response: { code: 'email-not-found' },
+    });
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it('사용자 이메일과 Apple 이메일이 다르면 연결을 거부한다', async () => {
+    getUser.mockResolvedValue(
+      userRecord('current-uid', [], 'other@example.com'),
+    );
+    getUserByProviderUid.mockRejectedValue(authError('auth/user-not-found'));
+
+    await expect(
+      repository.link('current-uid', payload()),
+    ).rejects.toMatchObject({
+      status: HttpStatus.BAD_REQUEST,
+      response: { code: 'email-mismatch' },
+    });
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it('현재 사용자의 다른 Apple provider 연결을 거부한다', async () => {
+    getUser.mockResolvedValue(
+      userRecord('current-uid', [
+        { ...appleProvider(), uid: 'other-apple-subject' },
+      ]),
+    );
+    getUserByProviderUid.mockRejectedValue(authError('auth/user-not-found'));
+
+    await expect(
+      repository.link('current-uid', payload()),
+    ).rejects.toMatchObject({
+      status: HttpStatus.CONFLICT,
+      response: { code: 'apple-provider-link-conflict' },
+    });
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it('다른 사용자가 소유한 Apple provider 연결을 거부한다', async () => {
+    getUser.mockResolvedValue(userRecord('current-uid'));
+    getUserByProviderUid.mockResolvedValue(userRecord('other-uid'));
+
+    await expect(
+      repository.link('current-uid', payload()),
+    ).rejects.toMatchObject({
+      status: HttpStatus.CONFLICT,
+      response: { code: 'apple-provider-link-conflict' },
+    });
+    expect(updateUser).not.toHaveBeenCalled();
+  });
 });
 
 // Apple ID token payload 대역을 구성합니다.
@@ -186,8 +298,9 @@ function payload(
 function userRecord(
   uid: string,
   providerData: UserRecord['providerData'] = [],
+  email = 'user@example.com',
 ): UserRecord {
-  return { uid, providerData } as UserRecord;
+  return { uid, email, providerData } as UserRecord;
 }
 
 // Apple provider 대역을 구성합니다.

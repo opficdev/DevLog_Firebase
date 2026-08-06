@@ -66,4 +66,71 @@ export class AppleCredentialRepository {
       }
     });
   }
+
+  // 새 경로를 우선해 credential을 읽고 기존 값은 새 값을 보존하며 이관합니다.
+  async find(uid: string): Promise<string | undefined> {
+    const root = this.firestore.doc(`authCredentials/${uid}`);
+    const reference = this.firestore.doc(
+      `authCredentials/${uid}/providers/apple`,
+    );
+    const legacyReference = this.firestore.doc(`users/${uid}/userData/tokens`);
+    return this.firestore.runTransaction(async (transaction) => {
+      const rootSnapshot = await transaction.get(root);
+      const snapshot = await transaction.get(reference);
+      const legacySnapshot = await transaction.get(legacyReference);
+      const rootData: Record<string, unknown> | undefined = rootSnapshot.data();
+      const data: Record<string, unknown> | undefined = snapshot.data();
+      const legacyData: Record<string, unknown> | undefined =
+        legacySnapshot.data();
+      const storedRefreshToken = data?.refreshToken;
+      const legacyRefreshToken = legacyData?.appleRefreshToken;
+      const refreshToken =
+        typeof storedRefreshToken === 'string'
+          ? storedRefreshToken
+          : typeof legacyRefreshToken === 'string'
+            ? legacyRefreshToken
+            : undefined;
+
+      if (!rootData?.deletionStartedAt && !storedRefreshToken && refreshToken) {
+        transaction.set(
+          reference,
+          {
+            refreshToken,
+            migratedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
+      if (legacySnapshot.exists && typeof legacyRefreshToken === 'string') {
+        transaction.update(legacyReference, {
+          appleRefreshToken: FieldValue.delete(),
+        });
+      }
+      return refreshToken;
+    });
+  }
+
+  // 서버 전용 Apple credential과 남아 있는 기존 token 필드를 삭제합니다.
+  async delete(uid: string): Promise<void> {
+    const reference = this.firestore.doc(
+      `authCredentials/${uid}/providers/apple`,
+    );
+    const legacyReference = this.firestore.doc(`users/${uid}/userData/tokens`);
+    await this.firestore.runTransaction(async (transaction) => {
+      const legacySnapshot = await transaction.get(legacyReference);
+      const legacyData: Record<string, unknown> | undefined =
+        legacySnapshot.data();
+      transaction.delete(reference);
+      if (
+        legacySnapshot.exists &&
+        legacyData &&
+        'appleRefreshToken' in legacyData
+      ) {
+        transaction.update(legacyReference, {
+          appleRefreshToken: FieldValue.delete(),
+        });
+      }
+    });
+  }
 }

@@ -2,11 +2,15 @@
 import {
   Body,
   Controller,
+  Delete,
   HttpCode,
   HttpStatus,
   Post,
+  Put,
+  Req,
 } from '@nestjs/common';
 
+import { type FirebaseAuthenticatedRequest } from '../auth/firebase-authenticated-request';
 import { Public } from '../auth/public.decorator';
 import { ApiException } from '../common/api.exception';
 import { AppleAuthenticationService } from './apple-authentication.service';
@@ -56,6 +60,92 @@ export class AppleAuthenticationController {
       ),
     };
   }
+
+  // challenge로 증명한 Apple provider를 인증된 사용자에게 연결합니다.
+  @Put('account-link')
+  @HttpCode(HttpStatus.OK)
+  async link(
+    @Req() request: FirebaseAuthenticatedRequest,
+    @Body() body: unknown,
+  ): Promise<{ success: true }> {
+    const uid = requiredAuthenticatedUid(request);
+    const value = bodyRecord(body);
+    await this.service.linkProvider(
+      uid,
+      requiredBodyString(value, 'challengeId'),
+      requiredBodyString(value, 'authorizationCode'),
+      optionalBodyString(value, 'credentialEmail'),
+    );
+    return { success: true };
+  }
+
+  // authorization code로 Apple refresh token을 저장하고 반환합니다.
+  @Post('refresh-token')
+  @HttpCode(HttpStatus.OK)
+  async refreshToken(
+    @Req() request: FirebaseAuthenticatedRequest,
+    @Body() body: unknown,
+  ): Promise<{ success: true; refreshToken: string }> {
+    const uid = requiredAuthenticatedUid(request);
+    const value = bodyRecord(body);
+    const refreshToken = await this.service.requestRefreshToken(
+      uid,
+      requiredBodyString(value, 'authorizationCode'),
+    );
+    return { success: true, refreshToken };
+  }
+
+  // 저장된 Apple credential로 발급한 access token을 반환합니다.
+  @Post('access-token')
+  @HttpCode(HttpStatus.OK)
+  async accessToken(
+    @Req() request: FirebaseAuthenticatedRequest,
+  ): Promise<{ token: string }> {
+    return {
+      token: await this.service.refreshAccessToken(
+        requiredAuthenticatedUid(request),
+      ),
+    };
+  }
+
+  // 인증된 사용자의 Apple grant와 credential을 폐기합니다.
+  @Delete('access-token')
+  @HttpCode(HttpStatus.OK)
+  async revokeAccessToken(
+    @Req() request: FirebaseAuthenticatedRequest,
+    @Body() body: unknown,
+  ): Promise<{ success: true }> {
+    const value = bodyRecord(body);
+    await this.service.revokeAccessToken(
+      requiredAuthenticatedUid(request),
+      value.token,
+    );
+    return { success: true };
+  }
+
+  // 인증된 사용자의 Apple provider 연결을 해제합니다.
+  @Delete('account-link')
+  @HttpCode(HttpStatus.OK)
+  async unlink(
+    @Req() request: FirebaseAuthenticatedRequest,
+  ): Promise<{ success: true }> {
+    await this.service.unlinkProvider(requiredAuthenticatedUid(request));
+    return { success: true };
+  }
+}
+
+// 인증 경계에서 검증한 사용자 식별자를 반환합니다.
+function requiredAuthenticatedUid(
+  request: FirebaseAuthenticatedRequest,
+): string {
+  if (!request.uid) {
+    throw new ApiException(
+      HttpStatus.UNAUTHORIZED,
+      'unauthenticated',
+      '인증된 사용자가 아닙니다.',
+    );
+  }
+  return request.uid;
 }
 
 // 요청 body를 문자열 필드 조회가 가능한 객체로 변환합니다.

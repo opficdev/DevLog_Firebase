@@ -112,6 +112,72 @@ describe(AppleAuthenticationClient.name, () => {
     expect(mockedAxios.post.mock.calls).toHaveLength(0);
   });
 
+  it('Apple refresh token을 access token으로 교환한다', async () => {
+    mockedAxios.post.mockResolvedValue({
+      status: HttpStatus.OK,
+      data: { access_token: 'issued-access-token' },
+    });
+
+    await expect(client.requestAccessToken('refresh-token')).resolves.toBe(
+      'issued-access-token',
+    );
+    const requestBody = mockedAxios.post.mock.calls[0][1];
+    expect(
+      Object.fromEntries(new URLSearchParams(requestBody as string)),
+    ).toEqual({
+      client_id: 'client-id',
+      client_secret: 'client-secret',
+      grant_type: 'refresh_token',
+      refresh_token: 'refresh-token',
+    });
+  });
+
+  it('무효 Apple refresh token을 재인증 오류로 변환한다', async () => {
+    mockedAxios.post.mockRejectedValue(
+      axiosError(HttpStatus.BAD_REQUEST, { error: 'invalid_grant' }),
+    );
+
+    await expect(
+      client.requestAccessToken('refresh-token'),
+    ).rejects.toMatchObject({
+      status: HttpStatus.UNAUTHORIZED,
+      response: {
+        code: 'unauthenticated',
+        message: 'Apple refresh token이 만료되었거나 유효하지 않습니다.',
+      },
+    });
+  });
+
+  it('Apple access token 요청 실패를 내부 오류로 변환한다', async () => {
+    mockedAxios.post.mockRejectedValue(
+      axiosError(HttpStatus.INTERNAL_SERVER_ERROR, { error: 'server_error' }),
+    );
+
+    await expect(
+      client.requestAccessToken('refresh-token'),
+    ).rejects.toMatchObject({
+      status: HttpStatus.INTERNAL_SERVER_ERROR,
+      response: {
+        code: 'internal',
+        message: 'Apple access token 발급에 실패했습니다.',
+      },
+    });
+  });
+
+  it('Apple 응답에 access token이 없으면 내부 오류를 반환한다', async () => {
+    mockedAxios.post.mockResolvedValue({ status: HttpStatus.OK, data: {} });
+
+    await expect(
+      client.requestAccessToken('refresh-token'),
+    ).rejects.toMatchObject({
+      status: HttpStatus.INTERNAL_SERVER_ERROR,
+      response: {
+        code: 'internal',
+        message: 'Apple 응답에 access token이 없습니다.',
+      },
+    });
+  });
+
   it('Apple JWKS와 필수 claim으로 ID token payload를 반환한다', async () => {
     let signingKeyError: Error | null | undefined;
     let signingKey: jwt.Secret | jwt.PublicKey;
