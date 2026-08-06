@@ -17,6 +17,10 @@ const { api } = require("../lib/rest/api");
 
 (async () => {
     for (const [method, path] of [
+        ["POST", "/api/auth/github/sign-in-sessions"],
+        ["GET", "/api/auth/github/callback"],
+        ["POST", "/api/auth/github/custom-token"],
+        ["POST", "/api/auth/github/account-link-sessions"],
         ["PUT", "/api/auth/apple/account-link"],
         ["DELETE", "/api/auth/apple/account-link"],
         ["POST", "/api/auth/apple/access-token"],

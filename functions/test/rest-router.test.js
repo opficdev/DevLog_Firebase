@@ -25,10 +25,6 @@ assert.deepStrictEqual(
 );
 
 const githubOAuthRoutes = [
-    ["POST", ["auth", "github", "sign-in-sessions"], "createGithubSignInSession", false],
-    ["GET", ["auth", "github", "callback"], "githubCallback", false],
-    ["POST", ["auth", "github", "custom-token"], "requestGithubCustomToken", false],
-    ["POST", ["auth", "github", "account-link-sessions"], "createGithubAccountLinkSession", true],
     ["PUT", ["auth", "github", "account-link"], "linkGithubAccount", true],
     ["DELETE", ["auth", "github", "account-link"], "unlinkGithubAccount", true]
 ];
@@ -41,6 +37,10 @@ for (const [method, segments, action, requiresAuth] of githubOAuthRoutes) {
 }
 
 for (const [method, segments] of [
+    ["POST", ["auth", "github", "sign-in-sessions"]],
+    ["GET", ["auth", "github", "callback"]],
+    ["POST", ["auth", "github", "custom-token"]],
+    ["POST", ["auth", "github", "account-link-sessions"]],
     ["POST", ["auth", "apple", "challenges"]],
     ["POST", ["auth", "apple", "custom-token"]],
     ["PUT", ["auth", "apple", "account-link"]],
