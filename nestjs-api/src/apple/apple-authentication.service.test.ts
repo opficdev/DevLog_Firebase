@@ -255,6 +255,166 @@ describe(AppleAuthenticationService.name, () => {
     expect(save).toHaveBeenCalledWith('user-1', 'refresh-token');
     expect(revokeExchangedTokens).not.toHaveBeenCalled();
   });
+
+  it('기존 요청 처리 순서를 유지해 Firebase custom token을 반환한다', async () => {
+    const sequence: string[] = [];
+    verifyIdToken.mockImplementation(() => {
+      sequence.push('ID token 검증');
+      return Promise.resolve(tokenPayload());
+    });
+    resolveUid.mockImplementation(() => {
+      sequence.push('Firebase uid 결정');
+      return Promise.resolve('user-1');
+    });
+    ensureProvider.mockImplementation(() => {
+      sequence.push('Apple provider 연결');
+      return Promise.resolve();
+    });
+    exchangeAuthorizationCode.mockImplementation(() => {
+      sequence.push('authorization code 교환');
+      return Promise.resolve(oauthTokens());
+    });
+    requiredRefreshToken.mockImplementation(() => {
+      sequence.push('refresh token 확인');
+      return Promise.resolve('refresh-token');
+    });
+    save.mockImplementation(() => {
+      sequence.push('Apple credential 저장');
+      return Promise.resolve();
+    });
+    createCustomToken.mockImplementation(() => {
+      sequence.push('Firebase custom token 생성');
+      return Promise.resolve('custom-token');
+    });
+
+    await expect(
+      service.requestCustomTokenWithIdToken(
+        'legacy-id-token',
+        'authorization-code',
+      ),
+    ).resolves.toBe('custom-token');
+
+    expect(verifyIdToken).toHaveBeenCalledWith('legacy-id-token');
+    expect(resolveUid).toHaveBeenCalledWith(tokenPayload());
+    expect(ensureProvider).toHaveBeenCalledWith('user-1', tokenPayload());
+    expect(exchangeAuthorizationCode).toHaveBeenCalledWith(
+      'authorization-code',
+    );
+    expect(requiredRefreshToken).toHaveBeenCalledWith(oauthTokens());
+    expect(save).toHaveBeenCalledWith('user-1', 'refresh-token');
+    expect(createCustomToken).toHaveBeenCalledWith('user-1');
+    expect(update).not.toHaveBeenCalled();
+    expect(revokeExchangedTokens).not.toHaveBeenCalled();
+    expect(sequence).toEqual([
+      'ID token 검증',
+      'Firebase uid 결정',
+      'Apple provider 연결',
+      'authorization code 교환',
+      'refresh token 확인',
+      'Apple credential 저장',
+      'Firebase custom token 생성',
+    ]);
+  });
+
+  it('기존 요청의 ID token 검증 실패 시 후속 처리를 중단한다', async () => {
+    const error = new Error('ID token 검증 실패');
+    verifyIdToken.mockRejectedValue(error);
+
+    await expect(
+      service.requestCustomTokenWithIdToken(
+        'legacy-id-token',
+        'authorization-code',
+      ),
+    ).rejects.toBe(error);
+    expect(resolveUid).not.toHaveBeenCalled();
+    expect(exchangeAuthorizationCode).not.toHaveBeenCalled();
+    expect(revokeExchangedTokens).not.toHaveBeenCalled();
+  });
+
+  it('기존 요청의 Firebase uid 결정 실패 시 code를 교환하지 않는다', async () => {
+    const error = new Error('Firebase uid 결정 실패');
+    resolveUid.mockRejectedValue(error);
+
+    await expect(
+      service.requestCustomTokenWithIdToken(
+        'legacy-id-token',
+        'authorization-code',
+      ),
+    ).rejects.toBe(error);
+    expect(ensureProvider).not.toHaveBeenCalled();
+    expect(exchangeAuthorizationCode).not.toHaveBeenCalled();
+    expect(revokeExchangedTokens).not.toHaveBeenCalled();
+  });
+
+  it('기존 요청의 Apple provider 연결 실패 시 code를 교환하지 않는다', async () => {
+    const error = new Error('Apple provider 연결 실패');
+    ensureProvider.mockRejectedValue(error);
+
+    await expect(
+      service.requestCustomTokenWithIdToken(
+        'legacy-id-token',
+        'authorization-code',
+      ),
+    ).rejects.toBe(error);
+    expect(exchangeAuthorizationCode).not.toHaveBeenCalled();
+    expect(revokeExchangedTokens).not.toHaveBeenCalled();
+  });
+
+  it('기존 요청의 code 교환 실패 시 보상 폐기를 시도하지 않는다', async () => {
+    const error = new Error('authorization code 교환 실패');
+    exchangeAuthorizationCode.mockRejectedValue(error);
+
+    await expect(
+      service.requestCustomTokenWithIdToken(
+        'legacy-id-token',
+        'authorization-code',
+      ),
+    ).rejects.toBe(error);
+    expect(requiredRefreshToken).not.toHaveBeenCalled();
+    expect(revokeExchangedTokens).not.toHaveBeenCalled();
+  });
+
+  it('기존 요청의 refresh token 확인 실패 시 후속 처리를 중단한다', async () => {
+    const error = new Error('refresh token 확인 실패');
+    requiredRefreshToken.mockRejectedValue(error);
+
+    await expect(
+      service.requestCustomTokenWithIdToken(
+        'legacy-id-token',
+        'authorization-code',
+      ),
+    ).rejects.toBe(error);
+    expect(save).not.toHaveBeenCalled();
+    expect(revokeExchangedTokens).not.toHaveBeenCalled();
+  });
+
+  it('기존 요청의 credential 저장 실패 시 교환 token을 폐기한다', async () => {
+    const error = new Error('Apple credential 저장 실패');
+    save.mockRejectedValue(error);
+
+    await expect(
+      service.requestCustomTokenWithIdToken(
+        'legacy-id-token',
+        'authorization-code',
+      ),
+    ).rejects.toBe(error);
+    expect(revokeExchangedTokens).toHaveBeenCalledWith(oauthTokens());
+    expect(createCustomToken).not.toHaveBeenCalled();
+  });
+
+  it('기존 요청의 custom token 생성 실패 시 저장된 credential을 유지한다', async () => {
+    const error = new Error('Firebase custom token 생성 실패');
+    createCustomToken.mockRejectedValue(error);
+
+    await expect(
+      service.requestCustomTokenWithIdToken(
+        'legacy-id-token',
+        'authorization-code',
+      ),
+    ).rejects.toBe(error);
+    expect(save).toHaveBeenCalledWith('user-1', 'refresh-token');
+    expect(revokeExchangedTokens).not.toHaveBeenCalled();
+  });
 });
 
 // Apple OAuth token 대역을 구성합니다.

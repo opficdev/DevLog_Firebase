@@ -85,4 +85,27 @@ export class AppleAuthenticationService {
 
     return this.auth.createCustomToken(uid);
   }
+
+  // 기존 ID token 요청 형식으로 Firebase custom token을 생성합니다.
+  // prettier-ignore
+  async requestCustomTokenWithIdToken(
+    idToken: string,
+    authorizationCode: string,
+  ): Promise<string> {
+    const payload = await this.client.verifyIdToken(idToken);
+    const uid = await this.providerRepository.resolveUid(payload);
+    await this.providerRepository.ensureProvider(uid, payload);
+    const tokens = await this.client.exchangeAuthorizationCode(
+      authorizationCode,
+    );
+    const refreshToken = await this.client.requiredRefreshToken(tokens);
+    try {
+      await this.credentialRepository.save(uid, refreshToken);
+    } catch (error) {
+      await this.client.revokeExchangedTokens(tokens);
+      throw error;
+    }
+
+    return this.auth.createCustomToken(uid);
+  }
 }
