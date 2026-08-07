@@ -123,6 +123,13 @@ jobs:
           set -o pipefail
           npm ci 2>&1 | tee -a nestjs-api.log
 
+      - name: Audit production dependencies
+        shell: bash
+        working-directory: nestjs-api
+        run: |
+          set -o pipefail
+          npm audit --omit=dev --omit=optional 2>&1 | tee -a nestjs-api.log
+
       - name: Lint
         shell: bash
         working-directory: nestjs-api
@@ -157,6 +164,30 @@ jobs:
         run: |
           set -o pipefail
           npm run docker:build 2>&1 | tee -a nestjs-api.log
+
+      - name: Verify Docker production dependencies
+        shell: bash
+        working-directory: nestjs-api
+        run: |
+          set -o pipefail
+          docker run --rm devlog-nestjs-api:local node -e '
+            require("firebase-admin/app");
+            require("firebase-admin/auth");
+            require("firebase-admin/firestore");
+            for (const dependency of ["@google-cloud/storage", "uuid"]) {
+              let resolvedPath;
+              try {
+                resolvedPath = require.resolve(dependency);
+              } catch (error) {
+                if (error.code !== "MODULE_NOT_FOUND") {
+                  throw error;
+                }
+              }
+              if (resolvedPath) {
+                throw new Error(dependency + " is installed");
+              }
+            }
+          ' 2>&1 | tee -a nestjs-api.log
 
       - name: Check diff
         shell: bash

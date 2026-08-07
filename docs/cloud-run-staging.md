@@ -1,9 +1,9 @@
-# `http-api` 스테이징 수동 배포
+# `api-v2` 스테이징 수동 배포
 
 ## 범위
 
 - 프로젝트: `devlog-staging`
-- 서비스: `http-api`
+- 서비스: `api-v2`
 - region: `asia-northeast3`
 - 런타임 service account: `http-api-runtime`
 - 자원: request-based billing, 1 vCPU, 512 MiB, min instances 0, max instances 3, concurrency 80, timeout 60초, port 8080
@@ -114,13 +114,14 @@ npm run test:e2e -- --runInBand
 cd ..
 ```
 
-기존 서비스가 있으면 트래픽 100%를 받는 revision을 기록합니다. 첫 배포에는 복구 대상 revision이 없습니다.
+`api-v2`가 이미 존재하면 배포 전에 트래픽 100%를 받는 revision을 기록합니다. 첫 배포라면 이전 revision이 없음을 확인합니다.
 
 ```bash
-gcloud run services describe http-api \
+gcloud run services list \
 	--project devlog-staging \
 	--region asia-northeast3 \
-	--format='table(status.traffic[].revisionName,status.traffic[].percent)'
+	--filter='metadata.name=api-v2' \
+	--format='table(metadata.name,status.latestReadyRevisionName,status.traffic[].revisionName,status.traffic[].percent)'
 ```
 
 ## 배포
@@ -128,7 +129,7 @@ gcloud run services describe http-api \
 앞에서 입력한 전체 runtime 및 build service account email을 사용합니다.
 
 ```bash
-gcloud run deploy http-api \
+gcloud run deploy api-v2 \
 	--source nestjs-api \
 	--build-service-account "projects/devlog-staging/serviceAccounts/${BUILD_SERVICE_ACCOUNT}" \
 	--project devlog-staging \
@@ -137,11 +138,13 @@ gcloud run deploy http-api \
 	--cpu 1 \
 	--memory 512Mi \
 	--cpu-throttling \
+	--cpu-boost \
 	--min 0 \
 	--max 3 \
 	--concurrency 80 \
 	--timeout 60s \
 	--port 8080 \
+	--ingress all \
 	--no-invoker-iam-check \
 	--set-secrets=GOOGLE_OAUTH_CONFIG=GOOGLE_OAUTH_CONFIG:latest,APPLE_AUTH_CONFIG=APPLE_AUTH_CONFIG:latest,GITHUB_OAUTH_CONFIG=GITHUB_OAUTH_CONFIG:latest
 
@@ -151,11 +154,13 @@ unset RUNTIME_SERVICE_ACCOUNT BUILD_SERVICE_ACCOUNT
 배포 후 주소와 최신 revision을 확인합니다.
 
 ```bash
-gcloud run services describe http-api \
+gcloud run services describe api-v2 \
 	--project devlog-staging \
 	--region asia-northeast3 \
 	--format='table(status.url,status.latestReadyRevisionName,status.traffic)'
 ```
+
+region, runtime 및 build service account, Secret 연결 이름과 version 참조, CPU, 메모리, min/max instance, concurrency, timeout, port, ingress와 Invoker IAM 설정이 앞의 배포 명령과 같아야 합니다. Secret payload는 조회하지 않습니다. 하나라도 다르면 Firebase Hosting 라우팅을 진행하지 않고 `api-v2` 설정을 먼저 수정합니다.
 
 ## 직접 호출 검증
 
@@ -168,7 +173,7 @@ read -r -p "Staging PushNotification ID: " PUSH_NOTIFICATION_ID
 read -r -s -p "Firebase ID Token: " FIREBASE_ID_TOKEN
 printf '\n'
 
-SERVICE_URL="$(gcloud run services describe http-api \
+SERVICE_URL="$(gcloud run services describe api-v2 \
 	--project devlog-staging \
 	--region asia-northeast3 \
 	--format='value(status.url)')"
@@ -301,13 +306,13 @@ unset FIREBASE_ID_TOKEN TODO_ID WEB_PAGE_ID PUSH_NOTIFICATION_ID SERVICE_URL
 오류 로그가 한 항목의 `jsonPayload`로 수집되는지 확인합니다.
 
 ```bash
-LATEST_REVISION="$(gcloud run services describe http-api \
+LATEST_REVISION="$(gcloud run services describe api-v2 \
 	--project devlog-staging \
 	--region asia-northeast3 \
 	--format='value(status.latestReadyRevisionName)')"
 
 gcloud logging read \
-	"resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"http-api\" AND resource.labels.revision_name=\"${LATEST_REVISION}\"" \
+	"resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"api-v2\" AND resource.labels.revision_name=\"${LATEST_REVISION}\"" \
 	--project devlog-staging \
 	--freshness=10m \
 	--limit=50 \
@@ -322,18 +327,18 @@ unset LATEST_REVISION
 
 ## 롤백 경계
 
-`http-api` 변경은 다음 순서로만 확정합니다.
+`api-v2` 변경은 다음 순서로만 확정합니다.
 
-1. 로컬 검증을 통과한 commit을 Cloud Run `http-api`에 배포하고 세 Secret을 연결합니다.
+1. 로컬 검증을 통과한 commit을 Cloud Run `api-v2`에 배포하고 세 Secret을 연결합니다.
 2. 최신 revision이 `Ready`이고 트래픽 100%를 받는지 확인합니다.
 3. Cloud Run 직접 호출에서 Google·Apple·GitHub 인증 경로 검증이 통과하는지 확인합니다.
 4. `firebase-hosting-staging.md`에 따라 Staging Hosting만 배포합니다.
 5. Hosting 경유 요청이 최신 revision과 Functions `api`에 의도한 경계대로 기록되는지 확인합니다.
 
-Functions `api`와 Production은 이 순서의 배포 범위에 포함하지 않습니다. Hosting 배포 전 실패하면 Cloud Run revision만 스테이징 `http-api` 범위에서 되돌립니다.
+Functions `api`와 Production은 이 순서의 배포 범위에 포함하지 않습니다. Hosting 배포 전 실패하면 Hosting을 변경하지 않고 `api-v2`를 수정하거나 해당 서비스의 이전 정상 revision으로 복구합니다. Hosting 전환 이후에도 [`revision 복구`](#revision-복구)를 따릅니다.
 
 ```bash
-gcloud run services update http-api \
+gcloud run services update api-v2 \
 	--project devlog-staging \
 	--region asia-northeast3 \
 	--invoker-iam-check
@@ -348,7 +353,7 @@ Token이 없는 요청이 `403`이면 Cloud Run 공개 설정이 적용되지 �
 ```bash
 read -r -p "Previous revision: " PREVIOUS_REVISION
 
-gcloud run services update-traffic http-api \
+gcloud run services update-traffic api-v2 \
 	--project devlog-staging \
 	--region asia-northeast3 \
 	--to-revisions "${PREVIOUS_REVISION}=100"
@@ -359,7 +364,7 @@ unset PREVIOUS_REVISION
 rollback 뒤 수정본을 배포하면 이전 트래픽 정책이 유지될 수 있습니다. 수정본 배포가 끝나면 최신 revision으로 트래픽을 명시적으로 전환하고 직접 호출 검증을 다시 수행합니다.
 
 ```bash
-gcloud run services update-traffic http-api \
+gcloud run services update-traffic api-v2 \
 	--project devlog-staging \
 	--region asia-northeast3 \
 	--to-latest
