@@ -12,42 +12,42 @@ assert.deepStrictEqual(staging.rewrites, [
     {
         source: "/api/todos/**",
         run: {
-            serviceId: "http-api",
+            serviceId: "api-v2",
             region: "asia-northeast3"
         }
     },
     {
         source: "/api/web-pages/**",
         run: {
-            serviceId: "http-api",
+            serviceId: "api-v2",
             region: "asia-northeast3"
         }
     },
     {
         source: "/api/push-notifications/**",
         run: {
-            serviceId: "http-api",
+            serviceId: "api-v2",
             region: "asia-northeast3"
         }
     },
     {
         source: "/api/auth/google/**",
         run: {
-            serviceId: "http-api",
+            serviceId: "api-v2",
             region: "asia-northeast3"
         }
     },
     {
         source: "/api/auth/apple/**",
         run: {
-            serviceId: "http-api",
+            serviceId: "api-v2",
             region: "asia-northeast3"
         }
     },
     {
         source: "/api/auth/github/**",
         run: {
-            serviceId: "http-api",
+            serviceId: "api-v2",
             region: "asia-northeast3"
         }
     },
