@@ -17,9 +17,7 @@ const {
 } = require("../lib/user/delete");
 const functionExports = require("../lib/index");
 
-const apiSecretKeys = [
-    "GITHUB_OAUTH_CONFIG"
-];
+const apiSecretKeys = [];
 const githubSecretKeys = ["GITHUB_OAUTH_CONFIG"];
 
 assert.deepStrictEqual(secretKeys(api), apiSecretKeys);

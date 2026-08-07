@@ -2,74 +2,10 @@ import axios from "axios";
 import * as logger from "firebase-functions/logger";
 import { HttpsError } from "firebase-functions/v2/https";
 
-// GitHub 사용자 API에서 인증 판단에 사용하는 프로필을 나타냅니다.
-export interface GitHubUser {
-    // GitHub 계정의 숫자 식별자를 저장합니다.
-    id: number;
-    // GitHub 로그인 이름을 저장합니다.
-    login: string;
-    // 공개 표시 이름을 저장합니다.
-    name?: string;
-    // 공개 이메일을 저장합니다.
-    email?: string;
-    // 공개 프로필 이미지 주소를 저장합니다.
-    avatar_url?: string;
-}
-
-// GitHub email API가 반환한 이메일 검증 상태를 나타냅니다.
-interface GitHubEmail {
-    // GitHub 계정 이메일을 저장합니다.
-    email: string;
-    // 대표 이메일 여부를 저장합니다.
-    primary: boolean;
-    // GitHub 검증 완료 여부를 저장합니다.
-    verified: boolean;
-}
-
 const ACCEPT = "application/vnd.github+json";
 const USER_AGENT = "DevLog-Firebase";
 const NOT_FOUND_STATUS = 404;
 const VALIDATION_FAILED_STATUS = 422;
-
-// GitHub API에서 로그인 계정의 프로필을 조회합니다.
-export async function requestGitHubUser(accessToken: string): Promise<GitHubUser> {
-    const response = await requestGitHubAPI(() =>
-        axios.get<GitHubUser>("https://api.github.com/user", {
-            headers: {
-                "Authorization": `Bearer ${accessToken}`,
-                "Accept": ACCEPT,
-                "User-Agent": USER_AGENT
-            }
-        })
-    );
-
-    return response.data;
-}
-
-// GitHub email 목록에서 검증된 이메일을 조회합니다.
-export async function requestGitHubVerifiedEmail(
-    accessToken: string
-): Promise<string | undefined> {
-    const emailResponse = await requestGitHubAPI(() =>
-        axios.get<GitHubEmail[]>("https://api.github.com/user/emails", {
-            headers: {
-                "Authorization": `Bearer ${accessToken}`,
-                "Accept": ACCEPT,
-                "User-Agent": USER_AGENT
-            }
-        })
-    );
-
-    const primaryVerifiedEmail = emailResponse.data.find((item) =>
-        item.primary && item.verified
-    )?.email
-
-    if (primaryVerifiedEmail) {
-        return primaryVerifiedEmail;
-    }
-
-    return emailResponse.data.find((item) => item.verified)?.email;
-}
 
 // GitHub OAuth App grant를 폐기하고 이미 무효화된 토큰은 성공으로 처리합니다.
 export async function revokeGitHubOAuthGrant(
@@ -274,18 +210,4 @@ function errorMetadata(error: unknown) {
     return {
         errorMessage: "Unknown error"
     };
-}
-
-// GitHub 인증 서버 요청 실패를 REST 계층에서 구분할 수 있는 오류로 변환합니다.
-async function requestGitHubAPI<T>(request: () => Promise<T>): Promise<T> {
-    try {
-        return await request();
-    } catch (error) {
-        logger.error("GitHub 인증 서버 요청에 실패했습니다.", errorMetadata(error));
-        throw new HttpsError(
-            "internal",
-            "GitHub 인증 서버 요청에 실패했습니다.",
-            { reason: "github_provider_failed" }
-        );
-    }
 }

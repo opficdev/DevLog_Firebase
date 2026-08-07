@@ -66,28 +66,7 @@
           }
         },
         {
-          "source": "/api/auth/github/sign-in-sessions",
-          "run": {
-            "serviceId": "http-api",
-            "region": "asia-northeast3"
-          }
-        },
-        {
-          "source": "/api/auth/github/callback",
-          "run": {
-            "serviceId": "http-api",
-            "region": "asia-northeast3"
-          }
-        },
-        {
-          "source": "/api/auth/github/custom-token",
-          "run": {
-            "serviceId": "http-api",
-            "region": "asia-northeast3"
-          }
-        },
-        {
-          "source": "/api/auth/github/account-link-sessions",
+          "source": "/api/auth/github/**",
           "run": {
             "serviceId": "http-api",
             "region": "asia-northeast3"

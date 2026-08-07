@@ -124,9 +124,44 @@ export class GitHubAuthenticationClient {
         message: 'GitHub OAuth token 폐기에 실패했습니다.',
         ...errorMetadata(error),
       });
-      throw githubRevocationException;
+      throw githubGrantRevocationException;
     }
-    throw githubRevocationException;
+    throw githubTokenRevocationException;
+  }
+
+  // GitHub OAuth App의 사용자 grant를 폐기합니다.
+  async revokeOAuthGrant(
+    uid: string,
+    accessToken: string,
+    configuration: GitHubAuthenticationConfiguration,
+  ): Promise<void> {
+    try {
+      const response = await axios.request({
+        method: 'delete',
+        url: applicationGrantURL(configuration.clientId),
+        ...applicationRequestConfiguration(configuration),
+        data: { access_token: accessToken },
+      });
+      if (response.status === Number(HttpStatus.NO_CONTENT)) {
+        return;
+      }
+    } catch (error) {
+      if (await this.isAlreadyInvalidToken(error, accessToken, configuration)) {
+        this.logger.warn({
+          message:
+            'GitHub OAuth App grant를 제거할 수 없지만 token이 이미 무효화되어 성공으로 처리합니다.',
+          uid,
+          github: errorMetadata(error),
+        });
+        return;
+      }
+      this.logger.error({
+        message: 'GitHub OAuth App grant 제거에 실패했습니다.',
+        ...errorMetadata(error),
+      });
+      throw githubGrantRevocationException;
+    }
+    throw githubGrantRevocationException;
   }
 
   // GitHub token 조회 결과로 이미 무효화된 token인지 확인합니다.
@@ -188,6 +223,11 @@ function applicationTokenURL(clientId: string): string {
   return `https://api.github.com/applications/${clientId}/token`;
 }
 
+// GitHub OAuth 애플리케이션 grant 관리 주소를 반환합니다.
+function applicationGrantURL(clientId: string): string {
+  return `https://api.github.com/applications/${clientId}/grant`;
+}
+
 // GitHub OAuth 애플리케이션 인증 요청 설정을 반환합니다.
 function applicationRequestConfiguration(
   configuration: GitHubAuthenticationConfiguration,
@@ -229,8 +269,13 @@ const githubProviderException = new ApiException(
   'github-provider-failed',
   'GitHub 인증 서버 요청에 실패했습니다.',
 );
-const githubRevocationException = new ApiException(
+const githubGrantRevocationException = new ApiException(
   HttpStatus.BAD_GATEWAY,
   'github-revoke-failed',
-  'GitHub grant 폐기에 실패했습니다.',
+  'GitHub OAuth App grant 제거에 실패했습니다.',
+);
+const githubTokenRevocationException = new ApiException(
+  HttpStatus.BAD_GATEWAY,
+  'github-revoke-failed',
+  'GitHub OAuth token 폐기에 실패했습니다.',
 );

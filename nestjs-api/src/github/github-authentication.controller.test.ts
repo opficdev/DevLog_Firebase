@@ -9,11 +9,17 @@ describe(GitHubAuthenticationController.name, () => {
   const createAccountLinkSession = jest.fn();
   const callback = jest.fn();
   const customToken = jest.fn();
+  const link = jest.fn();
+  const revoke = jest.fn();
+  const unlink = jest.fn();
   const controller = new GitHubAuthenticationController({
     createSignInSession,
     createAccountLinkSession,
     callback,
     customToken,
+    link,
+    revoke,
+    unlink,
   } as unknown as GitHubAuthenticationService);
 
   beforeEach(() => {
@@ -139,5 +145,31 @@ describe(GitHubAuthenticationController.name, () => {
       },
     });
     expect(customToken).not.toHaveBeenCalled();
+  });
+
+  it('검증된 UID와 ticket으로 GitHub 계정을 연결한다', async () => {
+    const request = { uid: 'user-1' } as FirebaseAuthenticatedRequest;
+
+    await expect(
+      controller.link(request, {
+        ticket: ' ticket-1 ',
+        appVerifier: ' app-verifier ',
+      }),
+    ).resolves.toBeUndefined();
+    expect(link).toHaveBeenCalledWith('user-1', 'ticket-1', 'app-verifier');
+  });
+
+  it('검증된 UID의 GitHub grant와 credential을 폐기한다', async () => {
+    const request = { uid: 'user-1' } as FirebaseAuthenticatedRequest;
+
+    await expect(controller.revoke(request)).resolves.toBeUndefined();
+    expect(revoke).toHaveBeenCalledWith('user-1');
+  });
+
+  it('검증된 UID의 GitHub provider 연결을 해제한다', async () => {
+    const request = { uid: 'user-1' } as FirebaseAuthenticatedRequest;
+
+    await expect(controller.unlink(request)).resolves.toBeUndefined();
+    expect(unlink).toHaveBeenCalledWith('user-1');
   });
 });

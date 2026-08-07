@@ -14,6 +14,7 @@ describe(GitHubCredentialRepository.name, () => {
     [unknown, Record<string, unknown>, { merge: boolean }]
   >();
   const update = jest.fn<void, [unknown, Record<string, unknown>]>();
+  const deleteDocument = jest.fn<void, [unknown]>();
   const get = jest.fn();
   const rootReference = { path: 'authCredentials/user-1' };
   const credentialReference = {
@@ -45,8 +46,15 @@ describe(GitHubCredentialRepository.name, () => {
           get: typeof transactionGet;
           set: typeof set;
           update: typeof update;
+          delete: typeof deleteDocument;
         }) => Promise<unknown>,
-      ) => callback({ get: transactionGet, set, update }),
+      ) =>
+        callback({
+          get: transactionGet,
+          set,
+          update,
+          delete: deleteDocument,
+        }),
     );
   });
 
@@ -208,6 +216,169 @@ describe(GitHubCredentialRepository.name, () => {
       },
       { merge: true },
     );
+  });
+
+  it('저장된 GitHub credential을 반환하고 기존 token 필드를 제거한다', async () => {
+    transactionGet
+      .mockResolvedValueOnce({ data: () => credential('access-token') })
+      .mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ githubAccessToken: 'legacy-token' }),
+      });
+
+    await expect(repository.find('user-1')).resolves.toEqual(
+      credential('access-token'),
+    );
+    expect(update).toHaveBeenCalledWith(legacyReference, {
+      githubAccessToken: FieldValue.delete(),
+    });
+  });
+
+  it('clientId가 없는 저장 credential을 거부한다', async () => {
+    transactionGet
+      .mockResolvedValueOnce({ data: () => ({ accessToken: 'access-token' }) })
+      .mockResolvedValueOnce({ exists: false, data: () => undefined });
+
+    await expect(repository.find('user-1')).rejects.toMatchObject({
+      status: HttpStatus.INTERNAL_SERVER_ERROR,
+      response: { code: 'internal' },
+    });
+  });
+
+  it('현재 credential의 폐기 claim을 획득한다', async () => {
+    transactionGet.mockResolvedValue({
+      data: () => credential('access-token'),
+    });
+
+    const claim = await repository.claimRevocation(
+      'user-1',
+      credential('access-token'),
+    );
+
+    expect(Buffer.from(claim, 'base64url')).toHaveLength(32);
+    expect(update.mock.calls[0]?.[0]).toBe(credentialReference);
+    expect(update.mock.calls[0]?.[1].revocationClaim).toBe(claim);
+    expect(update.mock.calls[0]?.[1].revocationExpiresAt).toBeInstanceOf(
+      Timestamp,
+    );
+  });
+
+  it('변경된 credential의 claim 획득을 거부한다', async () => {
+    transactionGet.mockResolvedValue({
+      data: () => credential('other-token'),
+    });
+
+    await expect(
+      repository.claimRevocation('user-1', credential('access-token')),
+    ).rejects.toMatchObject({
+      status: HttpStatus.CONFLICT,
+      response: { code: 'aborted' },
+    });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('활성 lease가 있는 credential의 claim 획득을 거부한다', async () => {
+    transactionGet.mockResolvedValue({
+      data: () => ({
+        ...credential('access-token'),
+        revocationClaim: 'other-claim',
+        revocationExpiresAt: Timestamp.fromMillis(Date.now() + 60_000),
+      }),
+    });
+
+    await expect(
+      repository.claimRevocation('user-1', credential('access-token')),
+    ).rejects.toMatchObject({
+      status: HttpStatus.CONFLICT,
+      response: { code: 'aborted' },
+    });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('만료된 lease가 있는 credential의 새 claim을 획득한다', async () => {
+    transactionGet.mockResolvedValue({
+      data: () => ({
+        ...credential('access-token'),
+        revocationClaim: 'expired-claim',
+        revocationExpiresAt: Timestamp.fromMillis(Date.now() - 60_000),
+      }),
+    });
+
+    const claim = await repository.claimRevocation(
+      'user-1',
+      credential('access-token'),
+    );
+
+    expect(claim).not.toBe('expired-claim');
+    expect(update.mock.calls[0]?.[1].revocationClaim).toBe(claim);
+    expect(update.mock.calls[0]?.[1].revocationExpiresAt).toBeInstanceOf(
+      Timestamp,
+    );
+  });
+
+  it('claim한 credential과 기존 token 필드를 삭제한다', async () => {
+    transactionGet
+      .mockResolvedValueOnce({
+        data: () => ({
+          ...credential('access-token'),
+          revocationClaim: 'claim',
+        }),
+      })
+      .mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ githubAccessToken: 'legacy-token' }),
+      });
+
+    await repository.deleteRevoked(
+      'user-1',
+      credential('access-token'),
+      'claim',
+    );
+
+    expect(deleteDocument).toHaveBeenCalledWith(credentialReference);
+    expect(update).toHaveBeenCalledWith(legacyReference, {
+      githubAccessToken: FieldValue.delete(),
+    });
+  });
+
+  it('소유한 credential 폐기 claim을 해제한다', async () => {
+    transactionGet.mockResolvedValue({
+      data: () => ({ revocationClaim: 'claim' }),
+    });
+
+    await repository.releaseRevocation('user-1', 'claim');
+
+    expect(update).toHaveBeenCalledWith(credentialReference, {
+      revocationClaim: FieldValue.delete(),
+      revocationExpiresAt: FieldValue.delete(),
+    });
+  });
+
+  it('비어 있는 credential 문서를 삭제한다', async () => {
+    transactionGet
+      .mockResolvedValueOnce({ data: () => undefined })
+      .mockResolvedValueOnce({ exists: false, data: () => undefined });
+
+    await repository.deleteEmpty('user-1');
+
+    expect(deleteDocument).toHaveBeenCalledWith(credentialReference);
+  });
+
+  it('credential이나 폐기 상태가 남은 문서 정리를 거부한다', async () => {
+    transactionGet
+      .mockResolvedValueOnce({
+        data: () => ({
+          ...credential('access-token'),
+          pendingRevocations: [credential('old-token')],
+        }),
+      })
+      .mockResolvedValueOnce({ exists: false, data: () => undefined });
+
+    await expect(repository.deleteEmpty('user-1')).rejects.toMatchObject({
+      status: HttpStatus.CONFLICT,
+      response: { code: 'aborted' },
+    });
+    expect(deleteDocument).not.toHaveBeenCalled();
   });
 });
 

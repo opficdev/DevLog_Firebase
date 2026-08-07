@@ -19,11 +19,20 @@ describe(GitHubAuthenticationService.name, () => {
   const configuration = jest.fn<GitHubAuthenticationConfiguration, []>();
   const exchangeAuthorizationCode = jest.fn();
   const revokeOAuthToken = jest.fn();
+  const revokeOAuthGrant = jest.fn();
   const createCustomToken = jest.fn();
+  const getUser = jest.fn();
+  const updateUser = jest.fn();
   const saveCredential = jest.fn();
   const pendingRevocations = jest.fn();
   const removePending = jest.fn();
+  const findCredential = jest.fn();
+  const claimRevocation = jest.fn();
+  const deleteRevoked = jest.fn();
+  const releaseRevocation = jest.fn();
+  const deleteEmpty = jest.fn();
   const resolveUid = jest.fn();
+  const linkProvider = jest.fn();
   const create = jest.fn<Promise<OAuthSessionCreation>, [OAuthSessionInput]>();
   const claimSession = jest.fn();
   const complete = jest.fn();
@@ -33,18 +42,24 @@ describe(GitHubAuthenticationService.name, () => {
   const consumeTicket = jest.fn();
   const releaseTicket = jest.fn();
   const service = new GitHubAuthenticationService(
-    { createCustomToken } as unknown as Auth,
+    { createCustomToken, getUser, updateUser } as unknown as Auth,
     { configuration },
     {
       exchangeAuthorizationCode,
       revokeOAuthToken,
+      revokeOAuthGrant,
     } as unknown as GitHubAuthenticationClient,
     {
       save: saveCredential,
       pendingRevocations,
       removePending,
+      find: findCredential,
+      claimRevocation,
+      deleteRevoked,
+      releaseRevocation,
+      deleteEmpty,
     } as unknown as GitHubCredentialRepository,
-    { resolveUid } as unknown as GitHubProviderRepository,
+    { resolveUid, link: linkProvider } as unknown as GitHubProviderRepository,
     {
       create,
       claim: claimSession,
@@ -79,7 +94,18 @@ describe(GitHubAuthenticationService.name, () => {
     claimTicket.mockResolvedValue(claimedTicket());
     resolveUid.mockResolvedValue('github-uid');
     pendingRevocations.mockResolvedValue([]);
+    findCredential.mockResolvedValue({
+      accessToken: 'access-token',
+      clientId: 'client-id',
+    });
+    claimRevocation.mockResolvedValue('revocation-claim');
     createCustomToken.mockResolvedValue('custom-token');
+    getUser.mockResolvedValue({
+      providerData: [
+        { providerId: 'github.com' },
+        { providerId: 'google.com' },
+      ],
+    });
   });
 
   afterEach(() => {
@@ -322,6 +348,211 @@ describe(GitHubAuthenticationService.name, () => {
     expect(saveCredential).toHaveBeenCalled();
     expect(releaseTicket).toHaveBeenCalledWith(claimedTicket());
     expect(consumeTicket).not.toHaveBeenCalled();
+  });
+
+  it('현재 UID에 결합된 ticket 처리 순서를 지켜 GitHub 계정을 연결한다', async () => {
+    const linkedTicket = claimedTicket({ purpose: 'link', uid: 'user-1' });
+    const sequence: string[] = [];
+    claimTicket.mockImplementation(() => {
+      sequence.push('ticket claim');
+      return Promise.resolve(linkedTicket);
+    });
+    linkProvider.mockImplementation(() => {
+      sequence.push('provider 연결');
+      return Promise.resolve();
+    });
+    saveCredential.mockImplementation(() => {
+      sequence.push('credential 저장');
+      return Promise.resolve();
+    });
+    pendingRevocations.mockImplementation(() => {
+      sequence.push('이전 token 조회');
+      return Promise.resolve([]);
+    });
+    consumeTicket.mockImplementation(() => {
+      sequence.push('ticket 소비');
+      return Promise.resolve();
+    });
+
+    await service.link('user-1', 'ticket-1', 'app-verifier');
+
+    expect(claimTicket).toHaveBeenCalledWith(
+      'ticket-1',
+      'app-verifier',
+      'github',
+      'link',
+      'user-1',
+    );
+    expect(linkProvider).toHaveBeenCalledWith('user-1', 'access-token');
+    expect(saveCredential).toHaveBeenCalledWith('user-1', {
+      accessToken: 'access-token',
+      clientId: 'client-id',
+    });
+    expect(sequence).toEqual([
+      'ticket claim',
+      'provider 연결',
+      'credential 저장',
+      '이전 token 조회',
+      'ticket 소비',
+    ]);
+    expect(releaseTicket).not.toHaveBeenCalled();
+  });
+
+  it('GitHub 계정 연결 실패 뒤 ticket을 다시 사용할 수 있도록 해제한다', async () => {
+    const linkedTicket = claimedTicket({ purpose: 'link', uid: 'user-1' });
+    const error = new Error('provider 연결 실패');
+    claimTicket.mockResolvedValue(linkedTicket);
+    linkProvider.mockRejectedValue(error);
+
+    await expect(
+      service.link('user-1', 'ticket-1', 'app-verifier'),
+    ).rejects.toBe(error);
+    expect(releaseTicket).toHaveBeenCalledWith(linkedTicket);
+    expect(saveCredential).not.toHaveBeenCalled();
+    expect(consumeTicket).not.toHaveBeenCalled();
+  });
+
+  it('이전 token 뒤 현재 GitHub grant와 credential을 폐기한다', async () => {
+    const sequence: string[] = [];
+    pendingRevocations.mockImplementation(() => {
+      sequence.push('이전 token 조회');
+      return Promise.resolve([]);
+    });
+    claimRevocation.mockImplementation(() => {
+      sequence.push('폐기 claim');
+      return Promise.resolve('revocation-claim');
+    });
+    revokeOAuthGrant.mockImplementation(() => {
+      sequence.push('grant 폐기');
+      return Promise.resolve();
+    });
+    deleteRevoked.mockImplementation(() => {
+      sequence.push('credential 삭제');
+      return Promise.resolve();
+    });
+
+    await service.revoke('user-1');
+
+    expect(findCredential).toHaveBeenCalledWith('user-1');
+    expect(claimRevocation).toHaveBeenCalledWith('user-1', {
+      accessToken: 'access-token',
+      clientId: 'client-id',
+    });
+    expect(revokeOAuthGrant).toHaveBeenCalledWith(
+      'user-1',
+      'access-token',
+      expect.objectContaining({ clientId: 'client-id' }),
+    );
+    expect(deleteRevoked).toHaveBeenCalledWith(
+      'user-1',
+      { accessToken: 'access-token', clientId: 'client-id' },
+      'revocation-claim',
+    );
+    expect(sequence).toEqual([
+      '이전 token 조회',
+      '폐기 claim',
+      'grant 폐기',
+      'credential 삭제',
+    ]);
+  });
+
+  it('GitHub credential이 없으면 빈 문서를 정리한다', async () => {
+    findCredential.mockResolvedValue(undefined);
+
+    await service.revoke('user-1');
+
+    expect(pendingRevocations).toHaveBeenCalledWith('user-1');
+    expect(deleteEmpty).toHaveBeenCalledWith('user-1');
+    expect(claimRevocation).not.toHaveBeenCalled();
+    expect(revokeOAuthGrant).not.toHaveBeenCalled();
+  });
+
+  it('GitHub grant 폐기 실패 뒤 claim을 해제한다', async () => {
+    const error = new Error('grant 폐기 실패');
+    revokeOAuthGrant.mockRejectedValue(error);
+
+    await expect(service.revoke('user-1')).rejects.toBe(error);
+    expect(releaseRevocation).toHaveBeenCalledWith(
+      'user-1',
+      'revocation-claim',
+    );
+    expect(deleteRevoked).not.toHaveBeenCalled();
+  });
+
+  it('GitHub grant와 credential을 정리한 뒤 provider 연결을 해제한다', async () => {
+    const sequence: string[] = [];
+    getUser.mockImplementation(() => {
+      sequence.push('provider 조회');
+      return Promise.resolve({
+        providerData: [
+          { providerId: 'github.com' },
+          { providerId: 'google.com' },
+        ],
+      });
+    });
+    findCredential.mockImplementation(() => {
+      sequence.push('credential 조회');
+      return Promise.resolve({
+        accessToken: 'access-token',
+        clientId: 'client-id',
+      });
+    });
+    claimRevocation.mockImplementation(() => {
+      sequence.push('폐기 claim');
+      return Promise.resolve('revocation-claim');
+    });
+    revokeOAuthGrant.mockImplementation(() => {
+      sequence.push('grant 폐기');
+      return Promise.resolve();
+    });
+    deleteRevoked.mockImplementation(() => {
+      sequence.push('credential 삭제');
+      return Promise.resolve();
+    });
+    updateUser.mockImplementation(() => {
+      sequence.push('provider 해제');
+      return Promise.resolve();
+    });
+
+    await expect(service.unlink('user-1')).resolves.toBeUndefined();
+    expect(updateUser).toHaveBeenCalledWith('user-1', {
+      providersToUnlink: ['github.com'],
+    });
+    expect(sequence).toEqual([
+      'provider 조회',
+      'credential 조회',
+      '폐기 claim',
+      'grant 폐기',
+      'credential 삭제',
+      'provider 해제',
+    ]);
+  });
+
+  it('마지막 GitHub provider는 grant 폐기 전에 해제를 거부한다', async () => {
+    getUser.mockResolvedValue({
+      providerData: [{ providerId: 'github.com' }],
+    });
+
+    await expect(service.unlink('user-1')).rejects.toMatchObject({
+      status: 412,
+      response: {
+        code: 'last-provider',
+        message: '마지막 로그인 provider는 해제할 수 없습니다.',
+      },
+    });
+    expect(findCredential).not.toHaveBeenCalled();
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it('GitHub provider가 없어도 남은 credential을 정리한다', async () => {
+    getUser.mockResolvedValue({
+      providerData: [{ providerId: 'google.com' }],
+    });
+    findCredential.mockResolvedValue(undefined);
+
+    await expect(service.unlink('user-1')).resolves.toBeUndefined();
+    expect(deleteEmpty).toHaveBeenCalledWith('user-1');
+    expect(updateUser).not.toHaveBeenCalled();
   });
 });
 

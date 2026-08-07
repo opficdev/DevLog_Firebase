@@ -8,12 +8,14 @@ import { GitHubProviderRepository } from './github-provider.repository';
 describe(GitHubProviderRepository.name, () => {
   const getUserByProviderUid = jest.fn();
   const getUserByEmail = jest.fn();
+  const getUser = jest.fn();
   const updateUser = jest.fn();
   const createUser = jest.fn();
   const deleteUser = jest.fn();
   const auth = {
     getUserByProviderUid,
     getUserByEmail,
+    getUser,
     updateUser,
     createUser,
     deleteUser,
@@ -216,6 +218,61 @@ describe(GitHubProviderRepository.name, () => {
     });
     expect(getUserByProviderUid).not.toHaveBeenCalled();
   });
+
+  it('현재 사용자와 verified email이 일치하면 GitHub provider를 연결한다', async () => {
+    getUser.mockResolvedValue(userRecord('user-1'));
+    getUserByProviderUid.mockRejectedValue(authError('auth/user-not-found'));
+
+    await repository.link('user-1', 'access-token');
+
+    expect(updateUser).toHaveBeenCalledWith('user-1', {
+      providerToLink: githubProvider(),
+    });
+  });
+
+  it('현재 사용자의 다른 GitHub provider를 교체하지 않는다', async () => {
+    getUser.mockResolvedValue(
+      userRecord('user-1', [githubProvider('user@example.com', 'other-id')]),
+    );
+
+    await expect(
+      repository.link('user-1', 'access-token'),
+    ).rejects.toMatchObject({
+      status: HttpStatus.CONFLICT,
+      response: { code: 'github-email-changed-account-conflict' },
+    });
+    expect(getUserByProviderUid).not.toHaveBeenCalled();
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it('다른 사용자가 소유한 GitHub provider 연결을 거부한다', async () => {
+    getUser.mockResolvedValue(userRecord('user-1'));
+    getUserByProviderUid.mockResolvedValue(userRecord('other-user'));
+
+    await expect(
+      repository.link('user-1', 'access-token'),
+    ).rejects.toMatchObject({
+      status: HttpStatus.CONFLICT,
+      response: { code: 'github-email-changed-account-conflict' },
+    });
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it('현재 사용자와 GitHub verified email이 다르면 연결을 거부한다', async () => {
+    getUser.mockResolvedValue(userRecord('user-1', [], 'other@example.com'));
+
+    await expect(
+      repository.link('user-1', 'access-token'),
+    ).rejects.toMatchObject({
+      status: HttpStatus.BAD_REQUEST,
+      response: {
+        code: 'email-mismatch',
+        message: '이메일이 일치하지 않습니다.',
+      },
+    });
+    expect(getUserByProviderUid).not.toHaveBeenCalled();
+    expect(updateUser).not.toHaveBeenCalled();
+  });
 });
 
 // GitHub 사용자 대역을 구성합니다.
@@ -233,17 +290,19 @@ function githubUser(overrides: Partial<GitHubUser> = {}): GitHubUser {
 function userRecord(
   uid: string,
   providerData: UserRecord['providerData'] = [],
+  email = 'user@example.com',
 ): UserRecord {
-  return { uid, providerData } as UserRecord;
+  return { uid, email, providerData } as UserRecord;
 }
 
 // GitHub provider 대역을 구성합니다.
 function githubProvider(
   email = 'user@example.com',
+  uid = '1',
 ): UserRecord['providerData'][number] {
   return {
     providerId: 'github.com',
-    uid: '1',
+    uid,
     displayName: 'GitHub User',
     email,
     photoURL: 'https://example.com/avatar.png',

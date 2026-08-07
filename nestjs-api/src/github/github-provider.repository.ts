@@ -110,6 +110,45 @@ export class GitHubProviderRepository {
       throw error;
     }
   }
+
+  // GitHub 사용자와 검증된 이메일의 소유권을 확인해 현재 사용자에게 provider를 연결합니다.
+  async link(uid: string, accessToken: string): Promise<void> {
+    const user = await this.client.user(accessToken);
+    const providerUid = githubProviderUid(user);
+    const email = await this.client.verifiedEmail(accessToken);
+    if (!email) {
+      throw emailNotFoundException;
+    }
+
+    const currentUser = await this.auth.getUser(uid);
+    if (currentUser.email !== email) {
+      throw emailMismatchException;
+    }
+    const currentProvider = currentUser.providerData.find(
+      (provider) => provider.providerId === providerId,
+    );
+    if (currentProvider && currentProvider.uid !== providerUid) {
+      throw linkConflictException;
+    }
+
+    try {
+      const providerUser = await this.auth.getUserByProviderUid(
+        providerId,
+        providerUid,
+      );
+      if (providerUser.uid !== uid) {
+        throw linkConflictException;
+      }
+    } catch (error) {
+      if (firebaseAuthErrorCode(error) !== 'auth/user-not-found') {
+        throw error;
+      }
+    }
+
+    await this.auth.updateUser(uid, {
+      providerToLink: githubProvider(providerUid, email, user),
+    });
+  }
 }
 
 // GitHub user id를 Firebase provider uid 문자열로 변환합니다.
@@ -148,4 +187,16 @@ const emailNotFoundException = new ApiException(
   HttpStatus.BAD_REQUEST,
   'email-not-found',
   'GitHub 사용자 데이터를 가져오지 못했습니다.',
+);
+
+const emailMismatchException = new ApiException(
+  HttpStatus.BAD_REQUEST,
+  'email-mismatch',
+  '이메일이 일치하지 않습니다.',
+);
+
+const linkConflictException = new ApiException(
+  HttpStatus.CONFLICT,
+  'github-email-changed-account-conflict',
+  'GitHub provider가 다른 계정에 연결되어 있습니다.',
 );

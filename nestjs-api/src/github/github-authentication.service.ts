@@ -23,6 +23,14 @@ import { GitHubProviderRepository } from './github-provider.repository';
 
 const authorizationEndpoint = 'https://github.com/login/oauth/authorize';
 const appCallbackURL = 'DevLog://oauth-callback';
+const githubProviderId = 'github.com';
+
+// 마지막 로그인 provider 해제 오류입니다.
+const lastProviderException = new ApiException(
+  HttpStatus.PRECONDITION_FAILED,
+  'last-provider',
+  '마지막 로그인 provider는 해제할 수 없습니다.',
+);
 
 // GitHub 인증과 OAuth session 처리를 조정합니다.
 @Injectable()
@@ -147,6 +155,59 @@ export class GitHubAuthenticationService {
     }
   }
 
+  // 현재 UID에 결합된 ticket으로 GitHub provider와 credential을 연결합니다.
+  // prettier-ignore
+  async link(
+    uid: string,
+    ticket: string,
+    appVerifier: string,
+  ): Promise<void> {
+    const claimed = await this.ticketRepository.claim(
+      ticket,
+      appVerifier,
+      'github',
+      'link',
+      uid,
+    );
+    try {
+      const credential = credentialFrom(claimed);
+      await this.providerRepository.link(uid, credential.accessToken);
+      await this.credentialRepository.save(uid, credential);
+      await this.revokePendingCredentials(uid);
+      await this.ticketRepository.consume(claimed);
+    } catch (error) {
+      await this.ticketRepository.release(claimed);
+      throw error;
+    }
+  }
+
+  // 저장된 GitHub OAuth grant와 credential을 폐기합니다.
+  async revoke(uid: string): Promise<void> {
+    const credential = await this.credentialRepository.find(uid);
+    await this.revokePendingCredentials(uid);
+    const configuration = this.revocationConfiguration(credential?.clientId);
+    await this.revokeCredential(uid, configuration, credential);
+  }
+
+  // GitHub grant와 credential을 정리한 뒤 provider 연결을 해제합니다.
+  async unlink(uid: string): Promise<void> {
+    const user = await this.auth.getUser(uid);
+    const providers = user.providerData ?? [];
+    const hasGitHubProvider = providers.some(
+      (provider) => provider.providerId === githubProviderId,
+    );
+    if (hasGitHubProvider && providers.length <= 1) {
+      throw lastProviderException;
+    }
+
+    await this.revoke(uid);
+    if (hasGitHubProvider) {
+      await this.auth.updateUser(uid, {
+        providersToUnlink: [githubProviderId],
+      });
+    }
+  }
+
   // 목적과 UID에 결합된 GitHub OAuth session과 authorization 주소를 생성합니다.
   private async createSession(
     purpose: OAuthPurpose,
@@ -183,16 +244,54 @@ export class GitHubAuthenticationService {
   private async revokePendingCredentials(uid: string): Promise<void> {
     const pending = await this.credentialRepository.pendingRevocations(uid);
     for (const credential of pending) {
-      const configuration = this.configurationProvider.configuration();
-      if (credential.clientId !== configuration.clientId) {
-        throw credentialConfigurationException;
-      }
+      const configuration = this.revocationConfiguration(credential.clientId);
       await this.client.revokeOAuthToken(
         uid,
         credential.accessToken,
         configuration,
       );
       await this.credentialRepository.removePending(uid, credential);
+    }
+  }
+
+  // credential을 발급한 OAuth App과 현재 설정이 일치하는지 확인합니다.
+  private revocationConfiguration(
+    credentialClientId?: string,
+  ): GitHubAuthenticationConfiguration {
+    const configuration = this.configurationProvider.configuration();
+    if (credentialClientId && credentialClientId !== configuration.clientId) {
+      throw credentialConfigurationException;
+    }
+    return configuration;
+  }
+
+  // 현재 GitHub credential을 claim한 뒤 grant 폐기 결과를 반영합니다.
+  private async revokeCredential(
+    uid: string,
+    configuration: GitHubAuthenticationConfiguration,
+    requestedCredential?: GitHubCredential,
+  ): Promise<void> {
+    const credential =
+      requestedCredential ?? (await this.credentialRepository.find(uid));
+    if (!credential) {
+      await this.credentialRepository.deleteEmpty(uid);
+      return;
+    }
+
+    const claim = await this.credentialRepository.claimRevocation(
+      uid,
+      credential,
+    );
+    try {
+      await this.client.revokeOAuthGrant(
+        uid,
+        credential.accessToken,
+        configuration,
+      );
+      await this.credentialRepository.deleteRevoked(uid, credential, claim);
+    } catch (error) {
+      await this.credentialRepository.releaseRevocation(uid, claim);
+      throw error;
     }
   }
 }
