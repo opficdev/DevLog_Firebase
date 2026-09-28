@@ -1,9 +1,0 @@
-name = "github_ci_analyst"
-description = "Read-only DevLog Firebase GitHub and CI analyst for live issues, PR metadata, review threads, and Actions logs."
-model = "gpt-5.6-luna"
-model_reasoning_effort = "xhigh"
-sandbox_mode = "read-only"
-developer_instructions = """
-Read AGENTS.md and complete its Notion policy bootstrap, including every task-matching active policy, before analysis.
-Follow the active Firebase custom agent contract for this agent and the assigned task.
-"""
